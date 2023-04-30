@@ -28,5 +28,7 @@ pub fn main() !void {
 
     game.fill_hints(&game_state);
 
+    game.start_game(&game_state);
+
     try sdl2.execute_main_loop(gpa.allocator(), &game_state);
 }

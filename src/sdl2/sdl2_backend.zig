@@ -7,8 +7,6 @@ const c = @cImport({
 
 const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
-const event = @import("../sudoku/event.zig");
-const GameEventTag = event.GameEventTag;
 
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 57;
@@ -111,7 +109,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     var shouldExit = false;
 
     var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent[0], game_state.extent[1]);
-    var gfx_event_index: usize = 0;
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
 
     while (!shouldExit) {
@@ -121,6 +118,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdlEvent) > 0) {
+            const mods = c.SDL_GetModState();
+            const is_any_ctrl_pressed = (mods & c.KMOD_CTRL) != 0;
+            const is_any_shift_pressed = (mods & c.KMOD_SHIFT) != 0;
+
             switch (sdlEvent.type) {
                 c.SDL_QUIT => {
                     shouldExit = true;
@@ -129,13 +130,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE) {
                         shouldExit = true;
                     } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
-                        const mods = c.SDL_GetModState();
                         const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
 
-                        if ((mods & c.KMOD_SHIFT) != 0) {
+                        if (is_any_shift_pressed) {
                             game.toggle_guess(game_state, number_index);
                         } else {
                             game.input_number(game_state, number_index);
+                        }
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_z and is_any_ctrl_pressed) {
+                        if (is_any_shift_pressed) {
+                            game.redo(game_state);
+                        } else {
+                            game.undo(game_state);
                         }
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
                         game.solve_basic_rules(game_state);
@@ -144,11 +150,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
-                    const x = @intCast(u16, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
-                    const y = @intCast(u16, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
+                    const x = @intCast(u32, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
+                    const y = @intCast(u32, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         game.select(game_state, .{ x, y });
-                    } else if (sdlEvent.button.button == c.SDL_BUTTON_RIGHT) {}
+                    }
                 },
                 else => {},
             }
@@ -173,76 +179,55 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         }
         gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
 
-        // Process game events for the gfx side
-        for (game_state.event_history[gfx_event_index..game_state.event_history_index]) |game_event| {
-            switch (game_event) {
-                GameEventTag.discover_number => |e| {
-                    if (e.children.len == 0) {
-                        gfx_board[e.location[0]][e.location[1]].invalid_move_time_secs = InvalidMoveTimeSecs;
-                    }
-                },
-                GameEventTag.game_end => |e| {
-                    for (e.exploded_mines) |mine_location| {
-                        gfx_board[mine_location[0]][mine_location[1]].is_exploded = true;
-                    }
-                },
-                else => {},
-            }
-        }
-
-        // Advance event index since we processed the rest
-        gfx_event_index = game_state.event_history_index;
-
         // Render game
         _ = c.SDL_RenderClear(ren);
 
-        for (game_state.board) |column, i| {
-            for (column) |cell, j| {
-                const gfx_cell = gfx_board[i][j];
+        for (game_state.board) |cell, flat_index| {
+            const cell_index = game.flat_board_index_to_2d(flat_index);
+            const gfx_cell = gfx_board[cell_index[0]][cell_index[1]];
 
-                const sprite_output_pos_rect = c.SDL_Rect{
-                    .x = @intCast(c_int, i * SpriteScreenExtent),
-                    .y = @intCast(c_int, j * SpriteScreenExtent),
-                    .w = SpriteScreenExtent,
-                    .h = SpriteScreenExtent,
-                };
+            const sprite_output_pos_rect = c.SDL_Rect{
+                .x = @intCast(c_int, cell_index[0] * SpriteScreenExtent),
+                .y = @intCast(c_int, cell_index[1] * SpriteScreenExtent),
+                .w = SpriteScreenExtent,
+                .h = SpriteScreenExtent,
+            };
 
-                // Draw base cell sprite
-                {
-                    const sprite_sheet_pos = get_tile_index(cell.set_number, gfx_cell);
-                    const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
+            // Draw base cell sprite
+            {
+                const sprite_sheet_pos = get_tile_index(cell.set_number, gfx_cell);
+                const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
 
-                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
 
-                    if (cell.set_number == 0) {
-                        for (range(9)) |_, index| {
-                            const hint_mask = @intCast(u9, @as(u32, 1) << @intCast(u5, index));
+                if (cell.set_number == 0) {
+                    for (range(9)) |_, index| {
+                        const hint_mask = @intCast(u9, @as(u32, 1) << @intCast(u5, index));
 
-                            if ((cell.hint_mask & hint_mask) > 0) {
-                                var mini_sprite_output_pos_rect = sprite_output_pos_rect;
-                                mini_sprite_output_pos_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
-                                mini_sprite_output_pos_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
-                                mini_sprite_output_pos_rect.w = @divTrunc(mini_sprite_output_pos_rect.w, 3);
-                                mini_sprite_output_pos_rect.h = @divTrunc(mini_sprite_output_pos_rect.h, 3);
+                        if ((cell.hint_mask & hint_mask) > 0) {
+                            var mini_sprite_output_pos_rect = sprite_output_pos_rect;
+                            mini_sprite_output_pos_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
+                            mini_sprite_output_pos_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
+                            mini_sprite_output_pos_rect.w = @divTrunc(mini_sprite_output_pos_rect.w, 3);
+                            mini_sprite_output_pos_rect.h = @divTrunc(mini_sprite_output_pos_rect.h, 3);
 
-                                const mini_sprite_sheet_pos = get_tile_index(@intCast(u8, index + 1), gfx_cell);
-                                const mini_sprite_sheet_rect = get_sprite_sheet_rect(mini_sprite_sheet_pos);
+                            const mini_sprite_sheet_pos = get_tile_index(@intCast(u8, index + 1), gfx_cell);
+                            const mini_sprite_sheet_rect = get_sprite_sheet_rect(mini_sprite_sheet_pos);
 
-                                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &mini_sprite_sheet_rect, &mini_sprite_output_pos_rect);
-                            }
+                            _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &mini_sprite_sheet_rect, &mini_sprite_output_pos_rect);
                         }
                     }
                 }
+            }
 
-                // Draw overlay on invalid move
-                if (gfx_cell.invalid_move_time_secs > 0.0) {
-                    const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
-                    const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
+            // Draw overlay on invalid move
+            if (gfx_cell.invalid_move_time_secs > 0.0) {
+                const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
+                const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
 
-                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
-                    _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
-                    _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
-                }
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
+                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
             }
         }
 

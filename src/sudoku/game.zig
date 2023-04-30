@@ -1,14 +1,9 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const event = @import("event.zig");
-const GameEvent = event.GameEvent;
-const GameResult = event.GameResult;
-
-pub const @"u16_2" = std.meta.Vector(2, u16);
-pub const @"i16_2" = std.meta.Vector(2, i16);
 pub const @"u32_2" = std.meta.Vector(2, u32);
 
+const MaxHistorySize = 512;
 const FullHintMask = 0b111111111;
 const EmptyHintMask = 0b000000000;
 
@@ -31,23 +26,29 @@ pub const CellState = struct {
 
 pub const GameState = struct {
     extent: u32_2,
-    board: [][]CellState,
-    selected_cell: u16_2,
+    board: []CellState,
+    selected_cell: u32_2,
     rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
 
-    // Storage for game events
-    event_history: []GameEvent,
-    event_history_index: usize = 0,
-    children_array: []u16_2,
-    children_array_index: usize = 0,
+    history: [MaxHistorySize][9 * 9]CellState = undefined,
+    history_index: u32 = 0,
+    max_history_index: u32 = 0,
 };
 
-pub fn range(len: usize) []const void {
+fn range(len: usize) []const void {
     return @as([*]void, undefined)[0..len];
 }
 
+pub fn flat_board_index_to_2d(flat_index: usize) u32_2 {
+    const x = @intCast(u32, flat_index % 9);
+    const y = @intCast(u32, flat_index / 9);
+
+    return .{ x, y };
+}
+
 pub fn cell_at(game: *GameState, position: u32_2) *CellState {
-    return &game.board[position[0]][position[1]];
+    const flat_index = position[0] + 9 * position[1];
+    return &game.board[flat_index];
 }
 
 // I borrowed this name from HLSL
@@ -150,16 +151,19 @@ pub fn fill_dummy_airplane_board(game: *GameState) void {
     cell_at(game, .{ 8, 8 }).set_number = 8;
 }
 
+pub fn fill_magic_board(game: *GameState) void {
+    cell_at(game, .{ 4, 2 }).set_number = 4;
+    cell_at(game, .{ 2, 3 }).set_number = 3;
+}
+
 pub fn fill_hints(game: *GameState) void {
     // Prepare hint mask for the solver
-    for (game.board) |column| {
-        for (column) |*cell| {
-            if (cell.set_number != 0) {
-                const mask = @intCast(u9, @as(u32, 1) << (cell.set_number - 1)); // FIXME proper way of enforcing this?
-                cell.hint_mask = mask;
-            } else {
-                cell.hint_mask = FullHintMask;
-            }
+    for (game.board) |*cell| {
+        if (cell.set_number != 0) {
+            const mask = @intCast(u9, @as(u32, 1) << (cell.set_number - 1)); // FIXME proper way of enforcing this?
+            cell.hint_mask = mask;
+        } else {
+            cell.hint_mask = FullHintMask;
         }
     }
 }
@@ -170,63 +174,40 @@ pub fn create_game_state(allocator: std.mem.Allocator, extent: u32_2, seed: u64)
     const cell_count = extent[0] * extent[1];
 
     // Allocate board
-    const board = try allocator.alloc([]CellState, extent[0]);
+    const board = try allocator.alloc(CellState, cell_count);
     errdefer allocator.free(board);
 
-    for (board) |*column| {
-        column.* = try allocator.alloc(CellState, extent[1]);
-        errdefer allocator.free(column);
-
-        for (column.*) |*cell| {
-            cell.* = .{};
-        }
+    for (board) |*cell| {
+        cell.* = .{};
     }
-
-    // Allocate array to hold events
-    const max_events = cell_count + 2000;
-
-    const event_history = try allocator.alloc(GameEvent, max_events);
-    errdefer allocator.free(event_history);
-
-    // Allocate array to hold cells discovered in events
-    const children_array = try allocator.alloc(u16_2, cell_count);
-    errdefer allocator.free(children_array);
 
     return GameState{
         .extent = extent,
         .rng = std.rand.Xoroshiro128.init(seed),
         .board = board,
-        .selected_cell = u16_2{ 9, 9 },
-        .event_history = event_history,
-        .children_array = children_array,
+        .selected_cell = u32_2{ 9, 9 },
     };
 }
 
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
-    allocator.free(game.children_array);
-    allocator.free(game.event_history);
-
-    for (game.board) |column| {
-        allocator.free(column);
-    }
-
+    //allocator.free(game.history);
     allocator.free(game.board);
 }
 
-pub fn select(game: *GameState, select_pos: u16_2) void {
-    assert(all(select_pos < @intCast(u16_2, game.extent)));
+pub fn select(game: *GameState, select_pos: u32_2) void {
+    assert(all(select_pos < game.extent));
 
     game.selected_cell = select_pos;
 }
 
 pub fn input_number(game: *GameState, number_index: u5) void {
-    assert(all(game.selected_cell < @intCast(u16_2, game.extent)));
+    assert(all(game.selected_cell < game.extent));
 
     place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
 }
 
 pub fn toggle_guess(game: *GameState, number_index: u5) void {
-    assert(all(game.selected_cell < @intCast(u16_2, game.extent)));
+    assert(all(game.selected_cell < game.extent));
 
     var cell = cell_at(game, game.selected_cell);
 
@@ -234,6 +215,8 @@ pub fn toggle_guess(game: *GameState, number_index: u5) void {
         const mask = @intCast(u9, @as(u32, 1) << number_index); // FIXME proper way of enforcing this?
         cell.hint_mask ^= mask;
     }
+
+    push_state_to_history(game);
 }
 
 pub fn solve_extra(game: *GameState) void {
@@ -259,6 +242,8 @@ pub fn solve_extra(game: *GameState) void {
         solve_find_unique_candidate(game, &row_region);
         solve_find_unique_candidate(game, &box_region);
     }
+
+    push_state_to_history(game);
 }
 
 fn solve_eliminate_candidate_region(game: *GameState, regions: []u32_2) void {
@@ -288,6 +273,8 @@ fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
 
     cell.set_number = number_index + 1;
     cell.hint_mask = @intCast(u9, @as(u32, 1) << number_index);
+
+    push_state_to_history(game);
 }
 
 fn remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
@@ -397,11 +384,47 @@ pub fn solve_basic_rules(game: *GameState) void {
     }
 
     // If there's a cell with a single possibility left, put it down
-    for (game.board) |column, i| {
-        for (column) |*cell, j| {
-            if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
-                place_number_remove_trivial_candidates(game, .{ @intCast(u32, i), @intCast(u32, j) }, @intCast(u5, first_bit_index(cell.hint_mask)));
-            }
+    for (game.board) |cell, flat_index| {
+        const index = flat_board_index_to_2d(flat_index);
+
+        if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
+            place_number_remove_trivial_candidates(game, index, @intCast(u5, first_bit_index(cell.hint_mask)));
         }
     }
+
+    push_state_to_history(game);
+}
+
+pub fn start_game(game: *GameState) void {
+    // The history should contain the initial state to function correctly
+    std.mem.copy(CellState, &game.history[game.history_index], game.board);
+}
+
+pub fn undo(game: *GameState) void {
+    if (game.history_index > 0) {
+        game.history_index -= 1;
+
+        load_state_from_history(game, game.history_index);
+    }
+}
+
+pub fn redo(game: *GameState) void {
+    if (game.history_index < game.max_history_index) {
+        game.history_index += 1;
+
+        load_state_from_history(game, game.history_index);
+    }
+}
+
+fn push_state_to_history(game: *GameState) void {
+    if (game.history_index + 1 < game.history.len) {
+        game.history_index += 1;
+        game.max_history_index = game.history_index;
+
+        std.mem.copy(CellState, &game.history[game.history_index], game.board);
+    }
+}
+
+fn load_state_from_history(game: *GameState, index: u32) void {
+    std.mem.copy(CellState, game.board, game.history[index][0..]);
 }
