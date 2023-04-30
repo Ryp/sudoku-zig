@@ -23,11 +23,6 @@ pub fn main() !void {
     var game_state = try game.create_game_state(gpa.allocator(), .{ 9, 9 }, seed);
     defer game.destroy_game_state(gpa.allocator(), &game_state);
 
-    //game.fill_dummy_board(&game_state);
-    game.fill_dummy_airplane_board(&game_state);
-
-    game.fill_hints(&game_state);
-
     game.start_game(&game_state);
 
     try sdl2.execute_main_loop(gpa.allocator(), &game_state);

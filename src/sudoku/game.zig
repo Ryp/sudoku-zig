@@ -68,7 +68,7 @@ fn any(vector: anytype) bool {
     return @reduce(.Or, vector);
 }
 
-pub fn fill_dummy_board(game: *GameState) void {
+fn fill_dummy_board(game: *GameState) void {
     cell_at(game, .{ 3, 0 }).set_number = 8;
 
     cell_at(game, .{ 0, 1 }).set_number = 4;
@@ -109,7 +109,7 @@ pub fn fill_dummy_board(game: *GameState) void {
     cell_at(game, .{ 5, 8 }).set_number = 3;
 }
 
-pub fn fill_dummy_airplane_board(game: *GameState) void {
+fn fill_dummy_airplane_board(game: *GameState) void {
     cell_at(game, .{ 0, 0 }).set_number = 6;
     cell_at(game, .{ 2, 0 }).set_number = 9;
     cell_at(game, .{ 7, 0 }).set_number = 3;
@@ -151,7 +151,7 @@ pub fn fill_dummy_airplane_board(game: *GameState) void {
     cell_at(game, .{ 8, 8 }).set_number = 8;
 }
 
-pub fn fill_magic_board(game: *GameState) void {
+fn fill_magic_board(game: *GameState) void {
     cell_at(game, .{ 4, 2 }).set_number = 4;
     cell_at(game, .{ 2, 3 }).set_number = 3;
 }
@@ -201,22 +201,22 @@ pub fn select(game: *GameState, select_pos: u32_2) void {
 }
 
 pub fn input_number(game: *GameState, number_index: u5) void {
-    assert(all(game.selected_cell < game.extent));
-
-    place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
+    if (all(game.selected_cell < game.extent)) {
+        place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
+    }
 }
 
 pub fn toggle_guess(game: *GameState, number_index: u5) void {
-    assert(all(game.selected_cell < game.extent));
+    if (all(game.selected_cell < game.extent)) {
+        var cell = cell_at(game, game.selected_cell);
 
-    var cell = cell_at(game, game.selected_cell);
+        if (cell.set_number == 0) {
+            const mask = @intCast(u9, @as(u32, 1) << number_index); // FIXME proper way of enforcing this?
+            cell.hint_mask ^= mask;
+        }
 
-    if (cell.set_number == 0) {
-        const mask = @intCast(u9, @as(u32, 1) << number_index); // FIXME proper way of enforcing this?
-        cell.hint_mask ^= mask;
+        push_state_to_history(game);
     }
-
-    push_state_to_history(game);
 }
 
 pub fn solve_extra(game: *GameState) void {
@@ -396,6 +396,11 @@ pub fn solve_basic_rules(game: *GameState) void {
 }
 
 pub fn start_game(game: *GameState) void {
+    //fill_dummy_board(game);
+    //fill_dummy_airplane_board(game);
+    fill_magic_board(game);
+    fill_hints(game);
+
     // The history should contain the initial state to function correctly
     std.mem.copy(CellState, &game.history[game.history_index], game.board);
 }
