@@ -12,7 +12,9 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(gpa.allocator());
     defer std.process.argsFree(gpa.allocator(), args);
 
-    assert(args.len == 1);
+    assert(args.len == 3);
+    const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
+    const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
     // Using the method from the docs to get a reasonably random seed
     var buf: [8]u8 = undefined;
@@ -20,7 +22,7 @@ pub fn main() !void {
     const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
 
     // Create game state
-    var game_state = try game.create_game_state(gpa.allocator(), .{ 9, 9 }, seed);
+    var game_state = try game.create_game_state(gpa.allocator(), box_w, box_h, seed);
     defer game.destroy_game_state(gpa.allocator(), &game_state);
 
     game.start_game(&game_state);

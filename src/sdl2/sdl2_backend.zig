@@ -18,7 +18,8 @@ const GfxState = struct {
     is_exploded: bool = false,
 };
 
-pub fn range(len: usize) []const void {
+// Soon to be deprecated in zig 0.11 for 0..x style ranges
+fn range(len: usize) []const void {
     return @as([*]void, undefined)[0..len];
 }
 
@@ -65,8 +66,8 @@ fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: []
 }
 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
-    const width = game_state.extent[0] * SpriteScreenExtent;
-    const height = game_state.extent[1] * SpriteScreenExtent;
+    const width = game_state.extent * SpriteScreenExtent;
+    const height = game_state.extent * SpriteScreenExtent;
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -108,7 +109,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
     var shouldExit = false;
 
-    var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent[0], game_state.extent[1]);
+    var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent, game_state.extent);
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
 
     while (!shouldExit) {
@@ -133,15 +134,15 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
 
                         if (is_any_shift_pressed) {
-                            game.toggle_guess(game_state, number_index);
+                            game.player_toggle_guess(game_state, number_index);
                         } else {
-                            game.input_number(game_state, number_index);
+                            game.player_input_number(game_state, number_index);
                         }
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_z and is_any_ctrl_pressed) {
                         if (is_any_shift_pressed) {
-                            game.redo(game_state);
+                            game.player_redo(game_state);
                         } else {
-                            game.undo(game_state);
+                            game.player_undo(game_state);
                         }
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
                         game.solve_basic_rules(game_state);
@@ -153,14 +154,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     const x = @intCast(u32, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
                     const y = @intCast(u32, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        game.select(game_state, .{ x, y });
+                        game.player_select(game_state, .{ x, y });
                     }
                 },
                 else => {},
             }
         }
 
-        const string = try std.fmt.allocPrintZ(allocator, "Sudoku {d}x{d}", .{ game_state.extent[0], game_state.extent[1] });
+        const string = try std.fmt.allocPrintZ(allocator, "Sudoku {d}x{d}", .{ game_state.extent, game_state.extent });
         defer allocator.free(string);
 
         c.SDL_SetWindowTitle(window, string.ptr);
@@ -168,8 +169,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         var mouse_x: c_int = undefined;
         var mouse_y: c_int = undefined;
         _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[0], @divTrunc(mouse_x, SpriteScreenExtent))));
-        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent[1], @divTrunc(mouse_y, SpriteScreenExtent))));
+        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent, @divTrunc(mouse_x, SpriteScreenExtent))));
+        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent, @divTrunc(mouse_y, SpriteScreenExtent))));
 
         for (gfx_board) |column| {
             for (column) |*cell| {
@@ -183,7 +184,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board) |cell, flat_index| {
-            const cell_index = game.flat_board_index_to_2d(flat_index);
+            const cell_index = game.flat_index_to_2d(game_state.extent, flat_index);
             const gfx_cell = gfx_board[cell_index[0]][cell_index[1]];
 
             const sprite_output_pos_rect = c.SDL_Rect{
@@ -201,7 +202,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
 
                 if (cell.set_number == 0) {
-                    for (range(9)) |_, index| {
+                    for (range(game_state.extent)) |_, index| {
                         const hint_mask = @intCast(u9, @as(u32, 1) << @intCast(u5, index));
 
                         if ((cell.hint_mask & hint_mask) > 0) {
