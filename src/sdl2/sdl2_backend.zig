@@ -27,24 +27,6 @@ fn range(len: usize) []const void {
     return @as([*]void, undefined)[0..len];
 }
 
-fn get_tile_index(number: u8, gfx_cell: GfxState) [2]u8 {
-    _ = gfx_cell; // FIXME
-
-    if (number == 9)
-        return .{ 6, 1 };
-
-    return .{ number, 0 };
-}
-
-fn get_sprite_sheet_rect(position: [2]u8) c.SDL_Rect {
-    return c.SDL_Rect{
-        .x = position[0] * SpriteSheetTileExtent,
-        .y = position[1] * SpriteSheetTileExtent,
-        .w = SpriteSheetTileExtent,
-        .h = SpriteSheetTileExtent,
-    };
-}
-
 fn allocate_2d_array_default_init(comptime T: type, allocator: std.mem.Allocator, x: usize, y: usize) ![][]T {
     var array = try allocator.alloc([]T, x);
     errdefer allocator.free(array);
@@ -251,9 +233,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
                 if (cell.set_number == 0) {
                     for (range(game_state.extent)) |_, index| {
-                        const hint_mask = @intCast(u9, @as(u32, 1) << @intCast(u5, index));
-
-                        if ((cell.hint_mask & hint_mask) > 0) {
+                        if ((cell.hint_mask >> @intCast(u4, index) & 1) > 0) {
                             var candidate_rect = cell_rect;
                             candidate_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
                             candidate_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);

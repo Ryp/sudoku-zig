@@ -24,7 +24,7 @@ fn any(vector: anytype) bool {
 }
 
 fn first_bit_index(mask_ro: u32) u32 {
-    var mask = mask_ro; // FIXME
+    var mask = mask_ro;
 
     for (range(32)) |_, index| {
         if ((mask & 1) != 0)
@@ -37,7 +37,7 @@ fn first_bit_index(mask_ro: u32) u32 {
 
 fn count_bits(mask_ro: u32) u32 {
     var bits: u32 = 0;
-    var mask = mask_ro; // FIXME
+    var mask = mask_ro;
 
     for (range(32)) |_| {
         bits += mask & 1;
@@ -57,12 +57,10 @@ pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
 }
 
 const MaxHistorySize = 512;
-const FullHintMask = 0b111111111;
-const EmptyHintMask = 0b000000000;
 
 pub const CellState = struct {
     set_number: u5 = 0,
-    hint_mask: u9 = 0,
+    hint_mask: u16 = 0,
 };
 
 pub const GameState = struct {
@@ -87,11 +85,18 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
     return &game.board[flat_index];
 }
 
+pub fn mask_for_number_index(number_index: u32) u16 {
+    assert(number_index < 16);
+    return @as(u16, 1) << @intCast(u4, number_index);
+}
+
 // Creates blank board without mines.
 // Placement of mines is done on the first player input.
 pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, seed: u64) !GameState {
     const extent = box_w * box_h;
     const cell_count = extent * extent;
+
+    assert(extent <= 16);
 
     // Allocate board
     const board = try allocator.alloc(CellState, cell_count);
@@ -165,7 +170,8 @@ fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: []u32_2, row_r
 }
 
 pub fn start_game(game: *GameState) void {
-    fill_dummy_board(game);
+    //fill_3x2_board(game);
+    //fill_dummy_board(game);
     //fill_dummy_airplane_board(game);
     //fill_magic_board(game);
     fill_hints(game);
@@ -191,8 +197,7 @@ pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
         var cell = cell_at(game, game.selected_cell);
 
         if (cell.set_number == 0) {
-            const mask = @intCast(u9, @as(u32, 1) << number_index); // FIXME proper way of enforcing this?
-            cell.hint_mask ^= mask;
+            cell.hint_mask ^= mask_for_number_index(number_index);
         }
 
         push_state_to_history(game);
@@ -203,7 +208,7 @@ fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
     var cell = cell_at(game, coord);
 
     cell.set_number = number_index + 1;
-    cell.hint_mask = @intCast(u9, @as(u32, 1) << number_index);
+    cell.hint_mask = mask_for_number_index(number_index);
 
     push_state_to_history(game);
 }
@@ -220,7 +225,7 @@ fn remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) v
     const row_region = game.row_regions[row_start .. row_start + game.extent];
     const box_region = game.box_regions[box_start .. box_start + game.extent];
 
-    const mask = @intCast(u9, @as(u32, 1) << number_index);
+    const mask = mask_for_number_index(number_index);
 
     for (range(game.extent)) |_, i| {
         cell_at(game, col_region[i]).hint_mask &= ~mask;
@@ -262,14 +267,13 @@ pub fn solve_basic_rules(game: *GameState) void {
 
 fn solve_eliminate_candidate_region(game: *GameState, region: []u32_2) void {
     assert(region.len == game.extent);
-    var used_mask: u9 = EmptyHintMask;
+    var used_mask: u16 = 0;
 
     for (region) |cell_coord| {
         const cell = cell_at(game, cell_coord);
 
         if (cell.set_number != 0) {
-            const mask = @intCast(u9, @as(u32, 1) << (cell.set_number - 1));
-            used_mask |= mask;
+            used_mask |= mask_for_number_index(cell.set_number - 1);
         }
     }
 
@@ -374,15 +378,17 @@ fn fill_hints(game: *GameState) void {
     // Prepare hint mask for the solver
     for (game.board) |*cell| {
         if (cell.set_number != 0) {
-            const mask = @intCast(u9, @as(u32, 1) << (cell.set_number - 1)); // FIXME proper way of enforcing this?
-            cell.hint_mask = mask;
+            cell.hint_mask = mask_for_number_index(cell.set_number - 1);
         } else {
-            cell.hint_mask = @intCast(u9, (@as(u32, 1) << @intCast(u5, game.extent)) - 1);
+            cell.hint_mask = @intCast(u16, (@as(u32, 1) << @intCast(u5, game.extent)) - 1);
         }
     }
 }
 
 fn fill_dummy_board(game: *GameState) void {
+    assert(game.box_w == 3);
+    assert(game.box_h == 3);
+
     cell_at(game, .{ 3, 0 }).set_number = 8;
 
     cell_at(game, .{ 0, 1 }).set_number = 4;
@@ -423,7 +429,33 @@ fn fill_dummy_board(game: *GameState) void {
     cell_at(game, .{ 5, 8 }).set_number = 3;
 }
 
+fn fill_3x2_board(game: *GameState) void {
+    assert(game.box_w == 3);
+    assert(game.box_h == 2);
+
+    cell_at(game, .{ 3, 0 }).set_number = 6;
+
+    cell_at(game, .{ 1, 1 }).set_number = 4;
+    cell_at(game, .{ 4, 1 }).set_number = 5;
+
+    cell_at(game, .{ 2, 2 }).set_number = 4;
+    cell_at(game, .{ 4, 2 }).set_number = 2;
+    cell_at(game, .{ 5, 2 }).set_number = 6;
+
+    cell_at(game, .{ 0, 3 }).set_number = 6;
+    cell_at(game, .{ 1, 3 }).set_number = 1;
+    cell_at(game, .{ 3, 3 }).set_number = 3;
+
+    cell_at(game, .{ 1, 4 }).set_number = 2;
+    cell_at(game, .{ 4, 4 }).set_number = 6;
+
+    cell_at(game, .{ 2, 5 }).set_number = 3;
+}
+
 fn fill_dummy_airplane_board(game: *GameState) void {
+    assert(game.box_w == 3);
+    assert(game.box_h == 3);
+
     cell_at(game, .{ 0, 0 }).set_number = 6;
     cell_at(game, .{ 2, 0 }).set_number = 9;
     cell_at(game, .{ 7, 0 }).set_number = 3;
@@ -466,6 +498,9 @@ fn fill_dummy_airplane_board(game: *GameState) void {
 }
 
 fn fill_magic_board(game: *GameState) void {
+    assert(game.box_w == 3);
+    assert(game.box_h == 3);
+
     cell_at(game, .{ 4, 2 }).set_number = 4;
     cell_at(game, .{ 2, 3 }).set_number = 3;
 }
