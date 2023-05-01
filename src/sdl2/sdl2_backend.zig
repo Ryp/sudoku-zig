@@ -51,6 +51,14 @@ fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: []
     allocator.free(array);
 }
 
+fn input_number(game_state: *GameState, candidate_mode: bool, number_index: u5) void {
+    if (candidate_mode) {
+        game.player_toggle_guess(game_state, number_index);
+    } else {
+        game.player_input_number(game_state, number_index);
+    }
+}
+
 pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
     const width = game_state.extent * SpriteScreenExtent;
     const height = game_state.extent * SpriteScreenExtent;
@@ -151,12 +159,21 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         shouldExit = true;
                     } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
                         const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
-
-                        if (is_any_shift_pressed) {
-                            game.player_toggle_guess(game_state, number_index);
-                        } else {
-                            game.player_input_number(game_state, number_index);
-                        }
+                        input_number(game_state, is_any_shift_pressed, number_index);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_a) {
+                        input_number(game_state, is_any_shift_pressed, 9);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_b) {
+                        input_number(game_state, is_any_shift_pressed, 10);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_c) {
+                        input_number(game_state, is_any_shift_pressed, 11);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_d) {
+                        input_number(game_state, is_any_shift_pressed, 12);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_e) {
+                        input_number(game_state, is_any_shift_pressed, 13);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_f) {
+                        input_number(game_state, is_any_shift_pressed, 14);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_g) {
+                        input_number(game_state, is_any_shift_pressed, 15);
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_z and is_any_ctrl_pressed) {
                         if (is_any_shift_pressed) {
                             game.player_redo(game_state);

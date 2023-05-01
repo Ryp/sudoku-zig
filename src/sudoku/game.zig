@@ -187,13 +187,13 @@ pub fn player_select(game: *GameState, select_pos: u32_2) void {
 }
 
 pub fn player_input_number(game: *GameState, number_index: u5) void {
-    if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+    if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
     }
 }
 
 pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
-    if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+    if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         var cell = cell_at(game, game.selected_cell);
 
         if (cell.set_number == 0) {
