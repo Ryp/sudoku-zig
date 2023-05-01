@@ -230,8 +230,8 @@ fn remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) v
 }
 
 fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
-    place_number(game, coord, number_index);
     remove_trivial_candidates(game, coord, number_index);
+    place_number(game, coord, number_index);
 }
 
 pub fn solve_basic_rules(game: *GameState) void {
