@@ -3,14 +3,18 @@ const assert = std.debug.assert;
 
 const c = @cImport({
     @cInclude("SDL2/SDL.h");
+    @cInclude("SDL2/SDL_ttf.h");
 });
 
 const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
 
+const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
 const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 57;
 const InvalidMoveTimeSecs: f32 = 0.3;
+const font_size: u32 = 50;
+const font_size_small: u32 = 16;
 
 const GfxState = struct {
     invalid_move_time_secs: f32 = 0.0,
@@ -68,12 +72,32 @@ fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: []
 pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
     const width = game_state.extent * SpriteScreenExtent;
     const height = game_state.extent * SpriteScreenExtent;
+    const bg_color = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+    const text_color = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
     defer c.SDL_Quit();
+
+    if (c.TTF_Init() != 0) {
+        c.SDL_Log("Unable to initialize TTF: %s", c.TTF_GetError());
+        return error.SDLInitializationFailed;
+    }
+    defer c.TTF_Quit();
+
+    var font = c.TTF_OpenFont("./res/FreeSans.ttf", font_size) orelse {
+        c.SDL_Log("TTF error: %s", c.TTF_GetError());
+        return error.SDLInitializationFailed;
+    };
+    defer c.TTF_CloseFont(font);
+
+    var font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", font_size_small) orelse {
+        c.SDL_Log("TTF error: %s", c.TTF_GetError());
+        return error.SDLInitializationFailed;
+    };
+    defer c.TTF_CloseFont(font_small);
 
     const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, width), @intCast(c_int, height), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
@@ -92,20 +116,33 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     };
     defer c.SDL_DestroyRenderer(ren);
 
-    // Create sprite sheet
-    // Using relative path for now
-    const sprite_sheet_surface = c.SDL_LoadBMP("res/tile.bmp") orelse {
-        c.SDL_Log("Unable to create BMP surface from file: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
+    var text_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
+    defer allocator.free(text_surfaces);
 
-    defer c.SDL_FreeSurface(sprite_sheet_surface);
+    var text_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
+    defer allocator.free(text_textures);
 
-    const sprite_sheet_texture = c.SDL_CreateTextureFromSurface(ren, sprite_sheet_surface) orelse {
-        c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    defer c.SDL_DestroyTexture(sprite_sheet_texture);
+    for (range(game_state.extent)) |_, i| {
+        text_surfaces[i] = c.TTF_RenderText_LCD(font, NumbersString[i], text_color, bg_color);
+        text_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_surfaces[i]) orelse {
+            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+    }
+
+    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
+    defer allocator.free(text_small_surfaces);
+
+    var text_small_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
+    defer allocator.free(text_small_textures);
+
+    for (range(game_state.extent)) |_, i| {
+        text_small_surfaces[i] = c.TTF_RenderText_LCD(font_small, NumbersString[i], text_color, bg_color);
+        text_small_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_small_surfaces[i]) orelse {
+            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+    }
 
     var shouldExit = false;
 
@@ -181,13 +218,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
 
         // Render game
+        _ = c.SDL_SetRenderDrawColor(ren, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board) |cell, flat_index| {
             const cell_index = game.flat_index_to_2d(game_state.extent, flat_index);
-            const gfx_cell = gfx_board[cell_index[0]][cell_index[1]];
 
-            const sprite_output_pos_rect = c.SDL_Rect{
+            const cell_rect = c.SDL_Rect{
                 .x = @intCast(c_int, cell_index[0] * SpriteScreenExtent),
                 .y = @intCast(c_int, cell_index[1] * SpriteScreenExtent),
                 .w = SpriteScreenExtent,
@@ -196,46 +233,108 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw base cell sprite
             {
-                const sprite_sheet_pos = get_tile_index(cell.set_number, gfx_cell);
-                const sprite_sheet_rect = get_sprite_sheet_rect(sprite_sheet_pos);
+                if (cell.set_number != 0) {
+                    const number_index: u32 = cell.set_number - 1;
+                    var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
+                    if (c.TTF_SizeText(font, NumbersString[number_index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                        c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                        return error.SDLInitializationFailed;
+                    }
+
+                    var glyph_out_rect = glyph_rect;
+                    glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
+                    glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
+
+                    _ = c.SDL_RenderCopy(ren, text_textures[number_index], &glyph_rect, &glyph_out_rect);
+                }
 
                 if (cell.set_number == 0) {
                     for (range(game_state.extent)) |_, index| {
                         const hint_mask = @intCast(u9, @as(u32, 1) << @intCast(u5, index));
 
                         if ((cell.hint_mask & hint_mask) > 0) {
-                            var mini_sprite_output_pos_rect = sprite_output_pos_rect;
-                            mini_sprite_output_pos_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
-                            mini_sprite_output_pos_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
-                            mini_sprite_output_pos_rect.w = @divTrunc(mini_sprite_output_pos_rect.w, 3);
-                            mini_sprite_output_pos_rect.h = @divTrunc(mini_sprite_output_pos_rect.h, 3);
+                            var candidate_rect = cell_rect;
+                            candidate_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
+                            candidate_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
+                            candidate_rect.w = @divTrunc(cell_rect.w, 3);
+                            candidate_rect.h = @divTrunc(cell_rect.h, 3);
 
-                            const mini_sprite_sheet_pos = get_tile_index(@intCast(u8, index + 1), gfx_cell);
-                            const mini_sprite_sheet_rect = get_sprite_sheet_rect(mini_sprite_sheet_pos);
+                            var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                            _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &mini_sprite_sheet_rect, &mini_sprite_output_pos_rect);
+                            if (c.TTF_SizeText(font_small, NumbersString[index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                                c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                                return error.SDLInitializationFailed;
+                            }
+
+                            var glyph_out_rect = glyph_rect;
+                            glyph_out_rect.x += candidate_rect.x + @divTrunc((candidate_rect.w - glyph_rect.w), 2);
+                            glyph_out_rect.y += candidate_rect.y + @divTrunc((candidate_rect.h - glyph_rect.h), 2);
+
+                            _ = c.SDL_RenderCopy(ren, text_small_textures[index], &glyph_rect, &glyph_out_rect);
                         }
                     }
                 }
             }
+        }
 
-            // Draw overlay on invalid move
-            if (gfx_cell.invalid_move_time_secs > 0.0) {
-                const alpha = gfx_cell.invalid_move_time_secs / InvalidMoveTimeSecs;
-                const sprite_sheet_rect = get_sprite_sheet_rect(.{ 8, 1 });
+        _ = c.SDL_SetRenderDrawColor(ren, text_color.r, text_color.g, text_color.b, text_color.a);
 
-                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, @floatToInt(u8, alpha * 255.0));
-                _ = c.SDL_RenderCopy(ren, sprite_sheet_texture, &sprite_sheet_rect, &sprite_output_pos_rect);
-                _ = c.SDL_SetTextureAlphaMod(sprite_sheet_texture, 255);
-            }
+        // Draw thin grid
+        for (range(game_state.extent + 1)) |_, index| {
+            const horizontal_rect = c.SDL_Rect{
+                .x = @intCast(c_int, index * SpriteScreenExtent),
+                .y = 0,
+                .w = 1,
+                .h = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+            };
+
+            const vertical_rect = c.SDL_Rect{
+                .x = 0,
+                .y = @intCast(c_int, index * SpriteScreenExtent),
+                .w = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .h = 1,
+            };
+
+            _ = c.SDL_RenderFillRect(ren, &vertical_rect);
+            _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
+        }
+
+        // Draw horizontal lines
+        for (range(game_state.box_h + 1)) |_, index| {
+            const rect = c.SDL_Rect{
+                .x = @intCast(c_int, index * game_state.box_w * SpriteScreenExtent) - 1,
+                .y = 0,
+                .w = 3,
+                .h = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+            };
+
+            _ = c.SDL_RenderFillRect(ren, &rect);
+        }
+
+        // Draw vertical lines
+        for (range(game_state.box_w + 1)) |_, index| {
+            const rect = c.SDL_Rect{
+                .x = 0,
+                .y = @intCast(c_int, index * game_state.box_h * SpriteScreenExtent) - 1,
+                .w = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .h = 3,
+            };
+
+            _ = c.SDL_RenderFillRect(ren, &rect);
         }
 
         // Present
         c.SDL_RenderPresent(ren);
 
         last_frame_time_ms = current_frame_time_ms;
+    }
+
+    for (range(game_state.extent)) |_, i| {
+        c.SDL_DestroyTexture(text_textures[i]);
+        c.SDL_FreeSurface(text_surfaces[i]);
+        c.SDL_DestroyTexture(text_small_textures[i]);
+        c.SDL_FreeSurface(text_small_surfaces[i]);
     }
 
     deallocate_2d_array(GfxState, allocator, gfx_board);
