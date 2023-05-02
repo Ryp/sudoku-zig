@@ -53,6 +53,22 @@ fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: []
     allocator.free(array);
 }
 
+fn get_candidate_layout(game_extent: u32) std.meta.Vector(2, u32) {
+    if (game_extent > 12) {
+        return .{ 4, 4 };
+    } else if (game_extent > 9) {
+        return .{ 4, 3 };
+    } else if (game_extent > 6) {
+        return .{ 3, 3 };
+    } else if (game_extent > 4) {
+        return .{ 3, 2 };
+    } else if (game_extent > 2) {
+        return .{ 2, 2 };
+    } else {
+        return .{ game_extent, 1 };
+    }
+}
+
 fn input_number(game_state: *GameState, candidate_mode: bool, number_index: u5) void {
     if (candidate_mode) {
         game.player_toggle_guess(game_state, number_index);
@@ -140,6 +156,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
     var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent, game_state.extent);
     var last_frame_time_ms: u32 = c.SDL_GetTicks();
+
+    const candidate_layout = get_candidate_layout(game_state.extent);
 
     while (!shouldExit) {
         const current_frame_time_ms: u32 = c.SDL_GetTicks();
@@ -281,10 +299,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 for (range(game_state.extent)) |_, index| {
                     if ((cell.hint_mask >> @intCast(u4, index) & 1) > 0) {
                         var candidate_rect = cell_rect;
-                        candidate_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
-                        candidate_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
-                        candidate_rect.w = @divTrunc(cell_rect.w, 3);
-                        candidate_rect.h = @divTrunc(cell_rect.h, 3);
+                        candidate_rect.x += @intCast(c_int, @rem(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
+                        candidate_rect.y += @intCast(c_int, @divTrunc(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
+                        candidate_rect.w = @divTrunc(cell_rect.w, @intCast(c_int, candidate_layout[0]));
+                        candidate_rect.h = @divTrunc(cell_rect.h, @intCast(c_int, candidate_layout[1]));
 
                         var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
