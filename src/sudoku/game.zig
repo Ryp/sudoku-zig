@@ -182,7 +182,6 @@ pub fn start_game(game: *GameState) void {
     //fill_dummy_board(game);
     //fill_dummy_airplane_board(game);
     //fill_magic_board(game);
-    fill_hints(game);
 
     // The history should contain the initial state to function correctly
     std.mem.copy(CellState, get_history_slice(game, 0), game.board);
@@ -195,6 +194,14 @@ pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
         game.selected_cell = .{ game.extent, game.extent };
     } else {
         game.selected_cell = select_pos;
+    }
+}
+
+pub fn player_clear_number(game: *GameState) void {
+    if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+        var cell = cell_at(game, game.selected_cell);
+        cell.set_number = 0;
+        cell.hint_mask = 0;
     }
 }
 
@@ -385,7 +392,7 @@ fn load_state_from_history(game: *GameState, index: u32) void {
     std.mem.copy(CellState, game.board, get_history_slice(game, index));
 }
 
-fn fill_hints(game: *GameState) void {
+pub fn player_fill_hints(game: *GameState) void {
     // Prepare hint mask for the solver
     for (game.board) |*cell| {
         if (cell.set_number != 0) {
@@ -393,6 +400,19 @@ fn fill_hints(game: *GameState) void {
         } else {
             cell.hint_mask = @intCast(u16, (@as(u32, 1) << @intCast(u5, game.extent)) - 1);
         }
+    }
+
+    for (game.board) |*cell, flat_index| {
+        if (cell.set_number != 0) {
+            const index = flat_index_to_2d(game.extent, flat_index);
+            place_number_remove_trivial_candidates(game, index, cell.set_number - 1);
+        }
+    }
+}
+
+pub fn player_clear_hints(game: *GameState) void {
+    for (game.board) |*cell| {
+        cell.hint_mask = 0;
     }
 }
 

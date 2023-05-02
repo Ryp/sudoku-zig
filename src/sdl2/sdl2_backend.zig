@@ -177,6 +177,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 c.SDL_KEYDOWN => {
                     if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE) {
                         shouldExit = true;
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_0) {
+                        game.player_clear_number(game_state);
                     } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
                         const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
                         input_number(game_state, is_any_shift_pressed, number_index);
@@ -200,6 +202,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         } else {
                             game.player_undo(game_state);
                         }
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_h and is_any_shift_pressed) {
+                        game.player_clear_hints(game_state);
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_h) {
+                        game.player_fill_hints(game_state);
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_LEFT) {
                         if (game_state.selected_cell[0] > 0)
                             game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 1, 0 });
