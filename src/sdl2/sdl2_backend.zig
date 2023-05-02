@@ -182,6 +182,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         } else {
                             game.player_undo(game_state);
                         }
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_LEFT) {
+                        if (game_state.selected_cell[0] > 0)
+                            game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 1, 0 });
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_RIGHT) {
+                        if (game_state.selected_cell[0] + 1 < game_state.extent)
+                            game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 1, 0 });
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_UP) {
+                        if (game_state.selected_cell[1] > 0)
+                            game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 0, 1 });
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_DOWN) {
+                        if (game_state.selected_cell[1] + 1 < game_state.extent)
+                            game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
                         game.solve_basic_rules(game_state);
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_BACKSPACE) {
