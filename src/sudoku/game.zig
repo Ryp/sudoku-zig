@@ -7,7 +7,7 @@ fn range(len: usize) []const void {
 }
 
 // I borrowed this name from HLSL
-fn all(vector: anytype) bool {
+pub fn all(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
     assert(type_info.Vector.child == bool);
     assert(type_info.Vector.len > 1);
@@ -188,10 +188,14 @@ pub fn start_game(game: *GameState) void {
     std.mem.copy(CellState, get_history_slice(game, 0), game.board);
 }
 
-pub fn player_select(game: *GameState, select_pos: u32_2) void {
+pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
     assert(all(select_pos < u32_2{ game.extent, game.extent }));
 
-    game.selected_cell = select_pos;
+    if (all(select_pos == game.selected_cell)) {
+        game.selected_cell = .{ game.extent, game.extent };
+    } else {
+        game.selected_cell = select_pos;
+    }
 }
 
 pub fn player_input_number(game: *GameState, number_index: u5) void {

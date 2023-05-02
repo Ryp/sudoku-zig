@@ -10,11 +10,13 @@ const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
-const SpriteSheetTileExtent = 19;
 const SpriteScreenExtent = 57;
-const InvalidMoveTimeSecs: f32 = 0.3;
-const font_size: u32 = 50;
-const font_size_small: u32 = 16;
+const FontSize: u32 = 50;
+const FontSizeSmall: u32 = 16;
+const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
+const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
+const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
 const GfxState = struct {
     invalid_move_time_secs: f32 = 0.0,
@@ -62,9 +64,6 @@ fn input_number(game_state: *GameState, candidate_mode: bool, number_index: u5) 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
     const width = game_state.extent * SpriteScreenExtent;
     const height = game_state.extent * SpriteScreenExtent;
-    const bg_color = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
-    const box_bg_color = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
-    const text_color = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -78,13 +77,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     }
     defer c.TTF_Quit();
 
-    var font = c.TTF_OpenFont("./res/FreeSans.ttf", font_size) orelse {
+    var font = c.TTF_OpenFont("./res/FreeSans.ttf", FontSize) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
     defer c.TTF_CloseFont(font);
 
-    var font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", font_size_small) orelse {
+    var font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", FontSizeSmall) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
@@ -113,14 +112,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     var text_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
     defer allocator.free(text_textures);
 
-    for (range(game_state.extent)) |_, i| {
-        text_surfaces[i] = c.TTF_RenderText_LCD(font, NumbersString[i], text_color, bg_color);
-        text_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_surfaces[i]) orelse {
-            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        };
-    }
-
     var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
     defer allocator.free(text_small_surfaces);
 
@@ -128,11 +119,21 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     defer allocator.free(text_small_textures);
 
     for (range(game_state.extent)) |_, i| {
-        text_small_surfaces[i] = c.TTF_RenderText_LCD(font_small, NumbersString[i], text_color, bg_color);
+        text_surfaces[i] = c.TTF_RenderText_LCD(font, NumbersString[i], TextColor, BgColor);
+        //text_surfaces[i] = c.TTF_RenderText_Blended(font, NumbersString[i], TextColor);
+        //text_surfaces[i] = c.TTF_RenderText_Shaded(font, NumbersString[i], TextColor, BgColor);
+        text_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_surfaces[i]) orelse {
+            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+        _ = c.SDL_SetTextureBlendMode(text_textures[i], c.SDL_BLENDMODE_MUL);
+
+        text_small_surfaces[i] = c.TTF_RenderText_LCD(font_small, NumbersString[i], TextColor, BgColor);
         text_small_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_small_surfaces[i]) orelse {
             c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
             return error.SDLInitializationFailed;
         };
+        _ = c.SDL_SetTextureBlendMode(text_small_textures[i], c.SDL_BLENDMODE_MUL);
     }
 
     var shouldExit = false;
@@ -191,7 +192,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     const x = @intCast(u32, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
                     const y = @intCast(u32, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        game.player_select(game_state, .{ x, y });
+                        game.player_toggle_select(game_state, .{ x, y });
                     }
                 },
                 else => {},
@@ -218,7 +219,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
 
         // Render game
-        _ = c.SDL_SetRenderDrawColor(ren, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
+        _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board) |cell, flat_index| {
@@ -234,11 +235,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw box background
             if (((box_index[0] & 1) ^ (box_index[1] & 1)) != 0) {
-                _ = c.SDL_SetRenderDrawColor(ren, box_bg_color.r, box_bg_color.g, box_bg_color.b, box_bg_color.a);
+                _ = c.SDL_SetRenderDrawColor(ren, BoxBgColor.r, BoxBgColor.g, BoxBgColor.b, BoxBgColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             }
 
-            _ = c.SDL_SetRenderDrawColor(ren, text_color.r, text_color.g, text_color.b, text_color.a);
+            if (game.all(game_state.selected_cell == cell_index)) {
+                _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
+                _ = c.SDL_RenderFillRect(ren, &cell_rect);
+            }
 
             // Draw placed numbers
             if (cell.set_number != 0) {
@@ -284,7 +288,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
         }
 
-        _ = c.SDL_SetRenderDrawColor(ren, text_color.r, text_color.g, text_color.b, text_color.a);
+        _ = c.SDL_SetRenderDrawColor(ren, TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 
         // Draw thin grid
         for (range(game_state.extent + 1)) |_, index| {
