@@ -15,6 +15,7 @@ const FontSize: u32 = 50;
 const FontSizeSmall: u32 = 16;
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
+const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
@@ -235,6 +236,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
         }
 
+        var highlighted_number: u32 = 0;
+        if (game.all(game_state.selected_cell < game.u32_2{ game_state.extent, game_state.extent })) {
+            const cell = game.cell_at(game_state, game_state.selected_cell);
+            highlighted_number = cell.set_number;
+        }
+
         const string = try std.fmt.allocPrintZ(allocator, "Sudoku {d}x{d}", .{ game_state.extent, game_state.extent });
         defer allocator.free(string);
 
@@ -281,6 +288,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
                 //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
+            } else if (highlighted_number > 0 and highlighted_number == cell.set_number) {
+                _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                _ = c.SDL_RenderFillRect(ren, &cell_rect);
             }
 
             // Draw placed numbers
@@ -309,6 +319,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         candidate_rect.y += @intCast(c_int, @divTrunc(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
                         candidate_rect.w = @divTrunc(cell_rect.w, @intCast(c_int, candidate_layout[0]));
                         candidate_rect.h = @divTrunc(cell_rect.h, @intCast(c_int, candidate_layout[1]));
+
+                        if (highlighted_number == index + 1) {
+                            _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                            _ = c.SDL_RenderFillRect(ren, &candidate_rect);
+                        }
 
                         var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
