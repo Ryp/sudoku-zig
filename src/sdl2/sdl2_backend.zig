@@ -63,6 +63,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     const width = game_state.extent * SpriteScreenExtent;
     const height = game_state.extent * SpriteScreenExtent;
     const bg_color = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+    const box_bg_color = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
     const text_color = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
@@ -222,6 +223,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
         for (game_state.board) |cell, flat_index| {
             const cell_index = game.flat_index_to_2d(game_state.extent, flat_index);
+            const box_index = game.box_index_from_cell(game_state, cell_index);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(c_int, cell_index[0] * SpriteScreenExtent),
@@ -230,46 +232,53 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 .h = SpriteScreenExtent,
             };
 
-            // Draw base cell sprite
-            {
-                if (cell.set_number != 0) {
-                    const number_index: u32 = cell.set_number - 1;
-                    var glyph_rect = std.mem.zeroes(c.SDL_Rect);
+            // Draw box background
+            if (((box_index[0] & 1) ^ (box_index[1] & 1)) != 0) {
+                _ = c.SDL_SetRenderDrawColor(ren, box_bg_color.r, box_bg_color.g, box_bg_color.b, box_bg_color.a);
+                _ = c.SDL_RenderFillRect(ren, &cell_rect);
+            }
 
-                    if (c.TTF_SizeText(font, NumbersString[number_index], &glyph_rect.w, &glyph_rect.h) != 0) {
-                        c.SDL_Log("TTF error: %s", c.TTF_GetError());
-                        return error.SDLInitializationFailed;
-                    }
+            _ = c.SDL_SetRenderDrawColor(ren, text_color.r, text_color.g, text_color.b, text_color.a);
 
-                    var glyph_out_rect = glyph_rect;
-                    glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
-                    glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
+            // Draw placed numbers
+            if (cell.set_number != 0) {
+                const number_index: u32 = cell.set_number - 1;
+                var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                    _ = c.SDL_RenderCopy(ren, text_textures[number_index], &glyph_rect, &glyph_out_rect);
+                if (c.TTF_SizeText(font, NumbersString[number_index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                    c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                    return error.SDLInitializationFailed;
                 }
 
-                if (cell.set_number == 0) {
-                    for (range(game_state.extent)) |_, index| {
-                        if ((cell.hint_mask >> @intCast(u4, index) & 1) > 0) {
-                            var candidate_rect = cell_rect;
-                            candidate_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
-                            candidate_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
-                            candidate_rect.w = @divTrunc(cell_rect.w, 3);
-                            candidate_rect.h = @divTrunc(cell_rect.h, 3);
+                var glyph_out_rect = glyph_rect;
+                glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
+                glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
 
-                            var glyph_rect = std.mem.zeroes(c.SDL_Rect);
+                _ = c.SDL_RenderCopy(ren, text_textures[number_index], &glyph_rect, &glyph_out_rect);
+            }
 
-                            if (c.TTF_SizeText(font_small, NumbersString[index], &glyph_rect.w, &glyph_rect.h) != 0) {
-                                c.SDL_Log("TTF error: %s", c.TTF_GetError());
-                                return error.SDLInitializationFailed;
-                            }
+            // Draw candidates
+            if (cell.set_number == 0) {
+                for (range(game_state.extent)) |_, index| {
+                    if ((cell.hint_mask >> @intCast(u4, index) & 1) > 0) {
+                        var candidate_rect = cell_rect;
+                        candidate_rect.x += @intCast(c_int, @rem(index, 3) * SpriteScreenExtent / 3);
+                        candidate_rect.y += @intCast(c_int, @divTrunc(index, 3) * SpriteScreenExtent / 3);
+                        candidate_rect.w = @divTrunc(cell_rect.w, 3);
+                        candidate_rect.h = @divTrunc(cell_rect.h, 3);
 
-                            var glyph_out_rect = glyph_rect;
-                            glyph_out_rect.x += candidate_rect.x + @divTrunc((candidate_rect.w - glyph_rect.w), 2);
-                            glyph_out_rect.y += candidate_rect.y + @divTrunc((candidate_rect.h - glyph_rect.h), 2);
+                        var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                            _ = c.SDL_RenderCopy(ren, text_small_textures[index], &glyph_rect, &glyph_out_rect);
+                        if (c.TTF_SizeText(font_small, NumbersString[index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                            c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                            return error.SDLInitializationFailed;
                         }
+
+                        var glyph_out_rect = glyph_rect;
+                        glyph_out_rect.x += candidate_rect.x + @divTrunc((candidate_rect.w - glyph_rect.w), 2);
+                        glyph_out_rect.y += candidate_rect.y + @divTrunc((candidate_rect.h - glyph_rect.h), 2);
+
+                        _ = c.SDL_RenderCopy(ren, text_small_textures[index], &glyph_rect, &glyph_out_rect);
                     }
                 }
             }

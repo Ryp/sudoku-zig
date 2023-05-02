@@ -56,6 +56,7 @@ pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
     return .{ x, y };
 }
 
+const MaxSudokuExtent = 16;
 const MaxHistorySize = 512;
 
 pub const CellState = struct {
@@ -85,8 +86,15 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
     return &game.board[flat_index];
 }
 
+pub fn box_index_from_cell(game: *GameState, cell_position: u32_2) u32_2 {
+    const x = (cell_position[0] / game.box_w);
+    const y = (cell_position[1] / game.box_h);
+
+    return .{ x, y };
+}
+
 pub fn mask_for_number_index(number_index: u32) u16 {
-    assert(number_index < 16);
+    assert(number_index < MaxSudokuExtent);
     return @as(u16, 1) << @intCast(u4, number_index);
 }
 
@@ -213,13 +221,12 @@ fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
     push_state_to_history(game);
 }
 
-fn remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
-    const box_x = (coord[0] / game.box_w);
-    const box_y = (coord[1] / game.box_h);
+fn remove_trivial_candidates(game: *GameState, cell_coord: u32_2, number_index: u5) void {
+    const box_index = box_index_from_cell(game, cell_coord);
 
-    const col_start = game.extent * coord[0];
-    const row_start = game.extent * coord[1];
-    const box_start = game.extent * (box_x + box_y * game.box_h);
+    const col_start = game.extent * cell_coord[0];
+    const row_start = game.extent * cell_coord[1];
+    const box_start = game.extent * (box_index[0] + box_index[1] * game.box_h);
 
     const col_region = game.col_regions[col_start .. col_start + game.extent];
     const row_region = game.row_regions[row_start .. row_start + game.extent];
