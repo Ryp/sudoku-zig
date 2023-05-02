@@ -317,10 +317,10 @@ pub fn solve_extra(game: *GameState) void {
 // If there's a region (col/row/box) where a possibility appears only once, put it down
 fn solve_find_unique_candidate(game: *GameState, region: []u32_2) void {
     assert(region.len == game.extent);
-    assert(game.extent == 9);
 
-    var counts = std.mem.zeroes([9]u32);
-    var last_occurences: [9]u32_2 = undefined;
+    // Use worst case size to allow allocating on the stack
+    var counts = std.mem.zeroes([MaxSudokuExtent]u32);
+    var last_occurences: [MaxSudokuExtent]u32_2 = undefined;
 
     for (region) |cell_coord| {
         const cell = cell_at(game, cell_coord);
@@ -336,7 +336,7 @@ fn solve_find_unique_candidate(game: *GameState, region: []u32_2) void {
         }
     }
 
-    for (counts) |count, number_index| {
+    for (counts[0..game.extent]) |count, number_index| {
         if (count == 1) {
             const coords = last_occurences[number_index];
             var cell = cell_at(game, coords);

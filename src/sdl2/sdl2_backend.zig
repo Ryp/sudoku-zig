@@ -251,9 +251,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             }
 
+            // Draw highlighted cell
             if (game.all(game_state.selected_cell == cell_index)) {
+                //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_MUL);
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
             }
 
             // Draw placed numbers
