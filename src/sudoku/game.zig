@@ -202,12 +202,15 @@ pub fn player_clear_number(game: *GameState) void {
         var cell = cell_at(game, game.selected_cell);
         cell.set_number = 0;
         cell.hint_mask = 0;
+
+        push_state_to_history(game);
     }
 }
 
 pub fn player_input_number(game: *GameState, number_index: u5) void {
     if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
+        push_state_to_history(game);
     }
 }
 
@@ -228,8 +231,6 @@ fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
 
     cell.set_number = number_index + 1;
     cell.hint_mask = mask_for_number_index(number_index);
-
-    push_state_to_history(game);
 }
 
 fn remove_trivial_candidates(game: *GameState, cell_coord: u32_2, number_index: u5) void {
@@ -253,11 +254,11 @@ fn remove_trivial_candidates(game: *GameState, cell_coord: u32_2, number_index: 
 }
 
 fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
-    remove_trivial_candidates(game, coord, number_index);
     place_number(game, coord, number_index);
+    remove_trivial_candidates(game, coord, number_index);
 }
 
-pub fn solve_basic_rules(game: *GameState) void {
+pub fn player_solve_basic_rules(game: *GameState) void {
     for (range(game.extent)) |_, region_index_usize| {
         const slice_start = region_index_usize * game.extent;
         const slice_end = slice_start + game.extent;
@@ -304,7 +305,7 @@ fn solve_eliminate_candidate_region(game: *GameState, region: []u32_2) void {
     }
 }
 
-pub fn solve_extra(game: *GameState) void {
+pub fn player_solve_extra(game: *GameState) void {
     for (range(game.extent)) |_, region_index_usize| {
         const slice_start = region_index_usize * game.extent;
         const slice_end = slice_start + game.extent;
@@ -408,12 +409,16 @@ pub fn player_fill_hints(game: *GameState) void {
             place_number_remove_trivial_candidates(game, index, cell.set_number - 1);
         }
     }
+
+    push_state_to_history(game);
 }
 
 pub fn player_clear_hints(game: *GameState) void {
     for (game.board) |*cell| {
         cell.hint_mask = 0;
     }
+
+    push_state_to_history(game);
 }
 
 fn fill_dummy_board(game: *GameState) void {
