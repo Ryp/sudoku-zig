@@ -104,7 +104,8 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, s
     const extent = box_w * box_h;
     const cell_count = extent * extent;
 
-    assert(extent <= 16);
+    assert(extent > 1);
+    assert(extent <= MaxSudokuExtent);
 
     // Allocate board
     const board = try allocator.alloc(CellState, cell_count);
@@ -178,11 +179,6 @@ fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: []u32_2, row_r
 }
 
 pub fn start_game(game: *GameState) void {
-    //fill_3x2_board(game);
-    //fill_dummy_board(game);
-    //fill_dummy_airplane_board(game);
-    //fill_magic_board(game);
-
     // The history should contain the initial state to function correctly
     std.mem.copy(CellState, get_history_slice(game, 0), game.board);
 }
@@ -272,14 +268,7 @@ pub fn player_solve_basic_rules(game: *GameState) void {
         solve_eliminate_candidate_region(game, box_region);
     }
 
-    // If there's a cell with a single possibility left, put it down
-    for (game.board) |cell, flat_index| {
-        const index = flat_index_to_2d(game.extent, flat_index);
-
-        if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
-            place_number_remove_trivial_candidates(game, index, @intCast(u5, first_bit_index(cell.hint_mask)));
-        }
-    }
+    solve_naked_singles(game);
 
     push_state_to_history(game);
 }
@@ -305,7 +294,7 @@ fn solve_eliminate_candidate_region(game: *GameState, region: []u32_2) void {
     }
 }
 
-pub fn player_solve_extra(game: *GameState) void {
+pub fn player_solve_hidden_singles(game: *GameState) void {
     for (range(game.extent)) |_, region_index_usize| {
         const slice_start = region_index_usize * game.extent;
         const slice_end = slice_start + game.extent;
@@ -314,16 +303,27 @@ pub fn player_solve_extra(game: *GameState) void {
         const row_region = game.row_regions[slice_start..slice_end];
         const box_region = game.box_regions[slice_start..slice_end];
 
-        solve_find_unique_candidate(game, col_region);
-        solve_find_unique_candidate(game, row_region);
-        solve_find_unique_candidate(game, box_region);
+        solve_hidden_singles(game, col_region);
+        solve_hidden_singles(game, row_region);
+        solve_hidden_singles(game, box_region);
     }
 
     push_state_to_history(game);
 }
 
+// If there's a cell with a single possibility left, put it down
+fn solve_naked_singles(game: *GameState) void {
+    for (game.board) |cell, flat_index| {
+        const index = flat_index_to_2d(game.extent, flat_index);
+
+        if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
+            place_number_remove_trivial_candidates(game, index, @intCast(u5, first_bit_index(cell.hint_mask)));
+        }
+    }
+}
+
 // If there's a region (col/row/box) where a possibility appears only once, put it down
-fn solve_find_unique_candidate(game: *GameState, region: []u32_2) void {
+fn solve_hidden_singles(game: *GameState, region: []u32_2) void {
     assert(region.len == game.extent);
 
     // Use worst case size to allow allocating on the stack
@@ -419,124 +419,4 @@ pub fn player_clear_hints(game: *GameState) void {
     }
 
     push_state_to_history(game);
-}
-
-fn fill_dummy_board(game: *GameState) void {
-    assert(game.box_w == 3);
-    assert(game.box_h == 3);
-
-    cell_at(game, .{ 3, 0 }).set_number = 8;
-
-    cell_at(game, .{ 0, 1 }).set_number = 4;
-    cell_at(game, .{ 4, 1 }).set_number = 1;
-    cell_at(game, .{ 5, 1 }).set_number = 5;
-    cell_at(game, .{ 7, 1 }).set_number = 3;
-
-    cell_at(game, .{ 1, 2 }).set_number = 2;
-    cell_at(game, .{ 2, 2 }).set_number = 9;
-    cell_at(game, .{ 4, 2 }).set_number = 4;
-    cell_at(game, .{ 6, 2 }).set_number = 5;
-    cell_at(game, .{ 7, 2 }).set_number = 1;
-    cell_at(game, .{ 8, 2 }).set_number = 8;
-
-    cell_at(game, .{ 1, 3 }).set_number = 4;
-    cell_at(game, .{ 6, 3 }).set_number = 1;
-    cell_at(game, .{ 7, 3 }).set_number = 2;
-
-    cell_at(game, .{ 3, 4 }).set_number = 6;
-    cell_at(game, .{ 5, 4 }).set_number = 2;
-
-    cell_at(game, .{ 1, 5 }).set_number = 3;
-    cell_at(game, .{ 2, 5 }).set_number = 2;
-    cell_at(game, .{ 7, 5 }).set_number = 9;
-
-    cell_at(game, .{ 0, 6 }).set_number = 6;
-    cell_at(game, .{ 1, 6 }).set_number = 9;
-    cell_at(game, .{ 2, 6 }).set_number = 3;
-    cell_at(game, .{ 4, 6 }).set_number = 5;
-    cell_at(game, .{ 6, 6 }).set_number = 8;
-    cell_at(game, .{ 7, 6 }).set_number = 7;
-
-    cell_at(game, .{ 1, 7 }).set_number = 5;
-    cell_at(game, .{ 3, 7 }).set_number = 4;
-    cell_at(game, .{ 4, 7 }).set_number = 8;
-    cell_at(game, .{ 8, 7 }).set_number = 1;
-
-    cell_at(game, .{ 5, 8 }).set_number = 3;
-}
-
-fn fill_3x2_board(game: *GameState) void {
-    assert(game.box_w == 3);
-    assert(game.box_h == 2);
-
-    cell_at(game, .{ 3, 0 }).set_number = 6;
-
-    cell_at(game, .{ 1, 1 }).set_number = 4;
-    cell_at(game, .{ 4, 1 }).set_number = 5;
-
-    cell_at(game, .{ 2, 2 }).set_number = 4;
-    cell_at(game, .{ 4, 2 }).set_number = 2;
-    cell_at(game, .{ 5, 2 }).set_number = 6;
-
-    cell_at(game, .{ 0, 3 }).set_number = 6;
-    cell_at(game, .{ 1, 3 }).set_number = 1;
-    cell_at(game, .{ 3, 3 }).set_number = 3;
-
-    cell_at(game, .{ 1, 4 }).set_number = 2;
-    cell_at(game, .{ 4, 4 }).set_number = 6;
-
-    cell_at(game, .{ 2, 5 }).set_number = 3;
-}
-
-fn fill_dummy_airplane_board(game: *GameState) void {
-    assert(game.box_w == 3);
-    assert(game.box_h == 3);
-
-    cell_at(game, .{ 0, 0 }).set_number = 6;
-    cell_at(game, .{ 2, 0 }).set_number = 9;
-    cell_at(game, .{ 7, 0 }).set_number = 3;
-
-    cell_at(game, .{ 0, 1 }).set_number = 7;
-    cell_at(game, .{ 2, 1 }).set_number = 3;
-    cell_at(game, .{ 5, 1 }).set_number = 4;
-    cell_at(game, .{ 7, 1 }).set_number = 9;
-
-    cell_at(game, .{ 2, 2 }).set_number = 4;
-    cell_at(game, .{ 3, 2 }).set_number = 2;
-    cell_at(game, .{ 5, 2 }).set_number = 9;
-    cell_at(game, .{ 7, 2 }).set_number = 7;
-
-    cell_at(game, .{ 0, 3 }).set_number = 2;
-    cell_at(game, .{ 1, 3 }).set_number = 8;
-    cell_at(game, .{ 2, 3 }).set_number = 7;
-    cell_at(game, .{ 5, 3 }).set_number = 3;
-
-    cell_at(game, .{ 6, 4 }).set_number = 3;
-
-    cell_at(game, .{ 3, 5 }).set_number = 9;
-    cell_at(game, .{ 6, 5 }).set_number = 1;
-    cell_at(game, .{ 7, 5 }).set_number = 8;
-    cell_at(game, .{ 8, 5 }).set_number = 7;
-
-    cell_at(game, .{ 1, 6 }).set_number = 4;
-    cell_at(game, .{ 3, 6 }).set_number = 8;
-    cell_at(game, .{ 5, 6 }).set_number = 5;
-    cell_at(game, .{ 6, 6 }).set_number = 7;
-
-    cell_at(game, .{ 1, 7 }).set_number = 7;
-    cell_at(game, .{ 3, 7 }).set_number = 1;
-    cell_at(game, .{ 6, 7 }).set_number = 4;
-    cell_at(game, .{ 8, 7 }).set_number = 3;
-
-    cell_at(game, .{ 1, 8 }).set_number = 6;
-    cell_at(game, .{ 6, 8 }).set_number = 5;
-    cell_at(game, .{ 8, 8 }).set_number = 8;
-}
-
-fn fill_magic_board(game: *GameState) void {
-    assert(game.box_w == 3);
-    assert(game.box_h == 3);
-
-    cell_at(game, .{ 4, 2 }).set_number = 4;
-    cell_at(game, .{ 2, 3 }).set_number = 3;
 }

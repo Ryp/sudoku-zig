@@ -222,7 +222,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
                         game.player_solve_basic_rules(game_state);
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_BACKSPACE) {
-                        game.player_solve_extra(game_state);
+                        game.player_solve_hidden_singles(game_state);
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
