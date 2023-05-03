@@ -178,7 +178,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 c.SDL_KEYDOWN => {
                     if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE) {
                         shouldExit = true;
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_0) {
+                    } else if (sdlEvent.key.keysym.sym == c.SDLK_0 or sdlEvent.key.keysym.sym == c.SDLK_DELETE) {
                         game.player_clear_number(game_state);
                     } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
                         const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
