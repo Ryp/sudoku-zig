@@ -148,6 +148,26 @@ fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: []u32_2, row_r
     }
 }
 
+pub fn fill_from_string(game: *GameState, str: []u8) void {
+    assert(str.len <= game.extent * game.extent);
+
+    for (str) |char, i| {
+        var number: u8 = 0;
+
+        if (char >= '1' and char <= '9') {
+            number = char - '0';
+        } else if (char >= 'A' and char <= 'G') {
+            number = char - 'A' + 10;
+        } else if (char >= 'a' and char <= 'g') {
+            number = char - 'a' + 10;
+        }
+
+        assert(number <= game.extent); // Zero is okay in our case
+
+        game.board[i].set_number = @intCast(u5, number);
+    }
+}
+
 pub fn start_game(game: *GameState) void {
     // The history should contain the initial state to function correctly
     std.mem.copy(CellState, get_history_slice(game, 0), game.board);
