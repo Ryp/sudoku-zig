@@ -1,6 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const solver = @import("solver.zig");
+
 // Soon to be deprecated in zig 0.11 for 0..x style ranges
 fn range(len: usize) []const void {
     return @as([*]void, undefined)[0..len];
@@ -15,38 +17,6 @@ pub fn all(vector: anytype) bool {
     return @reduce(.And, vector);
 }
 
-fn any(vector: anytype) bool {
-    const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.Vector.child == bool);
-    assert(type_info.Vector.len > 1);
-
-    return @reduce(.Or, vector);
-}
-
-fn first_bit_index(mask_ro: u32) u32 {
-    var mask = mask_ro;
-
-    for (range(32)) |_, index| {
-        if ((mask & 1) != 0)
-            return @intCast(u32, index);
-        mask = mask >> 1;
-    }
-
-    return 32;
-}
-
-fn count_bits(mask_ro: u32) u32 {
-    var bits: u32 = 0;
-    var mask = mask_ro;
-
-    for (range(32)) |_| {
-        bits += mask & 1;
-        mask = mask >> 1;
-    }
-
-    return bits;
-}
-
 pub const @"u32_2" = std.meta.Vector(2, u32);
 
 pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
@@ -56,7 +26,7 @@ pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
     return .{ x, y };
 }
 
-const MaxSudokuExtent = 16;
+pub const MaxSudokuExtent = 16;
 const MaxHistorySize = 512;
 
 pub const CellState = struct {
@@ -222,138 +192,24 @@ pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
     }
 }
 
-fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
+pub fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
     var cell = cell_at(game, coord);
 
     cell.set_number = number_index + 1;
     cell.hint_mask = mask_for_number_index(number_index);
 }
 
-fn remove_trivial_candidates(game: *GameState, cell_coord: u32_2, number_index: u5) void {
-    const box_index = box_index_from_cell(game, cell_coord);
-
-    const col_start = game.extent * cell_coord[0];
-    const row_start = game.extent * cell_coord[1];
-    const box_start = game.extent * (box_index[0] + box_index[1] * game.box_h);
-
-    const col_region = game.col_regions[col_start .. col_start + game.extent];
-    const row_region = game.row_regions[row_start .. row_start + game.extent];
-    const box_region = game.box_regions[box_start .. box_start + game.extent];
-
-    const mask = mask_for_number_index(number_index);
-
-    for (range(game.extent)) |_, i| {
-        cell_at(game, col_region[i]).hint_mask &= ~mask;
-        cell_at(game, row_region[i]).hint_mask &= ~mask;
-        cell_at(game, box_region[i]).hint_mask &= ~mask;
-    }
-}
-
-fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
+pub fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
     place_number(game, coord, number_index);
-    remove_trivial_candidates(game, coord, number_index);
+    solver.solve_trivial_candidates_at(game, coord, number_index);
 }
 
-pub fn player_solve_basic_rules(game: *GameState) void {
-    for (range(game.extent)) |_, region_index_usize| {
-        const slice_start = region_index_usize * game.extent;
-        const slice_end = slice_start + game.extent;
-
-        const col_region = game.col_regions[slice_start..slice_end];
-        const row_region = game.row_regions[slice_start..slice_end];
-        const box_region = game.box_regions[slice_start..slice_end];
-
-        solve_eliminate_candidate_region(game, col_region);
-        solve_eliminate_candidate_region(game, row_region);
-        solve_eliminate_candidate_region(game, box_region);
-    }
-
-    solve_naked_singles(game);
+pub fn player_solve(game: *GameState) void {
+    solver.solve_trivial_candidates(game);
+    solver.solve_naked_singles(game);
+    solver.solve_hidden_singles(game);
 
     push_state_to_history(game);
-}
-
-fn solve_eliminate_candidate_region(game: *GameState, region: []u32_2) void {
-    assert(region.len == game.extent);
-    var used_mask: u16 = 0;
-
-    for (region) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
-
-        if (cell.set_number != 0) {
-            used_mask |= mask_for_number_index(cell.set_number - 1);
-        }
-    }
-
-    for (region) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
-
-        if (cell.set_number == 0) {
-            cell.hint_mask &= ~used_mask;
-        }
-    }
-}
-
-pub fn player_solve_hidden_singles(game: *GameState) void {
-    for (range(game.extent)) |_, region_index_usize| {
-        const slice_start = region_index_usize * game.extent;
-        const slice_end = slice_start + game.extent;
-
-        const col_region = game.col_regions[slice_start..slice_end];
-        const row_region = game.row_regions[slice_start..slice_end];
-        const box_region = game.box_regions[slice_start..slice_end];
-
-        solve_hidden_singles(game, col_region);
-        solve_hidden_singles(game, row_region);
-        solve_hidden_singles(game, box_region);
-    }
-
-    push_state_to_history(game);
-}
-
-// If there's a cell with a single possibility left, put it down
-fn solve_naked_singles(game: *GameState) void {
-    for (game.board) |cell, flat_index| {
-        const index = flat_index_to_2d(game.extent, flat_index);
-
-        if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
-            place_number_remove_trivial_candidates(game, index, @intCast(u5, first_bit_index(cell.hint_mask)));
-        }
-    }
-}
-
-// If there's a region (col/row/box) where a possibility appears only once, put it down
-fn solve_hidden_singles(game: *GameState, region: []u32_2) void {
-    assert(region.len == game.extent);
-
-    // Use worst case size to allow allocating on the stack
-    var counts = std.mem.zeroes([MaxSudokuExtent]u32);
-    var last_occurences: [MaxSudokuExtent]u32_2 = undefined;
-
-    for (region) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
-
-        var mask = cell.hint_mask;
-
-        for (range(game.extent)) |_, number_index| {
-            if ((mask & 1) != 0) {
-                counts[number_index] += 1;
-                last_occurences[number_index] = cell_coord;
-            }
-            mask >>= 1;
-        }
-    }
-
-    for (counts[0..game.extent]) |count, number_index| {
-        if (count == 1) {
-            const coords = last_occurences[number_index];
-            var cell = cell_at(game, coords);
-
-            if (cell.set_number == 0) {
-                place_number_remove_trivial_candidates(game, coords, @intCast(u5, number_index));
-            }
-        }
-    }
 }
 
 fn get_history_slice(game: *GameState, history_index: u32) []CellState {

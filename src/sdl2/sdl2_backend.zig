@@ -220,9 +220,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         if (game_state.selected_cell[1] + 1 < game_state.extent)
                             game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
-                        game.player_solve_basic_rules(game_state);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_BACKSPACE) {
-                        game.player_solve_hidden_singles(game_state);
+                        game.player_solve(game_state);
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
