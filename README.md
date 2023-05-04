@@ -1,10 +1,14 @@
 # Sudoku
 
+A Sudoku game that doesn't come with puzzles in the box, bring your own!
+Supports all box sizes as long as they hold between 2 and 16 numbers, and has a basic human-like solver included.
+Lets you pencil out the candidates as well, which is necessary for advanced techniques.
+
 ## Building
 
 This should get you going after cloning the repo:
 ```sh
-$ zig build run
+$ zig build run -- 3 3 72..96..3...2.5....8...4.2........6.1.65.38.7.4........3.8...9....7.2...2..43..18
 ```
 
 ## Controls
@@ -21,3 +25,4 @@ $ zig build run
 | Redo           | Ctrl + Shift + Z   |
 | Fill guesses   | H                  |
 | Clear guesses  | Shift + H          |
+| Solve          | Enter              |
