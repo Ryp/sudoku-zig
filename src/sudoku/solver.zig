@@ -150,3 +150,67 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32_2) void {
         }
     }
 }
+
+pub fn solve_hidden_pairs(game: *GameState) void {
+    for (range(game.extent)) |_, region_index_usize| {
+        const slice_start = region_index_usize * game.extent;
+        const slice_end = slice_start + game.extent;
+
+        const col_region = game.col_regions[slice_start..slice_end];
+        const row_region = game.row_regions[slice_start..slice_end];
+        const box_region = game.box_regions[slice_start..slice_end];
+
+        solve_hidden_pairs_region(game, col_region);
+        solve_hidden_pairs_region(game, row_region);
+        solve_hidden_pairs_region(game, box_region);
+    }
+}
+
+fn solve_hidden_pairs_region(game: *GameState, region: []u32_2) void {
+    assert(region.len == game.extent);
+
+    // Use worst case size to allow allocating on the stack
+    var counts = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+    var position_mask = std.mem.zeroes([sudoku.MaxSudokuExtent]u16);
+
+    for (region) |cell_coord, cell_index| {
+        const cell = cell_at(game, cell_coord);
+        var mask = cell.hint_mask;
+
+        for (range(game.extent)) |_, number_index| {
+            if ((mask & 1) != 0) {
+                counts[number_index] += 1;
+                position_mask[number_index] |= sudoku.mask_for_number_index(@intCast(u32, cell_index));
+            }
+            mask >>= 1;
+        }
+    }
+
+    for (range(game.extent - 1)) |_, first_number| {
+        if (counts[first_number] != 2)
+            continue;
+
+        for (range(game.extent - first_number - 1)) |_, second_index| {
+            const second_number = second_index + first_number + 1;
+            assert(second_number < game.extent);
+
+            if (counts[second_number] != 2)
+                continue;
+
+            if (position_mask[first_number] != position_mask[second_number])
+                continue;
+
+            const pair_mask = sudoku.mask_for_number_index(@intCast(u32, first_number)) | sudoku.mask_for_number_index(@intCast(u32, second_number));
+
+            for (region) |cell_coord, i| {
+                var cell = cell_at(game, cell_coord);
+
+                if (((position_mask[first_number] >> @intCast(u4, i)) & 1) != 0) {
+                    cell.hint_mask = pair_mask;
+                } else {
+                    cell.hint_mask &= ~pair_mask;
+                }
+            }
+        }
+    }
+}

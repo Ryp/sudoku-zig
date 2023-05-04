@@ -228,6 +228,7 @@ pub fn player_solve(game: *GameState) void {
     solver.solve_trivial_candidates(game);
     solver.solve_naked_singles(game);
     solver.solve_hidden_singles(game);
+    solver.solve_hidden_pairs(game);
 
     push_state_to_history(game);
 }
