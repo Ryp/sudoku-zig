@@ -40,7 +40,6 @@ pub const GameState = struct {
     box_h: u32,
     board: []CellState = undefined,
     selected_cell: u32_2 = undefined,
-    rng: std.rand.Xoroshiro128, // Hardcode PRNG type for forward compatibility
 
     col_regions: []u32_2,
     row_regions: []u32_2,
@@ -70,7 +69,7 @@ pub fn mask_for_number_index(number_index: u32) u16 {
 
 // Creates blank board without mines.
 // Placement of mines is done on the first player input.
-pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, seed: u64) !GameState {
+pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !GameState {
     const extent = box_w * box_h;
     const cell_count = extent * extent;
 
@@ -104,7 +103,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, s
         .extent = extent,
         .box_w = box_w,
         .box_h = box_h,
-        .rng = std.rand.Xoroshiro128.init(seed),
         .board = board,
         .col_regions = col_regions,
         .row_regions = row_regions,

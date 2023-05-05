@@ -16,13 +16,8 @@ pub fn main() !void {
     const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
-    // Using the method from the docs to get a reasonably random seed
-    var buf: [8]u8 = undefined;
-    std.crypto.random.bytes(buf[0..]);
-    const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
-
     // Create game state
-    var game_state = try sudoku.create_game_state(gpa.allocator(), box_w, box_h, seed);
+    var game_state = try sudoku.create_game_state(gpa.allocator(), box_w, box_h);
     defer sudoku.destroy_game_state(gpa.allocator(), &game_state);
 
     if (args.len >= 4) {
