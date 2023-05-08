@@ -19,39 +19,9 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
-const GfxState = struct {
-    invalid_move_time_secs: f32 = 0.0,
-    is_hovered: bool = false,
-    is_exploded: bool = false,
-};
-
 // Soon to be deprecated in zig 0.11 for 0..x style ranges
 fn range(len: usize) []const void {
     return @as([*]void, undefined)[0..len];
-}
-
-fn allocate_2d_array_default_init(comptime T: type, allocator: std.mem.Allocator, x: usize, y: usize) ![][]T {
-    var array = try allocator.alloc([]T, x);
-    errdefer allocator.free(array);
-
-    for (array) |*column| {
-        column.* = try allocator.alloc(T, y);
-        errdefer allocator.free(column);
-
-        for (column.*) |*cell| {
-            cell.* = .{};
-        }
-    }
-
-    return array;
-}
-
-fn deallocate_2d_array(comptime T: type, allocator: std.mem.Allocator, array: [][]T) void {
-    for (array) |column| {
-        allocator.free(column);
-    }
-
-    allocator.free(array);
 }
 
 fn get_candidate_layout(game_extent: u32) std.meta.Vector(2, u32) {
@@ -135,6 +105,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     var text_small_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
     defer allocator.free(text_small_textures);
 
+    const candidate_layout = get_candidate_layout(game_state.extent);
+
     for (range(game_state.extent)) |_, i| {
         text_surfaces[i] = c.TTF_RenderText_LCD(font, NumbersString[i], TextColor, BgColor);
         //text_surfaces[i] = c.TTF_RenderText_Blended(font, NumbersString[i], TextColor);
@@ -153,17 +125,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetTextureBlendMode(text_small_textures[i], c.SDL_BLENDMODE_MUL);
     }
 
-    var shouldExit = false;
+    var should_exit = false;
 
-    var gfx_board = try allocate_2d_array_default_init(GfxState, allocator, game_state.extent, game_state.extent);
-    var last_frame_time_ms: u32 = c.SDL_GetTicks();
-
-    const candidate_layout = get_candidate_layout(game_state.extent);
-
-    while (!shouldExit) {
-        const current_frame_time_ms: u32 = c.SDL_GetTicks();
-        const frame_delta_secs = @intToFloat(f32, current_frame_time_ms - last_frame_time_ms) * 0.001;
-
+    while (!should_exit) {
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdlEvent) > 0) {
@@ -173,11 +137,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             switch (sdlEvent.type) {
                 c.SDL_QUIT => {
-                    shouldExit = true;
+                    should_exit = true;
                 },
                 c.SDL_KEYDOWN => {
                     if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE) {
-                        shouldExit = true;
+                        should_exit = true;
                     } else if (sdlEvent.key.keysym.sym == c.SDLK_0 or sdlEvent.key.keysym.sym == c.SDLK_DELETE) {
                         game.player_clear_number(game_state);
                     } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
@@ -244,20 +208,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         defer allocator.free(string);
 
         c.SDL_SetWindowTitle(window, string.ptr);
-
-        var mouse_x: c_int = undefined;
-        var mouse_y: c_int = undefined;
-        _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
-        const hovered_cell_x = @intCast(u16, std.math.max(0, std.math.min(game_state.extent, @divTrunc(mouse_x, SpriteScreenExtent))));
-        const hovered_cell_y = @intCast(u16, std.math.max(0, std.math.min(game_state.extent, @divTrunc(mouse_y, SpriteScreenExtent))));
-
-        for (gfx_board) |column| {
-            for (column) |*cell| {
-                cell.is_hovered = false;
-                cell.invalid_move_time_secs = std.math.max(0.0, cell.invalid_move_time_secs - frame_delta_secs);
-            }
-        }
-        gfx_board[hovered_cell_x][hovered_cell_y].is_hovered = true;
 
         // Render game
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
@@ -388,8 +338,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
         // Present
         c.SDL_RenderPresent(ren);
-
-        last_frame_time_ms = current_frame_time_ms;
     }
 
     for (range(game_state.extent)) |_, i| {
@@ -398,6 +346,4 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         c.SDL_DestroyTexture(text_small_textures[i]);
         c.SDL_FreeSurface(text_small_surfaces[i]);
     }
-
-    deallocate_2d_array(GfxState, allocator, gfx_board);
 }
