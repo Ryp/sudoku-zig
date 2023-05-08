@@ -23,18 +23,6 @@ fn first_bit_index(mask_ro: u32) u32 {
     return 32;
 }
 
-fn count_bits(mask_ro: u32) u32 {
-    var bits: u32 = 0;
-    var mask = mask_ro;
-
-    for (range(32)) |_| {
-        bits += mask & 1;
-        mask = mask >> 1;
-    }
-
-    return bits;
-}
-
 pub fn solve_trivial_candidates_at(game: *GameState, cell_coord: u32_2, number_index: u5) void {
     const box_index = sudoku.box_index_from_cell(game, cell_coord);
 
@@ -96,7 +84,7 @@ pub fn solve_naked_singles(game: *GameState) void {
     for (game.board) |cell, flat_index| {
         const index = sudoku.flat_index_to_2d(game.extent, flat_index);
 
-        if (cell.set_number == 0 and count_bits(cell.hint_mask) == 1) {
+        if (cell.set_number == 0 and @popCount(cell.hint_mask) == 1) {
             sudoku.place_number_remove_trivial_candidates(game, index, @intCast(u5, first_bit_index(cell.hint_mask)));
         }
     }
