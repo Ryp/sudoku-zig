@@ -2,16 +2,11 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
-const game = @import("game.zig");
-const @"u32_2" = game.u32_2;
-const @"u16_2" = game.u16_2;
-const event = @import("event.zig");
-
-const test_seed: u64 = 0xC0FFEE42DEADBEEF;
+const sudoku = @import("game.zig");
 
 test "Critical path" {
     const allocator: std.mem.Allocator = std.heap.page_allocator;
 
-    var game_state = try game.create_game_state(allocator, 3, 3, test_seed);
-    defer game.destroy_game_state(allocator, &game_state);
+    var game_state = try sudoku.create_game_state(allocator, 3, 3);
+    defer sudoku.destroy_game_state(allocator, &game_state);
 }
