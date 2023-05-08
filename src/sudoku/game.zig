@@ -67,8 +67,6 @@ pub fn mask_for_number_index(number_index: u32) u16 {
     return @as(u16, 1) << @intCast(u4, number_index);
 }
 
-// Creates blank board without mines.
-// Placement of mines is done on the first player input.
 pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !GameState {
     const extent = box_w * box_h;
     const cell_count = extent * extent;
