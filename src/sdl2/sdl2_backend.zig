@@ -140,51 +140,74 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     should_exit = true;
                 },
                 c.SDL_KEYDOWN => {
-                    if (sdlEvent.key.keysym.sym == c.SDLK_ESCAPE) {
-                        should_exit = true;
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_0 or sdlEvent.key.keysym.sym == c.SDLK_DELETE) {
-                        game.player_clear_number(game_state);
-                    } else if (sdlEvent.key.keysym.sym >= c.SDLK_1 and sdlEvent.key.keysym.sym <= c.SDLK_9) {
-                        const number_index = @intCast(u5, sdlEvent.key.keysym.sym - c.SDLK_1);
-                        input_number(game_state, is_any_shift_pressed, number_index);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_a) {
-                        input_number(game_state, is_any_shift_pressed, 9);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_b) {
-                        input_number(game_state, is_any_shift_pressed, 10);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_c) {
-                        input_number(game_state, is_any_shift_pressed, 11);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_d) {
-                        input_number(game_state, is_any_shift_pressed, 12);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_e) {
-                        input_number(game_state, is_any_shift_pressed, 13);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_f) {
-                        input_number(game_state, is_any_shift_pressed, 14);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_g) {
-                        input_number(game_state, is_any_shift_pressed, 15);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_z and is_any_ctrl_pressed) {
-                        if (is_any_shift_pressed) {
-                            game.player_redo(game_state);
-                        } else {
-                            game.player_undo(game_state);
-                        }
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_h and is_any_shift_pressed) {
-                        game.player_clear_hints(game_state);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_h) {
-                        game.player_fill_hints(game_state);
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_LEFT) {
-                        if (game_state.selected_cell[0] > 0)
-                            game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 1, 0 });
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_RIGHT) {
-                        if (game_state.selected_cell[0] + 1 < game_state.extent)
-                            game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 1, 0 });
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_UP) {
-                        if (game_state.selected_cell[1] > 0)
-                            game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 0, 1 });
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_DOWN) {
-                        if (game_state.selected_cell[1] + 1 < game_state.extent)
-                            game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
-                    } else if (sdlEvent.key.keysym.sym == c.SDLK_RETURN) {
-                        game.player_solve(game_state);
+                    switch (sdlEvent.key.keysym.sym) {
+                        c.SDLK_ESCAPE => {
+                            should_exit = true;
+                        },
+                        c.SDLK_DELETE, c.SDLK_0 => {
+                            game.player_clear_number(game_state);
+                        },
+                        c.SDLK_1...c.SDLK_9 => |sym| {
+                            const number_index = @intCast(u5, sym - c.SDLK_1);
+                            input_number(game_state, is_any_shift_pressed, number_index);
+                        },
+                        c.SDLK_a => {
+                            input_number(game_state, is_any_shift_pressed, 9);
+                        },
+                        c.SDLK_b => {
+                            input_number(game_state, is_any_shift_pressed, 10);
+                        },
+                        c.SDLK_c => {
+                            input_number(game_state, is_any_shift_pressed, 11);
+                        },
+                        c.SDLK_d => {
+                            input_number(game_state, is_any_shift_pressed, 12);
+                        },
+                        c.SDLK_e => {
+                            input_number(game_state, is_any_shift_pressed, 13);
+                        },
+                        c.SDLK_f => {
+                            input_number(game_state, is_any_shift_pressed, 14);
+                        },
+                        c.SDLK_g => {
+                            input_number(game_state, is_any_shift_pressed, 15);
+                        },
+                        c.SDLK_z => {
+                            if (is_any_ctrl_pressed) {
+                                if (is_any_shift_pressed) {
+                                    game.player_redo(game_state);
+                                } else {
+                                    game.player_undo(game_state);
+                                }
+                            }
+                        },
+                        c.SDLK_h => {
+                            if (is_any_shift_pressed) {
+                                game.player_clear_hints(game_state);
+                            } else {
+                                game.player_fill_hints(game_state);
+                            }
+                        },
+                        c.SDLK_LEFT => {
+                            if (game_state.selected_cell[0] > 0)
+                                game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 1, 0 });
+                        },
+                        c.SDLK_RIGHT => {
+                            if (game_state.selected_cell[0] + 1 < game_state.extent)
+                                game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 1, 0 });
+                        },
+                        c.SDLK_UP => {
+                            if (game_state.selected_cell[1] > 0)
+                                game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 0, 1 });
+                        },
+                        c.SDLK_DOWN => {
+                            if (game_state.selected_cell[1] + 1 < game_state.extent)
+                                game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
+                        },
+                        c.SDLK_RETURN => {
+                            game.player_solve(game_state);
+                        },
+                        else => {},
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
