@@ -105,6 +105,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     var text_small_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
     defer allocator.free(text_small_textures);
 
+    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku ({d}x{d} box size)", .{ game_state.box_w, game_state.box_h });
+    defer allocator.free(title_string);
+
+    c.SDL_SetWindowTitle(window, title_string.ptr);
+
     const candidate_layout = get_candidate_layout(game_state.extent);
 
     for (range(game_state.extent)) |_, i| {
@@ -226,11 +231,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             const cell = game.cell_at(game_state, game_state.selected_cell);
             highlighted_number = cell.set_number;
         }
-
-        const string = try std.fmt.allocPrintZ(allocator, "Sudoku {d}x{d}", .{ game_state.extent, game_state.extent });
-        defer allocator.free(string);
-
-        c.SDL_SetWindowTitle(window, string.ptr);
 
         // Render game
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
