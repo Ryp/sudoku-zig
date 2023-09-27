@@ -10,9 +10,9 @@ const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
-const SpriteScreenExtent = 57;
-const FontSize: u32 = 50;
-const FontSizeSmall: u32 = 16;
+const SpriteScreenExtent = 80;
+const FontSize: u32 = SpriteScreenExtent - 10;
+const FontSizeSmall: u32 = SpriteScreenExtent / 4;
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
 const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
