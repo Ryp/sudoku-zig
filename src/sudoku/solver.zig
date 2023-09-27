@@ -5,6 +5,12 @@ const sudoku = @import("game.zig");
 const GameState = sudoku.GameState;
 const cell_at = sudoku.cell_at;
 const u32_2 = sudoku.u32_2;
+const all = sudoku.all;
+
+const AABB_u32_2 = struct {
+    min: u32_2,
+    max: u32_2,
+};
 
 fn first_bit_index(mask_ro: u32) u32 {
     var mask = mask_ro;
@@ -195,5 +201,91 @@ fn solve_hidden_pairs_region(game: *GameState, region: []u32_2) void {
                 }
             }
         }
+    }
+}
+
+// If candidates in a box are arranged in a line, remove them from other boxes on that line.
+// Also called pointing pairs or triples in 9x9 sudoku.
+pub fn solve_pointing_lines(game: *GameState) void {
+    for (0..game.extent) |box_index| {
+        const slice_start = box_index * game.extent;
+        const slice_end = slice_start + game.extent;
+        const box_region = game.box_regions[slice_start..slice_end];
+
+        var box_aabbs: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
+        var candidate_counts = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+
+        // Compute AABB of candidates for each number
+        // FIXME cache remaining candidates per box and only iterate on this?
+        for (0..game.extent) |number_index| {
+            const number_mask = sudoku.mask_for_number_index(@intCast(number_index));
+
+            var aabb = &box_aabbs[number_index];
+            aabb.max = u32_2{ 0, 0 };
+            aabb.min = u32_2{ game.extent, game.extent };
+
+            for (box_region) |cell_coord| {
+                const cell = cell_at(game, cell_coord);
+
+                if ((cell.hint_mask & number_mask) != 0) {
+                    aabb.min = @min(aabb.min, cell_coord);
+                    aabb.max = @max(aabb.max, cell_coord);
+                    candidate_counts[number_index] += 1;
+                }
+            }
+
+            // Test if we have a valid AABB
+            // We don't care about single candidates, they should be found with simpler solving method already
+            if (candidate_counts[number_index] >= 2) {
+                const aabb_extent = aabb.max - aabb.min;
+                assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles
+
+                if (aabb_extent[0] == 0) {
+                    remove_candidates_from_pointing_colum(game, @intCast(number_index), @intCast(box_index), aabb.min[0]);
+                } else if (aabb_extent[1] == 0) {
+                    remove_candidates_from_pointing_row(game, @intCast(number_index), @intCast(box_index), aabb.min[1]);
+                }
+            }
+        }
+    }
+}
+
+fn remove_candidates_from_pointing_colum(game: *GameState, number_index: u32, box_flat_index: u32, col_index: u32) void {
+    const slice_start = col_index * game.extent;
+    const slice_end = slice_start + game.extent;
+    const col_region = game.col_regions[slice_start..slice_end];
+
+    const box_count = u32_2{ game.box_h, game.box_w };
+    const box_row_to_exclude = box_flat_index / box_count[0];
+    const number_mask = sudoku.mask_for_number_index(@intCast(number_index));
+
+    for (col_region, 0..game.extent) |cell_coord, row_index| {
+        const box_row = row_index / box_count[0];
+
+        if (box_row == box_row_to_exclude)
+            continue;
+
+        var cell = cell_at(game, cell_coord);
+        cell.hint_mask &= ~number_mask;
+    }
+}
+
+fn remove_candidates_from_pointing_row(game: *GameState, number_index: u32, box_flat_index: u32, row_index: u32) void {
+    const slice_start = row_index * game.extent;
+    const slice_end = slice_start + game.extent;
+    const row_region = game.row_regions[slice_start..slice_end];
+
+    const box_count = u32_2{ game.box_h, game.box_w };
+    const box_col_to_exclude = box_flat_index % box_count[0];
+    const number_mask = sudoku.mask_for_number_index(@intCast(number_index));
+
+    for (row_region, 0..game.extent) |cell_coord, col_index| {
+        const box_col = col_index / box_count[1];
+
+        if (box_col == box_col_to_exclude)
+            continue;
+
+        var cell = cell_at(game, cell_coord);
+        cell.hint_mask &= ~number_mask;
     }
 }

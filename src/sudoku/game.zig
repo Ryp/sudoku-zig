@@ -221,6 +221,7 @@ pub fn player_solve(game: *GameState) void {
     solver.solve_naked_singles(game);
     solver.solve_hidden_singles(game);
     solver.solve_hidden_pairs(game);
+    solver.solve_pointing_lines(game);
 
     push_state_to_history(game);
 }
