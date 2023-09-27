@@ -3,11 +3,6 @@ const assert = std.debug.assert;
 
 const solver = @import("solver.zig");
 
-// Soon to be deprecated in zig 0.11 for 0..x style ranges
-fn range(len: usize) []const void {
-    return @as([*]void, undefined)[0..len];
-}
-
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
@@ -17,11 +12,11 @@ pub fn all(vector: anytype) bool {
     return @reduce(.And, vector);
 }
 
-pub const @"u32_2" = std.meta.Vector(2, u32);
+pub const u32_2 = @Vector(2, u32);
 
 pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
-    const x = @intCast(u32, flat_index % extent);
-    const y = @intCast(u32, flat_index / extent);
+    const x: u32 = @intCast(flat_index % extent);
+    const y: u32 = @intCast(flat_index / extent);
 
     return .{ x, y };
 }
@@ -64,7 +59,7 @@ pub fn box_index_from_cell(game: *GameState, cell_position: u32_2) u32_2 {
 
 pub fn mask_for_number_index(number_index: u32) u16 {
     assert(number_index < MaxSudokuExtent);
-    return @as(u16, 1) << @intCast(u4, number_index);
+    return @as(u16, 1) << @intCast(number_index);
 }
 
 pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !GameState {
@@ -119,7 +114,7 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
 }
 
 fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: []u32_2, row_regions: []u32_2, box_regions: []u32_2) void {
-    for (range(extent)) |_, region_index_usize| {
+    for (0..extent) |region_index_usize| {
         const slice_start = region_index_usize * extent;
         const slice_end = slice_start + extent;
 
@@ -129,25 +124,26 @@ fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: []u32_2, row_r
 
         assert(col_region.len == extent);
 
-        const region_index = @intCast(u32, region_index_usize);
+        const region_index: u32 = @intCast(region_index_usize);
         const box_cell_offset_x = (region_index % box_h) * box_w;
         const box_cell_offset_y = (region_index / box_h) * box_h;
 
-        for (range(extent)) |_, i| {
-            col_region[i] = .{ @intCast(u32, region_index), @intCast(u32, i) };
-            row_region[i] = .{ @intCast(u32, i), @intCast(u32, region_index) };
+        for (col_region, row_region, box_region, 0..) |*col_cell, *row_cell, *box_cell, cell_index_usize| {
+            const cell_index: u32 = @intCast(cell_index_usize);
+            col_cell.* = .{ region_index, cell_index };
+            row_cell.* = .{ cell_index, region_index };
 
-            const col_index = box_cell_offset_x + @intCast(u32, i) % box_w;
-            const row_index = box_cell_offset_y + @intCast(u32, i) / box_w;
-            box_region[i] = .{ col_index, row_index };
+            const box_col_index: u32 = box_cell_offset_x + cell_index % box_w;
+            const box_row_index: u32 = box_cell_offset_y + cell_index / box_w;
+            box_cell.* = .{ box_col_index, box_row_index };
         }
     }
 }
 
 pub fn fill_from_string(game: *GameState, str: []u8) void {
-    assert(str.len <= game.extent * game.extent);
+    assert(str.len == game.extent * game.extent);
 
-    for (str) |char, i| {
+    for (game.board, str) |*cell, char| {
         var number: u8 = 0;
 
         if (char >= '1' and char <= '9') {
@@ -160,7 +156,7 @@ pub fn fill_from_string(game: *GameState, str: []u8) void {
 
         assert(number <= game.extent); // Zero is okay in our case
 
-        game.board[i].set_number = @intCast(u5, number);
+        cell.set_number = @intCast(number);
     }
 }
 
@@ -272,11 +268,11 @@ pub fn player_fill_hints(game: *GameState) void {
         if (cell.set_number != 0) {
             cell.hint_mask = mask_for_number_index(cell.set_number - 1);
         } else {
-            cell.hint_mask = @intCast(u16, (@as(u32, 1) << @intCast(u5, game.extent)) - 1);
+            cell.hint_mask = @intCast((@as(u32, 1) << @intCast(game.extent)) - 1);
         }
     }
 
-    for (game.board) |*cell, flat_index| {
+    for (game.board, 0..) |*cell, flat_index| {
         if (cell.set_number != 0) {
             const index = flat_index_to_2d(game.extent, flat_index);
             place_number_remove_trivial_candidates(game, index, cell.set_number - 1);

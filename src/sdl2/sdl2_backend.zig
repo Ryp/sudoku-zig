@@ -19,12 +19,7 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
-// Soon to be deprecated in zig 0.11 for 0..x style ranges
-fn range(len: usize) []const void {
-    return @as([*]void, undefined)[0..len];
-}
-
-fn get_candidate_layout(game_extent: u32) std.meta.Vector(2, u32) {
+fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     if (game_extent > 12) {
         return .{ 4, 4 };
     } else if (game_extent > 9) {
@@ -76,7 +71,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     };
     defer c.TTF_CloseFont(font_small);
 
-    const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, width), @intCast(c_int, height), c.SDL_WINDOW_SHOWN) orelse {
+    const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(width), @intCast(height), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
@@ -99,11 +94,33 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     var text_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
     defer allocator.free(text_textures);
 
+    const numbers_string = NumbersString[0..game_state.extent];
+
+    for (text_surfaces, text_textures, numbers_string) |*surface, *texture, number_string| {
+        surface.* = c.TTF_RenderText_LCD(font, number_string, TextColor, BgColor);
+        texture.* = c.SDL_CreateTextureFromSurface(ren, surface.*) orelse {
+            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+
+        _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
+    }
+
     var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
     defer allocator.free(text_small_surfaces);
 
     var text_small_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
     defer allocator.free(text_small_textures);
+
+    for (text_small_surfaces, text_small_textures, numbers_string) |*surface, *texture, number_string| {
+        surface.* = c.TTF_RenderText_LCD(font_small, number_string, TextColor, BgColor);
+        texture.* = c.SDL_CreateTextureFromSurface(ren, surface.*) orelse {
+            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+
+        _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
+    }
 
     const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku ({d}x{d} box size)", .{ game_state.box_w, game_state.box_h });
     defer allocator.free(title_string);
@@ -111,24 +128,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     c.SDL_SetWindowTitle(window, title_string.ptr);
 
     const candidate_layout = get_candidate_layout(game_state.extent);
-
-    for (range(game_state.extent)) |_, i| {
-        text_surfaces[i] = c.TTF_RenderText_LCD(font, NumbersString[i], TextColor, BgColor);
-        //text_surfaces[i] = c.TTF_RenderText_Blended(font, NumbersString[i], TextColor);
-        //text_surfaces[i] = c.TTF_RenderText_Shaded(font, NumbersString[i], TextColor, BgColor);
-        text_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_surfaces[i]) orelse {
-            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        };
-        _ = c.SDL_SetTextureBlendMode(text_textures[i], c.SDL_BLENDMODE_MUL);
-
-        text_small_surfaces[i] = c.TTF_RenderText_LCD(font_small, NumbersString[i], TextColor, BgColor);
-        text_small_textures[i] = c.SDL_CreateTextureFromSurface(ren, text_small_surfaces[i]) orelse {
-            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        };
-        _ = c.SDL_SetTextureBlendMode(text_small_textures[i], c.SDL_BLENDMODE_MUL);
-    }
 
     var should_exit = false;
 
@@ -153,8 +152,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                             game.player_clear_number(game_state);
                         },
                         c.SDLK_1...c.SDLK_9 => |sym| {
-                            const number_index = @intCast(u5, sym - c.SDLK_1);
-                            input_number(game_state, is_any_shift_pressed, number_index);
+                            input_number(game_state, is_any_shift_pressed, @intCast(sym - c.SDLK_1));
                         },
                         c.SDLK_a => {
                             input_number(game_state, is_any_shift_pressed, 9);
@@ -216,8 +214,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
-                    const x = @intCast(u32, @divTrunc(sdlEvent.button.x, SpriteScreenExtent));
-                    const y = @intCast(u32, @divTrunc(sdlEvent.button.y, SpriteScreenExtent));
+                    const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent));
+                    const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         game.player_toggle_select(game_state, .{ x, y });
                     }
@@ -236,13 +234,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
         _ = c.SDL_RenderClear(ren);
 
-        for (game_state.board) |cell, flat_index| {
+        for (game_state.board, 0..) |cell, flat_index| {
             const cell_index = game.flat_index_to_2d(game_state.extent, flat_index);
             const box_index = game.box_index_from_cell(game_state, cell_index);
 
             const cell_rect = c.SDL_Rect{
-                .x = @intCast(c_int, cell_index[0] * SpriteScreenExtent),
-                .y = @intCast(c_int, cell_index[1] * SpriteScreenExtent),
+                .x = @intCast(cell_index[0] * SpriteScreenExtent),
+                .y = @intCast(cell_index[1] * SpriteScreenExtent),
                 .w = SpriteScreenExtent,
                 .h = SpriteScreenExtent,
             };
@@ -283,13 +281,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw candidates
             if (cell.set_number == 0) {
-                for (range(game_state.extent)) |_, index| {
-                    if ((cell.hint_mask >> @intCast(u4, index) & 1) > 0) {
+                for (0..game_state.extent) |index| {
+                    if ((cell.hint_mask >> @intCast(index) & 1) > 0) {
                         var candidate_rect = cell_rect;
-                        candidate_rect.x += @intCast(c_int, @rem(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
-                        candidate_rect.y += @intCast(c_int, @divTrunc(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
-                        candidate_rect.w = @divTrunc(cell_rect.w, @intCast(c_int, candidate_layout[0]));
-                        candidate_rect.h = @divTrunc(cell_rect.h, @intCast(c_int, candidate_layout[1]));
+                        candidate_rect.x += @intCast(@rem(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
+                        candidate_rect.y += @intCast(@divTrunc(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
+                        candidate_rect.w = @divTrunc(cell_rect.w, @as(c_int, @intCast(candidate_layout[0])));
+                        candidate_rect.h = @divTrunc(cell_rect.h, @as(c_int, @intCast(candidate_layout[1])));
 
                         if (highlighted_number == index + 1) {
                             _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
@@ -316,18 +314,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetRenderDrawColor(ren, TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 
         // Draw thin grid
-        for (range(game_state.extent + 1)) |_, index| {
+        for (0..game_state.extent + 1) |index| {
             const horizontal_rect = c.SDL_Rect{
-                .x = @intCast(c_int, index * SpriteScreenExtent),
+                .x = @intCast(index * SpriteScreenExtent),
                 .y = 0,
                 .w = 1,
-                .h = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .h = @intCast(game_state.extent * SpriteScreenExtent),
             };
 
             const vertical_rect = c.SDL_Rect{
                 .x = 0,
-                .y = @intCast(c_int, index * SpriteScreenExtent),
-                .w = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .y = @intCast(index * SpriteScreenExtent),
+                .w = @intCast(game_state.extent * SpriteScreenExtent),
                 .h = 1,
             };
 
@@ -336,23 +334,23 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         }
 
         // Draw horizontal lines
-        for (range(game_state.box_h + 1)) |_, index| {
+        for (0..game_state.box_h + 1) |index| {
             const rect = c.SDL_Rect{
-                .x = @intCast(c_int, index * game_state.box_w * SpriteScreenExtent) - 1,
+                .x = @as(c_int, @intCast(index * game_state.box_w * SpriteScreenExtent)) - 1,
                 .y = 0,
                 .w = 3,
-                .h = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .h = @intCast(game_state.extent * SpriteScreenExtent),
             };
 
             _ = c.SDL_RenderFillRect(ren, &rect);
         }
 
         // Draw vertical lines
-        for (range(game_state.box_w + 1)) |_, index| {
+        for (0..game_state.box_w + 1) |index| {
             const rect = c.SDL_Rect{
                 .x = 0,
-                .y = @intCast(c_int, index * game_state.box_h * SpriteScreenExtent) - 1,
-                .w = @intCast(c_int, game_state.extent * SpriteScreenExtent),
+                .y = @as(c_int, @intCast(index * game_state.box_h * SpriteScreenExtent)) - 1,
+                .w = @intCast(game_state.extent * SpriteScreenExtent),
                 .h = 3,
             };
 
@@ -363,10 +361,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         c.SDL_RenderPresent(ren);
     }
 
-    for (range(game_state.extent)) |_, i| {
-        c.SDL_DestroyTexture(text_textures[i]);
-        c.SDL_FreeSurface(text_surfaces[i]);
-        c.SDL_DestroyTexture(text_small_textures[i]);
-        c.SDL_FreeSurface(text_small_surfaces[i]);
+    for (text_textures, text_surfaces) |texture, surface| {
+        c.SDL_DestroyTexture(texture);
+        c.SDL_FreeSurface(surface);
+    }
+
+    for (text_small_textures, text_small_surfaces) |texture, surface| {
+        c.SDL_DestroyTexture(texture);
+        c.SDL_FreeSurface(surface);
     }
 }

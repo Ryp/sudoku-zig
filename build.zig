@@ -1,25 +1,23 @@
 const Builder = @import("std").build.Builder;
 
 pub fn build(b: *Builder) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
-
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable("sudoku", "src/main.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-    exe.install();
+    const exe = b.addExecutable(.{
+        .name = "sudoku",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .optimize = optimize,
+    });
+
+    b.installArtifact(exe);
+
     exe.linkSystemLibrary("c");
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2_ttf");
 
-    const run_cmd = exe.run();
+    const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -29,6 +27,11 @@ pub fn build(b: *Builder) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run tests");
-    const a_test = b.addTest("src/sudoku/test.zig");
+    const a_test = b.addTest(.{
+        .name = "test",
+        .root_source_file = .{ .path = "src/sudoku/test.zig" },
+        .optimize = optimize,
+    });
+
     test_step.dependOn(&a_test.step);
 }
