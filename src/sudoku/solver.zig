@@ -26,14 +26,11 @@ fn first_bit_index(mask_ro: u32) u32 {
 
 pub fn solve_trivial_candidates_at(game: *GameState, cell_coord: u32_2, number_index: u5) void {
     const box_index = sudoku.box_index_from_cell(game, cell_coord);
+    const box_index_flat = box_index[0] + box_index[1] * game.box_h;
 
-    const col_start = game.extent * cell_coord[0];
-    const row_start = game.extent * cell_coord[1];
-    const box_start = game.extent * (box_index[0] + box_index[1] * game.box_h);
-
-    const col_region = game.col_regions[col_start .. col_start + game.extent];
-    const row_region = game.row_regions[row_start .. row_start + game.extent];
-    const box_region = game.box_regions[box_start .. box_start + game.extent];
+    const col_region = game.col_regions[cell_coord[0]];
+    const row_region = game.row_regions[cell_coord[1]];
+    const box_region = game.box_regions[box_index_flat];
 
     const mask = sudoku.mask_for_number_index(number_index);
 
@@ -45,14 +42,7 @@ pub fn solve_trivial_candidates_at(game: *GameState, cell_coord: u32_2, number_i
 }
 
 pub fn solve_trivial_candidates(game: *GameState) void {
-    for (0..game.extent) |region_index_usize| {
-        const slice_start = region_index_usize * game.extent;
-        const slice_end = slice_start + game.extent;
-
-        const col_region = game.col_regions[slice_start..slice_end];
-        const row_region = game.row_regions[slice_start..slice_end];
-        const box_region = game.box_regions[slice_start..slice_end];
-
+    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
         solve_eliminate_candidate_region(game, col_region);
         solve_eliminate_candidate_region(game, row_region);
         solve_eliminate_candidate_region(game, box_region);
@@ -92,14 +82,7 @@ pub fn solve_naked_singles(game: *GameState) void {
 }
 
 pub fn solve_hidden_singles(game: *GameState) void {
-    for (0..game.extent) |region_index_usize| {
-        const slice_start = region_index_usize * game.extent;
-        const slice_end = slice_start + game.extent;
-
-        const col_region = game.col_regions[slice_start..slice_end];
-        const row_region = game.row_regions[slice_start..slice_end];
-        const box_region = game.box_regions[slice_start..slice_end];
-
+    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
         solve_hidden_singles_region(game, col_region);
         solve_hidden_singles_region(game, row_region);
         solve_hidden_singles_region(game, box_region);
@@ -141,14 +124,7 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32_2) void {
 }
 
 pub fn solve_hidden_pairs(game: *GameState) void {
-    for (0..game.extent) |region_index_usize| {
-        const slice_start = region_index_usize * game.extent;
-        const slice_end = slice_start + game.extent;
-
-        const col_region = game.col_regions[slice_start..slice_end];
-        const row_region = game.row_regions[slice_start..slice_end];
-        const box_region = game.box_regions[slice_start..slice_end];
-
+    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
         solve_hidden_pairs_region(game, col_region);
         solve_hidden_pairs_region(game, row_region);
         solve_hidden_pairs_region(game, box_region);
@@ -208,9 +184,7 @@ fn solve_hidden_pairs_region(game: *GameState, region: []u32_2) void {
 // Also called pointing pairs or triples in 9x9 sudoku.
 pub fn solve_pointing_lines(game: *GameState) void {
     for (0..game.extent) |box_index| {
-        const slice_start = box_index * game.extent;
-        const slice_end = slice_start + game.extent;
-        const box_region = game.box_regions[slice_start..slice_end];
+        const box_region = game.box_regions[box_index];
 
         var box_aabbs: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
         var candidate_counts = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
@@ -251,9 +225,7 @@ pub fn solve_pointing_lines(game: *GameState) void {
 }
 
 fn remove_candidates_from_pointing_colum(game: *GameState, number_index: u32, box_flat_index: u32, col_index: u32) void {
-    const slice_start = col_index * game.extent;
-    const slice_end = slice_start + game.extent;
-    const col_region = game.col_regions[slice_start..slice_end];
+    const col_region = game.col_regions[col_index];
 
     const box_count = u32_2{ game.box_h, game.box_w };
     const box_row_to_exclude = box_flat_index / box_count[0];
@@ -271,9 +243,7 @@ fn remove_candidates_from_pointing_colum(game: *GameState, number_index: u32, bo
 }
 
 fn remove_candidates_from_pointing_row(game: *GameState, number_index: u32, box_flat_index: u32, row_index: u32) void {
-    const slice_start = row_index * game.extent;
-    const slice_end = slice_start + game.extent;
-    const row_region = game.row_regions[slice_start..slice_end];
+    const row_region = game.row_regions[row_index];
 
     const box_count = u32_2{ game.box_h, game.box_w };
     const box_col_to_exclude = box_flat_index % box_count[0];
