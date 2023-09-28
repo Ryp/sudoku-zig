@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const sudoku = @import("game.zig");
 // FIXME Use another simpler struct for the board?
 const GameState = sudoku.GameState;
+const UnsetNumber = sudoku.UnsetNumber;
 const cell_at = sudoku.cell_at;
 const u32_2 = sudoku.u32_2;
 
@@ -34,10 +35,7 @@ fn swap_region(game: *GameState, region_a: []u32_2, region_b: []u32_2) void {
         var cell_a = cell_at(game, cell_coord_a);
         var cell_b = cell_at(game, cell_coord_b);
 
-        // FIXME use swap
-        const t = cell_a.set_number;
-        cell_a.set_number = cell_b.set_number;
-        cell_b.set_number = t;
+        std.mem.swap(u5, &cell_a.number, &cell_b.number);
     }
 }
 
@@ -51,7 +49,7 @@ pub fn generate_dumb_grid(game: *GameState) void {
             const box_offset = region_index / game.box_h;
             const number_index = @as(u32, @intCast(i + line_offset + box_offset)) % game.extent;
 
-            cell.set_number = @intCast(number_index + 1);
+            cell.number = @intCast(number_index);
         }
     }
 
@@ -87,8 +85,8 @@ pub fn generate_dumb_grid(game: *GameState) void {
 
         var cell = cell_at(game, .{ x, y });
 
-        if (cell.set_number != 0) {
-            cell.set_number = 0;
+        if (cell.number != UnsetNumber) {
+            cell.number = UnsetNumber;
             numbers_to_remove -= 1;
         }
     }

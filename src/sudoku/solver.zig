@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const sudoku = @import("game.zig");
 const GameState = sudoku.GameState;
+const UnsetNumber = sudoku.UnsetNumber;
 const cell_at = sudoku.cell_at;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
@@ -57,15 +58,15 @@ fn solve_eliminate_candidate_region(game: *GameState, region: []u32_2) void {
     for (region) |cell_coord| {
         const cell = cell_at(game, cell_coord);
 
-        if (cell.set_number != 0) {
-            used_mask |= sudoku.mask_for_number_index(cell.set_number - 1);
+        if (cell.number != UnsetNumber) {
+            used_mask |= sudoku.mask_for_number_index(cell.number);
         }
     }
 
     for (region) |cell_coord| {
         const cell = cell_at(game, cell_coord);
 
-        if (cell.set_number == 0) {
+        if (cell.number == UnsetNumber) {
             cell.hint_mask &= ~used_mask;
         }
     }
@@ -76,7 +77,7 @@ pub fn solve_naked_singles(game: *GameState) void {
     for (game.board, 0..) |cell, flat_index| {
         const index = sudoku.flat_index_to_2d(game.extent, flat_index);
 
-        if (cell.set_number == 0 and @popCount(cell.hint_mask) == 1) {
+        if (cell.number == UnsetNumber and @popCount(cell.hint_mask) == 1) {
             sudoku.place_number_remove_trivial_candidates(game, index, @intCast(first_bit_index(cell.hint_mask)));
         }
     }
@@ -117,7 +118,7 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32_2) void {
             const coords = last_occurences[number_index];
             var cell = sudoku.cell_at(game, coords);
 
-            if (cell.set_number == 0) {
+            if (cell.number == UnsetNumber) {
                 sudoku.place_number_remove_trivial_candidates(game, coords, @intCast(number_index));
             }
         }

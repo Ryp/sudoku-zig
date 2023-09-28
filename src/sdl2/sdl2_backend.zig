@@ -8,6 +8,7 @@ const c = @cImport({
 
 const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
+const UnsetNumber = game.UnsetNumber;
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
 const SpriteScreenExtent = 80;
@@ -224,10 +225,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
         }
 
-        var highlighted_number: u32 = 0;
+        var highlighted_number: u32 = UnsetNumber;
         if (game.all(game_state.selected_cell < game.u32_2{ game_state.extent, game_state.extent })) {
             const cell = game.cell_at(game_state, game_state.selected_cell);
-            highlighted_number = cell.set_number;
+            highlighted_number = cell.number;
         }
 
         // Render game
@@ -257,17 +258,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
                 //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
-            } else if (highlighted_number > 0 and highlighted_number == cell.set_number) {
+            } else if (highlighted_number != UnsetNumber and highlighted_number == cell.number) {
                 _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             }
 
             // Draw placed numbers
-            if (cell.set_number != 0) {
-                const number_index: u32 = cell.set_number - 1;
+            if (cell.number != UnsetNumber) {
                 var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                if (c.TTF_SizeText(font, NumbersString[number_index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                if (c.TTF_SizeText(font, NumbersString[cell.number], &glyph_rect.w, &glyph_rect.h) != 0) {
                     c.SDL_Log("TTF error: %s", c.TTF_GetError());
                     return error.SDLInitializationFailed;
                 }
@@ -276,11 +276,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
                 glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
 
-                _ = c.SDL_RenderCopy(ren, text_textures[number_index], &glyph_rect, &glyph_out_rect);
+                _ = c.SDL_RenderCopy(ren, text_textures[cell.number], &glyph_rect, &glyph_out_rect);
             }
 
             // Draw candidates
-            if (cell.set_number == 0) {
+            if (cell.number == UnsetNumber) {
                 for (0..game_state.extent) |index| {
                     if ((cell.hint_mask >> @intCast(index) & 1) > 0) {
                         var candidate_rect = cell_rect;
@@ -289,7 +289,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         candidate_rect.w = @divTrunc(cell_rect.w, @as(c_int, @intCast(candidate_layout[0])));
                         candidate_rect.h = @divTrunc(cell_rect.h, @as(c_int, @intCast(candidate_layout[1])));
 
-                        if (highlighted_number == index + 1) {
+                        if (highlighted_number == index) {
                             _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                             _ = c.SDL_RenderFillRect(ren, &candidate_rect);
                         }

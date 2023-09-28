@@ -23,10 +23,11 @@ pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
 }
 
 pub const MaxSudokuExtent = 16;
+pub const UnsetNumber: u5 = 0x1F;
 const MaxHistorySize = 512;
 
 pub const CellState = struct {
-    set_number: u5 = 0,
+    number: u5 = UnsetNumber,
     hint_mask: u16 = 0,
 };
 
@@ -159,19 +160,19 @@ pub fn fill_from_string(game: *GameState, str: []u8) void {
     assert(str.len == game.extent * game.extent);
 
     for (game.board, str) |*cell, char| {
-        var number: u8 = 0;
+        var number: u8 = UnsetNumber;
 
         if (char >= '1' and char <= '9') {
-            number = char - '0';
+            number = char - '1';
         } else if (char >= 'A' and char <= 'G') {
-            number = char - 'A' + 10;
+            number = char - 'A' + 9;
         } else if (char >= 'a' and char <= 'g') {
-            number = char - 'a' + 10;
+            number = char - 'a' + 9;
         }
 
-        assert(number <= game.extent); // Zero is okay in our case
+        assert(number < game.extent or number == UnsetNumber);
 
-        cell.set_number = @intCast(number);
+        cell.number = @intCast(number);
     }
 }
 
@@ -197,7 +198,7 @@ pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
 pub fn player_clear_number(game: *GameState) void {
     if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         var cell = cell_at(game, game.selected_cell);
-        cell.set_number = 0;
+        cell.number = UnsetNumber;
         cell.hint_mask = 0;
 
         push_state_to_history(game);
@@ -215,7 +216,7 @@ pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
     if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         var cell = cell_at(game, game.selected_cell);
 
-        if (cell.set_number == 0) {
+        if (cell.number == UnsetNumber) {
             cell.hint_mask ^= mask_for_number_index(number_index);
         }
 
@@ -226,7 +227,7 @@ pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
 pub fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
     var cell = cell_at(game, coord);
 
-    cell.set_number = number_index + 1;
+    cell.number = number_index;
     cell.hint_mask = mask_for_number_index(number_index);
 }
 
@@ -285,17 +286,17 @@ fn load_state_from_history(game: *GameState, index: u32) void {
 pub fn player_fill_hints(game: *GameState) void {
     // Prepare hint mask for the solver
     for (game.board) |*cell| {
-        if (cell.set_number != 0) {
-            cell.hint_mask = mask_for_number_index(cell.set_number - 1);
+        if (cell.number != UnsetNumber) {
+            cell.hint_mask = mask_for_number_index(cell.number);
         } else {
             cell.hint_mask = @intCast((@as(u32, 1) << @intCast(game.extent)) - 1);
         }
     }
 
     for (game.board, 0..) |*cell, flat_index| {
-        if (cell.set_number != 0) {
+        if (cell.number != UnsetNumber) {
             const index = flat_index_to_2d(game.extent, flat_index);
-            place_number_remove_trivial_candidates(game, index, cell.set_number - 1);
+            place_number_remove_trivial_candidates(game, index, cell.number);
         }
     }
 
