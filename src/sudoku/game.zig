@@ -35,15 +35,15 @@ pub const GameState = struct {
     extent: u32,
     box_w: u32,
     box_h: u32,
-    board: []CellState = undefined,
-    selected_cell: u32_2 = undefined,
+    board: []CellState,
+    selected_cell: u32_2,
 
-    region_offsets: []u32_2 = undefined,
-    col_regions: [][]u32_2 = undefined,
-    row_regions: [][]u32_2 = undefined,
-    box_regions: [][]u32_2 = undefined,
+    region_offsets: []u32_2,
+    col_regions: [][]u32_2,
+    row_regions: [][]u32_2,
+    box_regions: [][]u32_2,
 
-    history: []CellState = undefined,
+    history: []CellState,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
 };
