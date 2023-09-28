@@ -21,6 +21,7 @@ fn first_bit_index(mask_ro: u32) u32 {
         mask = mask >> 1;
     }
 
+    assert(false);
     return 32;
 }
 

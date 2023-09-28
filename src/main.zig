@@ -20,8 +20,10 @@ pub fn main() !void {
     var game_state = try sudoku.create_game_state(gpa.allocator(), box_w, box_h);
     defer sudoku.destroy_game_state(gpa.allocator(), &game_state);
 
-    if (args.len >= 4) {
+    if (args.len == 4) {
         sudoku.fill_from_string(&game_state, args[3]);
+    } else if (args.len == 3) {
+        sudoku.fill_from_generator(&game_state);
     }
 
     sudoku.start_game(&game_state);

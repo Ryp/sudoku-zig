@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 
 // I borrowed this name from HLSL
@@ -172,6 +173,10 @@ pub fn fill_from_string(game: *GameState, str: []u8) void {
 
         cell.set_number = @intCast(number);
     }
+}
+
+pub fn fill_from_generator(game: *GameState) void {
+    generator.generate_dumb_grid(game);
 }
 
 pub fn start_game(game: *GameState) void {
