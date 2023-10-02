@@ -47,9 +47,9 @@ pub fn generate_dumb_grid(game: *GameState) void {
             var cell = cell_at(game, cell_coord);
             const line_offset = region_index * game.box_w;
             const box_offset = region_index / game.box_h;
-            const number_index = @as(u32, @intCast(i + line_offset + box_offset)) % game.extent;
+            const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % game.extent);
 
-            cell.number = @intCast(number_index);
+            cell.number = number;
         }
     }
 
@@ -63,7 +63,7 @@ pub fn generate_dumb_grid(game: *GameState) void {
 
     // Apply isomorphisms to that grid to make it look more interesting
     // Possible candidates:
-    // - Swap two parallel lines going through the same column
+    // - Swap two parallel lines going through the same box
     // - Flip horizontally or vertically
     // - Rotate by 180 degrees
     for (0..rounds) |_| {
@@ -72,7 +72,7 @@ pub fn generate_dumb_grid(game: *GameState) void {
     }
 
     // Remove numbers at random places to give a challenge to the player.
-    // The biggest issue here is that we don't control resulting difficulty very well,
+    // FIXME The biggest issue here is that we don't control resulting difficulty very well,
     // and we might even generate a grid that has too many holes therefore multiple solutions.
     const cell_count = game.extent * game.extent;
     var numbers_to_remove = (cell_count * 2) / 4;

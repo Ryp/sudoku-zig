@@ -9,6 +9,7 @@ const c = @cImport({
 const game = @import("../sudoku/game.zig");
 const GameState = game.GameState;
 const UnsetNumber = game.UnsetNumber;
+const event = @import("../sudoku/event.zig");
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
 const SpriteScreenExtent = 80;
@@ -36,11 +37,11 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     }
 }
 
-fn input_number(game_state: *GameState, candidate_mode: bool, number_index: u5) void {
+fn input_number(game_state: *GameState, candidate_mode: bool, number: u4) void {
     if (candidate_mode) {
-        game.player_toggle_guess(game_state, number_index);
+        game.player_toggle_guess(game_state, number);
     } else {
-        game.player_input_number(game_state, number_index);
+        game.player_input_number(game_state, number);
     }
 }
 

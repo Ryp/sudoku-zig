@@ -3,6 +3,8 @@ const assert = std.debug.assert;
 
 const generator = @import("generator.zig");
 const solver = @import("solver.zig");
+const event = @import("event.zig");
+const SolverEvent = event.SolverEvent;
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -46,6 +48,9 @@ pub const GameState = struct {
     history: []CellState,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
+
+    solver_events: []SolverEvent,
+    solver_event_index: u32 = 0,
 };
 
 pub fn cell_at(game: *GameState, position: u32_2) *CellState {
@@ -60,9 +65,8 @@ pub fn box_index_from_cell(game: *GameState, cell_position: u32_2) u32_2 {
     return .{ x, y };
 }
 
-pub fn mask_for_number_index(number_index: u32) u16 {
-    assert(number_index < MaxSudokuExtent);
-    return @as(u16, 1) << @intCast(number_index);
+pub fn mask_for_number(number: u4) u16 {
+    return @as(u16, 1) << number;
 }
 
 pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !GameState {
@@ -109,6 +113,9 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !
 
     fill_regions(extent, box_w, box_h, col_regions, row_regions, box_regions);
 
+    const solver_events = try allocator.alloc(SolverEvent, cell_count * extent);
+    errdefer allocator.free(solver_events);
+
     return GameState{
         .extent = extent,
         .box_w = box_w,
@@ -120,10 +127,12 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !
         .region_offsets = region_offsets,
         .history = history,
         .selected_cell = u32_2{ extent, extent }, // Invalid value
+        .solver_events = solver_events,
     };
 }
 
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
+    allocator.free(game.solver_events);
     allocator.free(game.col_regions);
     allocator.free(game.row_regions);
     allocator.free(game.box_regions);
@@ -205,35 +214,35 @@ pub fn player_clear_number(game: *GameState) void {
     }
 }
 
-pub fn player_input_number(game: *GameState, number_index: u5) void {
-    if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        place_number_remove_trivial_candidates(game, game.selected_cell, number_index);
+pub fn player_input_number(game: *GameState, number: u4) void {
+    if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+        place_number_remove_trivial_candidates(game, game.selected_cell, number);
         push_state_to_history(game);
     }
 }
 
-pub fn player_toggle_guess(game: *GameState, number_index: u5) void {
-    if (number_index < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+pub fn player_toggle_guess(game: *GameState, number: u4) void {
+    if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
         var cell = cell_at(game, game.selected_cell);
 
         if (cell.number == UnsetNumber) {
-            cell.hint_mask ^= mask_for_number_index(number_index);
+            cell.hint_mask ^= mask_for_number(number);
         }
 
         push_state_to_history(game);
     }
 }
 
-pub fn place_number(game: *GameState, coord: u32_2, number_index: u5) void {
+pub fn place_number(game: *GameState, coord: u32_2, number: u4) void {
     var cell = cell_at(game, coord);
 
-    cell.number = number_index;
-    cell.hint_mask = mask_for_number_index(number_index);
+    cell.number = number;
+    cell.hint_mask = mask_for_number(number);
 }
 
-pub fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number_index: u5) void {
-    place_number(game, coord, number_index);
-    solver.solve_trivial_candidates_at(game, coord, number_index);
+pub fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number: u4) void {
+    place_number(game, coord, number);
+    solver.solve_trivial_candidates_at(game, coord, number);
 }
 
 pub fn player_solve(game: *GameState) void {
@@ -287,7 +296,7 @@ pub fn player_fill_hints(game: *GameState) void {
     // Prepare hint mask for the solver
     for (game.board) |*cell| {
         if (cell.number != UnsetNumber) {
-            cell.hint_mask = mask_for_number_index(cell.number);
+            cell.hint_mask = mask_for_number(@intCast(cell.number));
         } else {
             cell.hint_mask = @intCast((@as(u32, 1) << @intCast(game.extent)) - 1);
         }
@@ -296,7 +305,7 @@ pub fn player_fill_hints(game: *GameState) void {
     for (game.board, 0..) |*cell, flat_index| {
         if (cell.number != UnsetNumber) {
             const index = flat_index_to_2d(game.extent, flat_index);
-            place_number_remove_trivial_candidates(game, index, cell.number);
+            place_number_remove_trivial_candidates(game, index, @intCast(cell.number));
         }
     }
 
