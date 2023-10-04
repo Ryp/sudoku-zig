@@ -230,10 +230,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
         }
 
-        var highlighted_number: u32 = UnsetNumber;
+        var highlight_mask: u16 = 0;
         if (game.all(game_state.selected_cell < game.u32_2{ game_state.extent, game_state.extent })) {
             const cell = game.cell_at(game_state, game_state.selected_cell);
-            highlighted_number = cell.number;
+
+            if (cell.number != UnsetNumber) {
+                highlight_mask = game.mask_for_number(@intCast(cell.number));
+            }
         }
 
         // Render game
@@ -259,13 +262,15 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw highlighted cell
             if (game.all(game_state.selected_cell == cell_index)) {
-                //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_MUL);
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
-                //_ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
-            } else if (highlighted_number != UnsetNumber and highlighted_number == cell.number) {
-                _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
-                _ = c.SDL_RenderFillRect(ren, &cell_rect);
+            } else {
+                if (cell.number != UnsetNumber) {
+                    if (highlight_mask & game.mask_for_number(@intCast(cell.number)) != 0) {
+                        _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                        _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                    }
+                }
             }
 
             // Draw placed numbers
@@ -286,22 +291,23 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw candidates
             if (cell.number == UnsetNumber) {
-                for (0..game_state.extent) |index| {
-                    if ((cell.hint_mask >> @intCast(index) & 1) > 0) {
+                for (0..game_state.extent) |number_usize| {
+                    const number: u4 = @intCast(number_usize);
+                    if (((cell.hint_mask >> number) & 1) != 0) {
                         var candidate_rect = cell_rect;
-                        candidate_rect.x += @intCast(@rem(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
-                        candidate_rect.y += @intCast(@divTrunc(index, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
+                        candidate_rect.x += @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
+                        candidate_rect.y += @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
                         candidate_rect.w = @divTrunc(cell_rect.w, @as(c_int, @intCast(candidate_layout[0])));
                         candidate_rect.h = @divTrunc(cell_rect.h, @as(c_int, @intCast(candidate_layout[1])));
 
-                        if (highlighted_number == index) {
+                        if (highlight_mask & game.mask_for_number(number) != 0) {
                             _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                             _ = c.SDL_RenderFillRect(ren, &candidate_rect);
                         }
 
                         var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                        if (c.TTF_SizeText(font_small, NumbersString[index], &glyph_rect.w, &glyph_rect.h) != 0) {
+                        if (c.TTF_SizeText(font_small, NumbersString[number], &glyph_rect.w, &glyph_rect.h) != 0) {
                             c.SDL_Log("TTF error: %s", c.TTF_GetError());
                             return error.SDLInitializationFailed;
                         }
@@ -310,7 +316,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         glyph_out_rect.x += candidate_rect.x + @divTrunc((candidate_rect.w - glyph_rect.w), 2);
                         glyph_out_rect.y += candidate_rect.y + @divTrunc((candidate_rect.h - glyph_rect.h), 2);
 
-                        _ = c.SDL_RenderCopy(ren, text_small_textures[index], &glyph_rect, &glyph_out_rect);
+                        _ = c.SDL_RenderCopy(ren, text_small_textures[number], &glyph_rect, &glyph_out_rect);
                     }
                 }
             }
