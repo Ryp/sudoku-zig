@@ -210,7 +210,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                                 game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
                         },
                         c.SDLK_RETURN => {
-                            game.player_solve(game_state);
+                            if (is_any_shift_pressed) {
+                                game.player_solve_human_step(game_state); // FIXME undocumented because it's not user-friendly yet
+                            } else {
+                                game.player_solve_brute_force(game_state);
+                            }
                         },
                         else => {},
                     }

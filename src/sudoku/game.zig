@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const generator = @import("generator.zig");
+const brute_solver = @import("brute_solver.zig");
 const solver = @import("solver.zig");
 const event = @import("event.zig");
 const SolverEvent = event.SolverEvent;
@@ -67,6 +68,10 @@ pub fn box_index_from_cell(game: *GameState, cell_position: u32_2) u32_2 {
 
 pub fn mask_for_number(number: u4) u16 {
     return @as(u16, 1) << number;
+}
+
+pub fn full_hint_mask(game_extent: u32) u16 {
+    return @intCast((@as(u32, 1) << @intCast(game_extent)) - 1);
 }
 
 pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !GameState {
@@ -233,19 +238,20 @@ pub fn player_toggle_guess(game: *GameState, number: u4) void {
     }
 }
 
-pub fn place_number(game: *GameState, coord: u32_2, number: u4) void {
-    var cell = cell_at(game, coord);
-
+pub fn place_number(cell: *CellState, number: u4) void {
     cell.number = number;
     cell.hint_mask = mask_for_number(number);
 }
 
 pub fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number: u4) void {
-    place_number(game, coord, number);
+    var cell = cell_at(game, coord);
+
+    place_number(cell, number);
     solver.solve_trivial_candidates_at(game, coord, number);
 }
 
-pub fn player_solve(game: *GameState) void {
+// FIXME We need a good way to communicate this to the user
+pub fn player_solve_human_step(game: *GameState) void {
     solver.solve_trivial_candidates(game);
     solver.solve_naked_singles(game);
     solver.solve_hidden_singles(game);
@@ -253,6 +259,15 @@ pub fn player_solve(game: *GameState) void {
     solver.solve_pointing_lines(game);
 
     push_state_to_history(game);
+}
+
+pub fn player_solve_brute_force(game: *GameState) void {
+    if (brute_solver.solve(game)) {
+        push_state_to_history(game);
+    } else {
+        // We didn't manage to solve the puzzle
+        // FIXME Tell the player somehow
+    }
 }
 
 fn get_history_slice(game: *GameState, history_index: u32) []CellState {
@@ -298,7 +313,7 @@ pub fn player_fill_hints(game: *GameState) void {
         if (cell.number != UnsetNumber) {
             cell.hint_mask = mask_for_number(@intCast(cell.number));
         } else {
-            cell.hint_mask = @intCast((@as(u32, 1) << @intCast(game.extent)) - 1);
+            cell.hint_mask = full_hint_mask(game.extent);
         }
     }
 
