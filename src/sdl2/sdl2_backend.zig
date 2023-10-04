@@ -6,9 +6,11 @@ const c = @cImport({
     @cInclude("SDL2/SDL_ttf.h");
 });
 
-const game = @import("../sudoku/game.zig");
-const GameState = game.GameState;
-const UnsetNumber = game.UnsetNumber;
+const sudoku = @import("../sudoku/game.zig");
+const GameState = sudoku.GameState;
+const UnsetNumber = sudoku.UnsetNumber;
+const u32_2 = sudoku.u32_2;
+const all = sudoku.all;
 const event = @import("../sudoku/event.zig");
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
@@ -38,17 +40,17 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     }
 }
 
-fn input_number(game_state: *GameState, candidate_mode: bool, number: u4) void {
+fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
     if (candidate_mode) {
-        game.player_toggle_guess(game_state, number);
+        sudoku.player_toggle_guess(game, number);
     } else {
-        game.player_input_number(game_state, number);
+        sudoku.player_input_number(game, number);
     }
 }
 
-pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !void {
-    const width = game_state.extent * SpriteScreenExtent;
-    const height = game_state.extent * SpriteScreenExtent;
+pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
+    const width = game.extent * SpriteScreenExtent;
+    const height = game.extent * SpriteScreenExtent;
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -91,13 +93,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
     };
     defer c.SDL_DestroyRenderer(ren);
 
-    var text_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
+    var text_surfaces = try allocator.alloc(*c.SDL_Surface, game.extent);
     defer allocator.free(text_surfaces);
 
-    var text_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
+    var text_textures = try allocator.alloc(*c.SDL_Texture, game.extent);
     defer allocator.free(text_textures);
 
-    const numbers_string = NumbersString[0..game_state.extent];
+    const numbers_string = NumbersString[0..game.extent];
 
     for (text_surfaces, text_textures, numbers_string) |*surface, *texture, number_string| {
         surface.* = c.TTF_RenderText_LCD(font, number_string, TextColor, BgColor);
@@ -109,10 +111,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
 
-    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game_state.extent);
+    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game.extent);
     defer allocator.free(text_small_surfaces);
 
-    var text_small_textures = try allocator.alloc(*c.SDL_Texture, game_state.extent);
+    var text_small_textures = try allocator.alloc(*c.SDL_Texture, game.extent);
     defer allocator.free(text_small_textures);
 
     for (text_small_surfaces, text_small_textures, numbers_string) |*surface, *texture, number_string| {
@@ -125,12 +127,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
 
-    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku ({d}x{d} box size)", .{ game_state.box_w, game_state.box_h });
+    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku ({d}x{d} box size)", .{ game.box_w, game.box_h });
     defer allocator.free(title_string);
 
     c.SDL_SetWindowTitle(window, title_string.ptr);
 
-    const candidate_layout = get_candidate_layout(game_state.extent);
+    const candidate_layout = get_candidate_layout(game.extent);
 
     var should_exit = false;
 
@@ -152,69 +154,69 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                             should_exit = true;
                         },
                         c.SDLK_DELETE, c.SDLK_0 => {
-                            game.player_clear_number(game_state);
+                            sudoku.player_clear_number(game);
                         },
                         c.SDLK_1...c.SDLK_9 => |sym| {
-                            input_number(game_state, is_any_shift_pressed, @intCast(sym - c.SDLK_1));
+                            input_number(game, is_any_shift_pressed, @intCast(sym - c.SDLK_1));
                         },
                         c.SDLK_a => {
-                            input_number(game_state, is_any_shift_pressed, 9);
+                            input_number(game, is_any_shift_pressed, 9);
                         },
                         c.SDLK_b => {
-                            input_number(game_state, is_any_shift_pressed, 10);
+                            input_number(game, is_any_shift_pressed, 10);
                         },
                         c.SDLK_c => {
-                            input_number(game_state, is_any_shift_pressed, 11);
+                            input_number(game, is_any_shift_pressed, 11);
                         },
                         c.SDLK_d => {
-                            input_number(game_state, is_any_shift_pressed, 12);
+                            input_number(game, is_any_shift_pressed, 12);
                         },
                         c.SDLK_e => {
-                            input_number(game_state, is_any_shift_pressed, 13);
+                            input_number(game, is_any_shift_pressed, 13);
                         },
                         c.SDLK_f => {
-                            input_number(game_state, is_any_shift_pressed, 14);
+                            input_number(game, is_any_shift_pressed, 14);
                         },
                         c.SDLK_g => {
-                            input_number(game_state, is_any_shift_pressed, 15);
+                            input_number(game, is_any_shift_pressed, 15);
                         },
                         c.SDLK_z => {
                             if (is_any_ctrl_pressed) {
                                 if (is_any_shift_pressed) {
-                                    game.player_redo(game_state);
+                                    sudoku.player_redo(game);
                                 } else {
-                                    game.player_undo(game_state);
+                                    sudoku.player_undo(game);
                                 }
                             }
                         },
                         c.SDLK_h => {
                             if (is_any_shift_pressed) {
-                                game.player_clear_hints(game_state);
+                                sudoku.player_clear_hints(game);
                             } else {
-                                game.player_fill_hints(game_state);
+                                sudoku.player_fill_hints(game);
                             }
                         },
                         c.SDLK_LEFT => {
-                            if (game_state.selected_cell[0] > 0)
-                                game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 1, 0 });
+                            if (game.selected_cell[0] > 0)
+                                sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 1, 0 });
                         },
                         c.SDLK_RIGHT => {
-                            if (game_state.selected_cell[0] + 1 < game_state.extent)
-                                game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 1, 0 });
+                            if (game.selected_cell[0] + 1 < game.extent)
+                                sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 1, 0 });
                         },
                         c.SDLK_UP => {
-                            if (game_state.selected_cell[1] > 0)
-                                game.player_toggle_select(game_state, game_state.selected_cell - game.u32_2{ 0, 1 });
+                            if (game.selected_cell[1] > 0)
+                                sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 0, 1 });
                         },
                         c.SDLK_DOWN => {
-                            if (game_state.selected_cell[1] + 1 < game_state.extent)
-                                game.player_toggle_select(game_state, game_state.selected_cell + game.u32_2{ 0, 1 });
+                            if (game.selected_cell[1] + 1 < game.extent)
+                                sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 0, 1 });
                         },
                         c.SDLK_RETURN => {
                             if (is_any_shift_pressed) {
-                                game.player_solve_human_step(game_state); // FIXME undocumented because it's not user-friendly yet
+                                sudoku.player_solve_human_step(game); // FIXME undocumented because it's not user-friendly yet
                             } else {
-                                game.player_solve_brute_force(game_state);
+                                sudoku.player_solve_brute_force(game);
                             }
                         },
                         else => {},
@@ -224,7 +226,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                     const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent));
                     const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        game.player_toggle_select(game_state, .{ x, y });
+                        sudoku.player_toggle_select(game, .{ x, y });
                     }
                 },
                 else => {},
@@ -232,11 +234,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         }
 
         var highlight_mask: u16 = 0;
-        if (game.all(game_state.selected_cell < game.u32_2{ game_state.extent, game_state.extent })) {
-            const cell = game.cell_at(game_state, game_state.selected_cell);
+        if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
+            const cell = sudoku.cell_at(game, game.selected_cell);
 
             if (cell.number != UnsetNumber) {
-                highlight_mask = game.mask_for_number(@intCast(cell.number));
+                highlight_mask = sudoku.mask_for_number(@intCast(cell.number));
             }
         }
 
@@ -244,13 +246,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
         _ = c.SDL_RenderClear(ren);
 
-        const selected_col = game_state.selected_cell[0];
-        const selected_row = game_state.selected_cell[1];
-        const selected_box = game.box_index_from_cell(game_state, game_state.selected_cell);
+        const selected_col = game.selected_cell[0];
+        const selected_row = game.selected_cell[1];
+        const selected_box = sudoku.box_index_from_cell(game, game.selected_cell);
 
-        for (game_state.board, 0..) |cell, flat_index| {
-            const cell_coord = game.flat_index_to_2d(game_state.extent, flat_index);
-            const box_coord = game.box_coord_from_cell(game_state, cell_coord);
+        for (game.board, 0..) |cell, flat_index| {
+            const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
+            const box_coord = sudoku.box_coord_from_cell(game, cell_coord);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -266,11 +268,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
             }
 
             // Draw highlighted cell
-            if (game.all(game_state.selected_cell == cell_coord)) {
+            if (all(game.selected_cell == cell_coord)) {
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
-                const box_region = game.box_index_from_cell(game_state, cell_coord);
+                const box_region = sudoku.box_index_from_cell(game, cell_coord);
 
                 if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_region == selected_box) {
                     _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
@@ -278,7 +280,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 }
 
                 if (cell.number != UnsetNumber) {
-                    if (highlight_mask & game.mask_for_number(@intCast(cell.number)) != 0) {
+                    if (highlight_mask & sudoku.mask_for_number(@intCast(cell.number)) != 0) {
                         _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                         _ = c.SDL_RenderFillRect(ren, &cell_rect);
                     }
@@ -303,7 +305,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
 
             // Draw candidates
             if (cell.number == UnsetNumber) {
-                for (0..game_state.extent) |number_usize| {
+                for (0..game.extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
                     if (((cell.hint_mask >> number) & 1) != 0) {
                         var candidate_rect = cell_rect;
@@ -312,7 +314,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                         candidate_rect.w = @divTrunc(cell_rect.w, @as(c_int, @intCast(candidate_layout[0])));
                         candidate_rect.h = @divTrunc(cell_rect.h, @as(c_int, @intCast(candidate_layout[1])));
 
-                        if (highlight_mask & game.mask_for_number(number) != 0) {
+                        if (highlight_mask & sudoku.mask_for_number(number) != 0) {
                             _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                             _ = c.SDL_RenderFillRect(ren, &candidate_rect);
                         }
@@ -337,18 +339,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetRenderDrawColor(ren, TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 
         // Draw thin grid
-        for (0..game_state.extent + 1) |index| {
+        for (0..game.extent + 1) |index| {
             const horizontal_rect = c.SDL_Rect{
                 .x = @intCast(index * SpriteScreenExtent),
                 .y = 0,
                 .w = 1,
-                .h = @intCast(game_state.extent * SpriteScreenExtent),
+                .h = @intCast(game.extent * SpriteScreenExtent),
             };
 
             const vertical_rect = c.SDL_Rect{
                 .x = 0,
                 .y = @intCast(index * SpriteScreenExtent),
-                .w = @intCast(game_state.extent * SpriteScreenExtent),
+                .w = @intCast(game.extent * SpriteScreenExtent),
                 .h = 1,
             };
 
@@ -357,23 +359,23 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         }
 
         // Draw horizontal lines
-        for (0..game_state.box_h + 1) |index| {
+        for (0..game.box_h + 1) |index| {
             const rect = c.SDL_Rect{
-                .x = @as(c_int, @intCast(index * game_state.box_w * SpriteScreenExtent)) - 1,
+                .x = @as(c_int, @intCast(index * game.box_w * SpriteScreenExtent)) - 1,
                 .y = 0,
                 .w = 3,
-                .h = @intCast(game_state.extent * SpriteScreenExtent),
+                .h = @intCast(game.extent * SpriteScreenExtent),
             };
 
             _ = c.SDL_RenderFillRect(ren, &rect);
         }
 
         // Draw vertical lines
-        for (0..game_state.box_w + 1) |index| {
+        for (0..game.box_w + 1) |index| {
             const rect = c.SDL_Rect{
                 .x = 0,
-                .y = @as(c_int, @intCast(index * game_state.box_h * SpriteScreenExtent)) - 1,
-                .w = @intCast(game_state.extent * SpriteScreenExtent),
+                .y = @as(c_int, @intCast(index * game.box_h * SpriteScreenExtent)) - 1,
+                .w = @intCast(game.extent * SpriteScreenExtent),
                 .h = 3,
             };
 
