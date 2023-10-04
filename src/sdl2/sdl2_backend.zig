@@ -17,6 +17,7 @@ const FontSize: u32 = SpriteScreenExtent - 10;
 const FontSizeSmall: u32 = SpriteScreenExtent / 4;
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
+const HighlightRegionColor = c.SDL_Color{ .r = 130, .g = 188, .b = 232, .a = 255 };
 const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
@@ -243,6 +244,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
         _ = c.SDL_RenderClear(ren);
 
+        const selected_col = game_state.selected_cell[0];
+        const selected_row = game_state.selected_cell[1];
+        const selected_box = game.box_index_from_cell(game_state, game_state.selected_cell);
+
         for (game_state.board, 0..) |cell, flat_index| {
             const cell_coord = game.flat_index_to_2d(game_state.extent, flat_index);
             const box_coord = game.box_coord_from_cell(game_state, cell_coord);
@@ -265,6 +270,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
+                const box_region = game.box_index_from_cell(game_state, cell_coord);
+
+                if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_region == selected_box) {
+                    _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
+                    _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                }
+
                 if (cell.number != UnsetNumber) {
                     if (highlight_mask & game.mask_for_number(@intCast(cell.number)) != 0) {
                         _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
