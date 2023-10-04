@@ -45,10 +45,8 @@ pub fn solve_trivial_candidates_at(game: *GameState, cell_coord: u32_2, number: 
 }
 
 pub fn solve_trivial_candidates(game: *GameState) void {
-    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
-        solve_eliminate_candidate_region(game, col_region);
-        solve_eliminate_candidate_region(game, row_region);
-        solve_eliminate_candidate_region(game, box_region);
+    for (game.all_regions) |region| {
+        solve_eliminate_candidate_region(game, region);
     }
 }
 
@@ -88,10 +86,8 @@ pub fn solve_naked_singles(game: *GameState) void {
 }
 
 pub fn solve_hidden_singles(game: *GameState) void {
-    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
-        solve_hidden_singles_region(game, col_region);
-        solve_hidden_singles_region(game, row_region);
-        solve_hidden_singles_region(game, box_region);
+    for (game.all_regions) |region| {
+        solve_hidden_singles_region(game, region);
     }
 }
 
@@ -138,10 +134,8 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32_2) void {
 }
 
 pub fn solve_hidden_pairs(game: *GameState) void {
-    for (game.col_regions, game.row_regions, game.box_regions) |col_region, row_region, box_region| {
-        solve_hidden_pairs_region(game, col_region);
-        solve_hidden_pairs_region(game, row_region);
-        solve_hidden_pairs_region(game, box_region);
+    for (game.all_regions) |region| {
+        solve_hidden_pairs_region(game, region);
     }
 }
 

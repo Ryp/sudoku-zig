@@ -42,6 +42,7 @@ pub const GameState = struct {
     selected_cell: u32_2,
 
     region_offsets: []u32_2,
+    all_regions: [][]u32_2,
     col_regions: [][]u32_2,
     row_regions: [][]u32_2,
     box_regions: [][]u32_2,
@@ -96,25 +97,19 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !
     const region_offsets = try allocator.alloc(u32_2, cell_count * 3);
     errdefer allocator.free(region_offsets);
 
-    const col_regions = try allocator.alloc([]u32_2, extent);
-    errdefer allocator.free(col_regions);
+    const all_regions = try allocator.alloc([]u32_2, extent * 3);
+    errdefer allocator.free(all_regions);
 
-    const row_regions = try allocator.alloc([]u32_2, extent);
-    errdefer allocator.free(row_regions);
+    // Map regions to raw offset slices
+    for (all_regions, 0..) |*region, region_index| {
+        const slice_start = region_index * extent;
 
-    const box_regions = try allocator.alloc([]u32_2, extent);
-    errdefer allocator.free(box_regions);
-
-    // Map regions to raw chunks of memory
-    for (0..extent) |region_index| {
-        const col_slice_start = 0 * cell_count + region_index * extent;
-        const row_slice_start = 1 * cell_count + region_index * extent;
-        const box_slice_start = 2 * cell_count + region_index * extent;
-
-        col_regions[region_index] = region_offsets[col_slice_start .. col_slice_start + extent];
-        row_regions[region_index] = region_offsets[row_slice_start .. row_slice_start + extent];
-        box_regions[region_index] = region_offsets[box_slice_start .. box_slice_start + extent];
+        region.* = region_offsets[slice_start .. slice_start + extent];
     }
+
+    const col_regions = all_regions[0 * extent .. 1 * extent];
+    const row_regions = all_regions[1 * extent .. 2 * extent];
+    const box_regions = all_regions[2 * extent .. 3 * extent];
 
     fill_regions(extent, box_w, box_h, col_regions, row_regions, box_regions);
 
@@ -126,10 +121,11 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !
         .box_w = box_w,
         .box_h = box_h,
         .board = board,
+        .region_offsets = region_offsets,
+        .all_regions = all_regions,
         .col_regions = col_regions,
         .row_regions = row_regions,
         .box_regions = box_regions,
-        .region_offsets = region_offsets,
         .history = history,
         .selected_cell = u32_2{ extent, extent }, // Invalid value
         .solver_events = solver_events,
@@ -138,9 +134,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32) !
 
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.solver_events);
-    allocator.free(game.col_regions);
-    allocator.free(game.row_regions);
-    allocator.free(game.box_regions);
+    allocator.free(game.all_regions);
     allocator.free(game.region_offsets);
     allocator.free(game.history);
     allocator.free(game.board);
