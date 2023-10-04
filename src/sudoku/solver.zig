@@ -29,11 +29,10 @@ fn first_bit_index_u16(mask_ro: u16) u4 {
 
 pub fn solve_trivial_candidates_at(game: *GameState, cell_coord: u32_2, number: u4) void {
     const box_index = sudoku.box_index_from_cell(game, cell_coord);
-    const box_index_flat = box_index[0] + box_index[1] * game.box_h;
 
     const col_region = game.col_regions[cell_coord[0]];
     const row_region = game.row_regions[cell_coord[1]];
-    const box_region = game.box_regions[box_index_flat];
+    const box_region = game.box_regions[box_index];
 
     const mask = sudoku.mask_for_number(number);
 

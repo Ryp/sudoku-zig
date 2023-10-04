@@ -32,7 +32,6 @@ pub fn solve(game: *GameState) bool {
     }
 
     const box_index = sudoku.box_index_from_cell(game, free_cell);
-    const box_index_flat = box_index[0] + box_index[1] * game.box_h;
 
     // Remove possible solutions based on visible regions
     for (game.col_regions[free_cell[0]]) |cell_coord| {
@@ -49,7 +48,7 @@ pub fn solve(game: *GameState) bool {
         }
     }
 
-    for (game.box_regions[box_index_flat]) |cell_coord| {
+    for (game.box_regions[box_index]) |cell_coord| {
         const cell = cell_at(game, cell_coord);
         if (cell.number != UnsetNumber) {
             valid_candidates[cell.number] = false;

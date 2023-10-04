@@ -60,11 +60,17 @@ pub fn cell_at(game: *GameState, position: u32_2) *CellState {
     return &game.board[flat_index];
 }
 
-pub fn box_index_from_cell(game: *GameState, cell_position: u32_2) u32_2 {
-    const x = (cell_position[0] / game.box_w);
-    const y = (cell_position[1] / game.box_h);
+pub fn box_coord_from_cell(game: *GameState, cell_coord: u32_2) u32_2 {
+    const x = (cell_coord[0] / game.box_w);
+    const y = (cell_coord[1] / game.box_h);
 
     return .{ x, y };
+}
+
+pub fn box_index_from_cell(game: *GameState, cell_coord: u32_2) u32 {
+    const box_coord = box_coord_from_cell(game, cell_coord);
+
+    return box_coord[0] + box_coord[1] * game.box_h;
 }
 
 pub fn mask_for_number(number: u4) u16 {

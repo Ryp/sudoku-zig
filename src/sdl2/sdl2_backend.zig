@@ -244,24 +244,24 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game_state: *GameState) !
         _ = c.SDL_RenderClear(ren);
 
         for (game_state.board, 0..) |cell, flat_index| {
-            const cell_index = game.flat_index_to_2d(game_state.extent, flat_index);
-            const box_index = game.box_index_from_cell(game_state, cell_index);
+            const cell_coord = game.flat_index_to_2d(game_state.extent, flat_index);
+            const box_coord = game.box_coord_from_cell(game_state, cell_coord);
 
             const cell_rect = c.SDL_Rect{
-                .x = @intCast(cell_index[0] * SpriteScreenExtent),
-                .y = @intCast(cell_index[1] * SpriteScreenExtent),
+                .x = @intCast(cell_coord[0] * SpriteScreenExtent),
+                .y = @intCast(cell_coord[1] * SpriteScreenExtent),
                 .w = SpriteScreenExtent,
                 .h = SpriteScreenExtent,
             };
 
             // Draw box background
-            if (((box_index[0] & 1) ^ (box_index[1] & 1)) != 0) {
+            if (((box_coord[0] & 1) ^ (box_coord[1] & 1)) != 0) {
                 _ = c.SDL_SetRenderDrawColor(ren, BoxBgColor.r, BoxBgColor.g, BoxBgColor.b, BoxBgColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             }
 
             // Draw highlighted cell
-            if (game.all(game_state.selected_cell == cell_index)) {
+            if (game.all(game_state.selected_cell == cell_coord)) {
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
