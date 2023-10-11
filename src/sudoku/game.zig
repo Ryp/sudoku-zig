@@ -170,7 +170,7 @@ fn fill_regions(extent: u32, box_w: u32, box_h: u32, col_regions: [][]u32_2, row
     }
 }
 
-pub fn fill_from_string(game: *GameState, str: []u8) void {
+pub fn fill_from_string(game: *GameState, str: []const u8) void {
     assert(str.len == game.extent * game.extent);
 
     for (game.board, str) |*cell, char| {

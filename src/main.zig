@@ -17,16 +17,16 @@ pub fn main() !void {
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
     // Create game state
-    var game_state = try sudoku.create_game_state(gpa.allocator(), box_w, box_h);
-    defer sudoku.destroy_game_state(gpa.allocator(), &game_state);
+    var game = try sudoku.create_game_state(gpa.allocator(), box_w, box_h);
+    defer sudoku.destroy_game_state(gpa.allocator(), &game);
 
     if (args.len == 4) {
-        sudoku.fill_from_string(&game_state, args[3]);
+        sudoku.fill_from_string(&game, args[3]);
     } else if (args.len == 3) {
-        sudoku.fill_from_generator(&game_state);
+        sudoku.fill_from_generator(&game);
     }
 
-    sudoku.start_game(&game_state);
+    sudoku.start_game(&game);
 
-    try sdl2.execute_main_loop(gpa.allocator(), &game_state);
+    try sdl2.execute_main_loop(gpa.allocator(), &game);
 }

@@ -26,12 +26,18 @@ pub fn build(b: *Builder) void {
     const run_step = b.step("run", "Run the program");
     run_step.dependOn(&run_cmd.step);
 
-    const test_step = b.step("test", "Run tests");
-    const a_test = b.addTest(.{
+    // Test
+    const test_a = b.addTest(.{
         .name = "test",
-        .root_source_file = .{ .path = "src/sudoku/test.zig" },
+        .root_source_file = .{ .path = "src/sudoku/brute_solver_test.zig" },
         .optimize = optimize,
     });
 
-    test_step.dependOn(&a_test.step);
+    b.installArtifact(test_a);
+
+    const test_cmd = b.addRunArtifact(test_a);
+    test_cmd.step.dependOn(b.getInstallStep());
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&test_cmd.step);
 }
