@@ -24,6 +24,14 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
+// NOTE: This only works for regular sudokus (regular rectangle regions)
+fn deprecated_box_coord_from_cell(game: *GameState, cell_coord: u32_2) u32_2 {
+    const x = (cell_coord[0] / game.box_w);
+    const y = (cell_coord[1] / game.box_h);
+
+    return .{ x, y };
+}
+
 fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     if (game_extent > 12) {
         return .{ 4, 4 };
@@ -248,11 +256,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         const selected_col = game.selected_cell[0];
         const selected_row = game.selected_cell[1];
-        const selected_box = sudoku.box_index_from_cell(game, game.selected_cell);
+        const selected_box = if (all(game.selected_cell < u32_2{ game.extent, game.extent }))
+            sudoku.box_index_from_cell(game, game.selected_cell)
+        else
+            game.extent;
 
         for (game.board, 0..) |cell, flat_index| {
             const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
-            const box_coord = sudoku.box_coord_from_cell(game, cell_coord);
+            const box_coord = deprecated_box_coord_from_cell(game, cell_coord);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -272,9 +283,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
-                const box_region = sudoku.box_index_from_cell(game, cell_coord);
+                const box_index = game.box_indices[flat_index];
 
-                if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_region == selected_box) {
+                if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
                     _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
                     _ = c.SDL_RenderFillRect(ren, &cell_rect);
                 }
