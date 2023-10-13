@@ -19,7 +19,7 @@ const FontSize: u32 = SpriteScreenExtent - 10;
 const FontSizeSmall: u32 = SpriteScreenExtent / 4;
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
-const HighlightRegionColor = c.SDL_Color{ .r = 130, .g = 188, .b = 232, .a = 255 };
+const HighlightRegionColor = c.SDL_Color{ .r = 160, .g = 208, .b = 232, .a = 80 };
 const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
@@ -289,8 +289,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
                 if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
+                    _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_BLEND);
                     _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
                     _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                    _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
                 }
 
                 if (cell.number != UnsetNumber) {
