@@ -49,9 +49,6 @@ fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
 }
 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
-    const width = game.extent * SpriteScreenExtent;
-    const height = game.extent * SpriteScreenExtent;
-
     var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
     var box_region_colors = box_region_colors_full[0..game.extent];
 
@@ -90,7 +87,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     };
     defer c.TTF_CloseFont(font_small);
 
-    const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(width), @intCast(height), c.SDL_WINDOW_SHOWN) orelse {
+    const window_width = game.extent * SpriteScreenExtent;
+    const window_height = game.extent * SpriteScreenExtent;
+
+    const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
