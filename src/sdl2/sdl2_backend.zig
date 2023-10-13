@@ -24,14 +24,6 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
-// NOTE: This only works for regular sudokus (regular rectangle regions)
-fn deprecated_box_coord_from_cell(game: *GameState, cell_coord: u32_2) u32_2 {
-    const x = (cell_coord[0] / game.box_w);
-    const y = (cell_coord[1] / game.box_h);
-
-    return .{ x, y };
-}
-
 fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     if (game_extent > 12) {
         return .{ 4, 4 };
@@ -59,6 +51,20 @@ fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const width = game.extent * SpriteScreenExtent;
     const height = game.extent * SpriteScreenExtent;
+
+    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
+    var box_region_colors = box_region_colors_full[0..game.extent];
+
+    for (box_region_colors, 0..) |*box_region_color, box_index| {
+        const box_index_x = box_index % game.box_w;
+        const box_index_y = box_index / game.box_w;
+
+        if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
+            box_region_color.* = BoxBgColor;
+        } else {
+            box_region_color.* = BgColor;
+        }
+    }
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -262,8 +268,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             game.extent;
 
         for (game.board, 0..) |cell, flat_index| {
+            const box_index = game.box_indices[flat_index];
+            const box_region_color = box_region_colors[box_index];
             const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
-            const box_coord = deprecated_box_coord_from_cell(game, cell_coord);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -273,18 +280,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             };
 
             // Draw box background
-            if (((box_coord[0] & 1) ^ (box_coord[1] & 1)) != 0) {
-                _ = c.SDL_SetRenderDrawColor(ren, BoxBgColor.r, BoxBgColor.g, BoxBgColor.b, BoxBgColor.a);
-                _ = c.SDL_RenderFillRect(ren, &cell_rect);
-            }
+            _ = c.SDL_SetRenderDrawColor(ren, box_region_color.r, box_region_color.g, box_region_color.b, box_region_color.a);
+            _ = c.SDL_RenderFillRect(ren, &cell_rect);
 
             // Draw highlighted cell
             if (all(game.selected_cell == cell_coord)) {
                 _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                 _ = c.SDL_RenderFillRect(ren, &cell_rect);
             } else {
-                const box_index = game.box_indices[flat_index];
-
                 if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
                     _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
                     _ = c.SDL_RenderFillRect(ren, &cell_rect);
