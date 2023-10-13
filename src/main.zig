@@ -23,9 +23,9 @@ pub fn main() !void {
     defer sudoku.destroy_game_state(gpa.allocator(), &game);
 
     if (args.len == 3) {
-        sudoku.fill_from_generator(&game);
+        sudoku.fill_grid_from_generator(&game);
     } else if (args.len == 4 or args.len == 5) {
-        sudoku.fill_from_string(&game, args[3]);
+        sudoku.fill_grid_from_string(&game, args[3]);
     }
 
     sudoku.start_game(&game);

@@ -191,7 +191,7 @@ fn fill_regions(extent: u32, col_regions: [][]u32_2, row_regions: [][]u32_2, box
     }
 }
 
-pub fn fill_from_string(game: *GameState, clues_string: []const u8) void {
+pub fn fill_grid_from_string(game: *GameState, clues_string: []const u8) void {
     assert(clues_string.len == game.extent * game.extent);
 
     for (game.board, clues_string) |*cell, char| {
@@ -250,7 +250,7 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
     }
 }
 
-pub fn fill_from_generator(game: *GameState) void {
+pub fn fill_grid_from_generator(game: *GameState) void {
     generator.generate_dumb_grid(game);
 }
 

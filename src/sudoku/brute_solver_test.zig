@@ -20,7 +20,7 @@ test "Critical path" {
     var game = try sudoku.create_game_state(gpa_allocator, box_w, box_h, "");
     defer sudoku.destroy_game_state(gpa_allocator, &game);
 
-    sudoku.fill_from_string(&game, sudoku_string);
+    sudoku.fill_grid_from_string(&game, sudoku_string);
 
     sudoku.start_game(&game);
 
