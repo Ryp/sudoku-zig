@@ -223,44 +223,24 @@ pub fn solve_pointing_lines(game: *GameState) void {
                 assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles
 
                 if (aabb_extent[0] == 0) {
-                    remove_candidates_from_pointing_colum(game, number, @intCast(box_index), aabb.min[0]);
+                    const col_region = game.col_regions[aabb.min[0]];
+                    remove_candidates_from_pointing_line(game, number, @intCast(box_index), col_region);
                 } else if (aabb_extent[1] == 0) {
-                    remove_candidates_from_pointing_row(game, number, @intCast(box_index), aabb.min[1]);
+                    const row_region = game.row_regions[aabb.min[1]];
+                    remove_candidates_from_pointing_line(game, number, @intCast(box_index), row_region);
                 }
             }
         }
     }
 }
 
-fn remove_candidates_from_pointing_colum(game: *GameState, number: u4, box_flat_index: u32, col_index: u32) void {
-    const col_region = game.col_regions[col_index];
-
-    const box_count = u32_2{ game.box_h, game.box_w };
-    const box_row_to_exclude = box_flat_index / box_count[0];
+fn remove_candidates_from_pointing_line(game: *GameState, number: u4, box_index_to_exclude: u32, line_region: []u32_2) void {
     const number_mask = sudoku.mask_for_number(number);
 
-    for (col_region, 0..game.extent) |cell_coord, row_index| {
-        const box_row = row_index / box_count[0];
+    for (line_region) |cell_coord| {
+        const box_index = sudoku.box_index_from_cell(game, cell_coord);
 
-        if (box_row == box_row_to_exclude)
-            continue;
-
-        var cell = cell_at(game, cell_coord);
-        cell.hint_mask &= ~number_mask;
-    }
-}
-
-fn remove_candidates_from_pointing_row(game: *GameState, number: u4, box_flat_index: u32, row_index: u32) void {
-    const row_region = game.row_regions[row_index];
-
-    const box_count = u32_2{ game.box_h, game.box_w };
-    const box_col_to_exclude = box_flat_index % box_count[0];
-    const number_mask = sudoku.mask_for_number(number);
-
-    for (row_region, 0..game.extent) |cell_coord, col_index| {
-        const box_col = col_index / box_count[1];
-
-        if (box_col == box_col_to_exclude)
+        if (box_index == box_index_to_exclude)
             continue;
 
         var cell = cell_at(game, cell_coord);

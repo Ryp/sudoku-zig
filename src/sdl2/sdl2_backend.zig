@@ -135,7 +135,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
 
-    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku ({d}x{d} box size)", .{ game.box_w, game.box_h });
+    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku", .{});
     defer allocator.free(title_string);
 
     c.SDL_SetWindowTitle(window, title_string.ptr);
