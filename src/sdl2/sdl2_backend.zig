@@ -18,10 +18,10 @@ const SpriteScreenExtent = 80;
 const FontSize: u32 = SpriteScreenExtent - 10;
 const FontSizeSmall: u32 = SpriteScreenExtent / 4;
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
 const HighlightRegionColor = c.SDL_Color{ .r = 160, .g = 208, .b = 232, .a = 80 };
 const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
-const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
 fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
@@ -52,15 +52,25 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
     var box_region_colors = box_region_colors_full[0..game.extent];
 
-    for (box_region_colors, 0..) |*box_region_color, box_index| {
-        const box_index_x = box_index % game.box_w;
-        const box_index_y = box_index / game.box_w;
+    switch (game.game_type) {
+        .regular => |regular| {
+            for (box_region_colors, 0..) |*box_region_color, box_index| {
+                const box_index_x = box_index % regular.box_h;
+                const box_index_y = box_index / regular.box_h;
 
-        if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
-            box_region_color.* = BoxBgColor;
-        } else {
-            box_region_color.* = BgColor;
-        }
+                if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
+                    box_region_color.* = BoxBgColor;
+                } else {
+                    box_region_color.* = BgColor;
+                }
+            }
+        },
+        .squiggly => {
+            for (box_region_colors, 0..) |*box_region_color, box_index| {
+                box_region_color.* = BgColor; // FIXME
+                box_region_color.r = @intCast(box_index * (255 / 9));
+            }
+        },
     }
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
@@ -375,28 +385,28 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         // Draw horizontal lines
-        for (0..game.box_h + 1) |index| {
-            const rect = c.SDL_Rect{
-                .x = @as(c_int, @intCast(index * game.box_w * SpriteScreenExtent)) - 1,
-                .y = 0,
-                .w = 3,
-                .h = @intCast(game.extent * SpriteScreenExtent),
-            };
+        // for (0..game.box_h + 1) |index| {
+        //     const rect = c.SDL_Rect{
+        //         .x = @as(c_int, @intCast(index * game.box_w * SpriteScreenExtent)) - 1,
+        //         .y = 0,
+        //         .w = 3,
+        //         .h = @intCast(game.extent * SpriteScreenExtent),
+        //     };
 
-            _ = c.SDL_RenderFillRect(ren, &rect);
-        }
+        //     _ = c.SDL_RenderFillRect(ren, &rect);
+        // }
 
-        // Draw vertical lines
-        for (0..game.box_w + 1) |index| {
-            const rect = c.SDL_Rect{
-                .x = 0,
-                .y = @as(c_int, @intCast(index * game.box_h * SpriteScreenExtent)) - 1,
-                .w = @intCast(game.extent * SpriteScreenExtent),
-                .h = 3,
-            };
+        // // Draw vertical lines
+        // for (0..game.box_w + 1) |index| {
+        //     const rect = c.SDL_Rect{
+        //         .x = 0,
+        //         .y = @as(c_int, @intCast(index * game.box_h * SpriteScreenExtent)) - 1,
+        //         .w = @intCast(game.extent * SpriteScreenExtent),
+        //         .h = 3,
+        //     };
 
-            _ = c.SDL_RenderFillRect(ren, &rect);
-        }
+        //     _ = c.SDL_RenderFillRect(ren, &rect);
+        // }
 
         // Present
         c.SDL_RenderPresent(ren);

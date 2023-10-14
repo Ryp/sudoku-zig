@@ -8,23 +8,23 @@ const UnsetNumber = sudoku.UnsetNumber;
 const cell_at = sudoku.cell_at;
 const u32_2 = sudoku.u32_2;
 
-fn swap_random_col(game: *GameState, rng: *std.rand.Xoroshiro128) void {
+fn swap_random_col(game: *GameState, regular_type: sudoku.RegularSudoku, rng: *std.rand.Xoroshiro128) void {
     // FIXME Use box count var
-    const box_x = rng.random().uintLessThan(u32, game.box_h);
-    const col_offset = box_x * game.box_w;
-    const col_a = col_offset + rng.random().uintLessThan(u32, game.box_w);
-    const col_b = col_offset + (rng.random().uintLessThan(u32, game.box_w - 1) + col_a + 1) % game.box_w;
+    const box_x = rng.random().uintLessThan(u32, regular_type.box_h);
+    const col_offset = box_x * regular_type.box_w;
+    const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_w);
+    const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_w - 1) + col_a + 1) % regular_type.box_w;
 
     assert(col_a != col_b);
     swap_region(game, game.col_regions[col_a], game.col_regions[col_b]);
 }
 
-fn swap_random_row(game: *GameState, rng: *std.rand.Xoroshiro128) void {
+fn swap_random_row(game: *GameState, regular_type: sudoku.RegularSudoku, rng: *std.rand.Xoroshiro128) void {
     // FIXME Use box count var
-    const box_y = rng.random().uintLessThan(u32, game.box_w);
-    const row_offset = box_y * game.box_h;
-    const row_a = row_offset + rng.random().uintLessThan(u32, game.box_h);
-    const row_b = row_offset + (rng.random().uintLessThan(u32, game.box_h - 1) + row_a + 1) % game.box_h;
+    const box_y = rng.random().uintLessThan(u32, regular_type.box_w);
+    const row_offset = box_y * regular_type.box_h;
+    const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_h);
+    const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_h - 1) + row_a + 1) % regular_type.box_h;
 
     assert(row_a != row_b);
     swap_region(game, game.row_regions[row_a], game.row_regions[row_b]);
@@ -40,13 +40,15 @@ fn swap_region(game: *GameState, region_a: []u32_2, region_b: []u32_2) void {
 }
 
 pub fn generate_dumb_grid(game: *GameState) void {
+    const regular_type = game.game_type.regular;
+
     // Generate a full grid by using an ordered sequence
     // that guarantees a valid output
     for (0..game.extent) |region_index| {
         for (game.row_regions[region_index], 0..game.extent) |cell_coord, i| {
             var cell = cell_at(game, cell_coord);
-            const line_offset = region_index * game.box_w;
-            const box_offset = region_index / game.box_h;
+            const line_offset = region_index * regular_type.box_w;
+            const box_offset = region_index / regular_type.box_h;
             const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % game.extent);
 
             cell.number = number;
@@ -67,8 +69,8 @@ pub fn generate_dumb_grid(game: *GameState) void {
     // - Flip horizontally or vertically
     // - Rotate by 180 degrees
     for (0..rounds) |_| {
-        swap_random_col(game, &rng);
-        swap_random_row(game, &rng);
+        swap_random_col(game, regular_type, &rng);
+        swap_random_row(game, regular_type, &rng);
     }
 
     // Remove numbers at random places to give a challenge to the player.

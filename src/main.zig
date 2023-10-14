@@ -16,10 +16,21 @@ pub fn main() !void {
     const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
-    const box_indices_string = if (args.len >= 5) args[4] else "";
+    const game_type = if (args.len < 5)
+        sudoku.GameType{ .regular = .{
+            .box_w = box_w,
+            .box_h = box_h,
+        } }
+    else
+        sudoku.GameType{
+            .squiggly = .{
+                .size = box_w * box_h, // FIXME use different format like 3x3 for regular
+                .box_indices_string = args[4],
+            },
+        };
 
     // Create game state
-    var game = try sudoku.create_game_state(gpa.allocator(), box_w, box_h, box_indices_string);
+    var game = try sudoku.create_game_state(gpa.allocator(), game_type);
     defer sudoku.destroy_game_state(gpa.allocator(), &game);
 
     if (args.len == 3) {

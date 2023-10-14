@@ -34,10 +34,29 @@ pub const CellState = struct {
     hint_mask: u16 = 0,
 };
 
-pub const GameState = struct {
-    extent: u32,
+pub const RegularSudoku = struct {
     box_w: u32,
     box_h: u32,
+};
+
+pub const SquigglySudoku = struct {
+    size: u32,
+    box_indices_string: []const u8,
+};
+
+pub const GameTypeTag = enum {
+    regular,
+    squiggly,
+};
+
+pub const GameType = union(GameTypeTag) {
+    regular: RegularSudoku,
+    squiggly: SquigglySudoku,
+};
+
+pub const GameState = struct {
+    extent: u32,
+    game_type: GameType,
     board: []CellState,
     selected_cell: u32_2,
 
@@ -81,8 +100,11 @@ pub fn full_hint_mask(game_extent: u32) u16 {
     return @intCast((@as(u32, 1) << @intCast(game_extent)) - 1);
 }
 
-pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, box_indices_string: []const u8) !GameState {
-    const extent = box_w * box_h;
+pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType) !GameState {
+    const extent = switch (game_type) {
+        .regular => |regular| regular.box_w * regular.box_h,
+        .squiggly => |squiggly| squiggly.size,
+    };
     const cell_count = extent * extent;
 
     assert(extent > 1);
@@ -109,10 +131,13 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, b
     const box_indices = try allocator.alloc(u4, cell_count);
     errdefer allocator.free(box_indices);
 
-    if (box_indices_string.len != 0) {
-        fill_region_indices_from_string(box_indices, box_indices_string, extent);
-    } else {
-        fill_region_indices_regular(box_indices, extent, box_w, box_h);
+    switch (game_type) {
+        .regular => |regular| {
+            fill_region_indices_regular(box_indices, extent, regular.box_w, regular.box_h);
+        },
+        .squiggly => |squiggly| {
+            fill_region_indices_from_string(box_indices, squiggly.box_indices_string, extent);
+        },
     }
 
     // Map regions to raw offset slices
@@ -133,8 +158,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, box_w: u32, box_h: u32, b
 
     return GameState{
         .extent = extent,
-        .box_w = box_w,
-        .box_h = box_h,
+        .game_type = game_type,
         .board = board,
         .region_offsets = region_offsets,
         .all_regions = all_regions,
