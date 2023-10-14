@@ -17,6 +17,7 @@ const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", 
 const SpriteScreenExtent = 80;
 const FontSize: u32 = SpriteScreenExtent - 10;
 const FontSizeSmall: u32 = SpriteScreenExtent / 4;
+
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
@@ -48,12 +49,32 @@ fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
     }
 }
 
-pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
-    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
-    var box_region_colors = box_region_colors_full[0..game.extent];
+// https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
+    const c_f = value * saturation;
+    const area_index = hue * 6.0;
+    const area_index_i: u8 = @intFromFloat(area_index);
+    const x_f = c_f * (1.0 - @fabs(@mod(area_index, 2.0) - 1.0));
+    const m_f = value - c_f;
+    const c_u8 = @min(255, @as(u8, @intFromFloat((c_f + m_f) * 255.0)));
+    const x_u8 = @min(255, @as(u8, @intFromFloat((x_f + m_f) * 255.0)));
+    const m_u8 = @min(255, @as(u8, @intFromFloat(m_f * 255.0)));
 
+    return switch (area_index_i) {
+        0 => c.SDL_Color{ .r = c_u8, .g = x_u8, .b = m_u8, .a = 255 },
+        1 => c.SDL_Color{ .r = x_u8, .g = c_u8, .b = m_u8, .a = 255 },
+        2 => c.SDL_Color{ .r = m_u8, .g = c_u8, .b = x_u8, .a = 255 },
+        3 => c.SDL_Color{ .r = m_u8, .g = x_u8, .b = c_u8, .a = 255 },
+        4 => c.SDL_Color{ .r = x_u8, .g = m_u8, .b = c_u8, .a = 255 },
+        5 => c.SDL_Color{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
+        else => unreachable,
+    };
+}
+
+fn fill_box_regions_colors(game: *GameState, box_region_colors: []c.SDL_Color) void {
     switch (game.game_type) {
         .regular => |regular| {
+            // Draw a checkerboard pattern
             for (box_region_colors, 0..) |*box_region_color, box_index| {
                 const box_index_x = box_index % regular.box_h;
                 const box_index_y = box_index / regular.box_h;
@@ -66,12 +87,20 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         },
         .squiggly => {
+            // Get a unique color for each region
             for (box_region_colors, 0..) |*box_region_color, box_index| {
-                box_region_color.* = BgColor; // FIXME
-                box_region_color.r = @intCast(box_index * (255 / 9));
+                const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
+                box_region_color.* = hsv_to_sdl_color(hue, 0.5, 1.0);
             }
         },
     }
+}
+
+pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
+    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
+    var box_region_colors = box_region_colors_full[0..game.extent];
+
+    fill_box_regions_colors(game, box_region_colors);
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -384,29 +413,35 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
         }
 
-        // Draw horizontal lines
-        // for (0..game.box_h + 1) |index| {
-        //     const rect = c.SDL_Rect{
-        //         .x = @as(c_int, @intCast(index * game.box_w * SpriteScreenExtent)) - 1,
-        //         .y = 0,
-        //         .w = 3,
-        //         .h = @intCast(game.extent * SpriteScreenExtent),
-        //     };
+        // Draw region delimitations with thicker lines
+        switch (game.game_type) {
+            .regular => |regular| {
+                // Draw horizontal lines
+                for (0..regular.box_h + 1) |index| {
+                    const rect = c.SDL_Rect{
+                        .x = @as(c_int, @intCast(index * regular.box_w * SpriteScreenExtent)) - 1,
+                        .y = 0,
+                        .w = 3,
+                        .h = @intCast(game.extent * SpriteScreenExtent),
+                    };
 
-        //     _ = c.SDL_RenderFillRect(ren, &rect);
-        // }
+                    _ = c.SDL_RenderFillRect(ren, &rect);
+                }
 
-        // // Draw vertical lines
-        // for (0..game.box_w + 1) |index| {
-        //     const rect = c.SDL_Rect{
-        //         .x = 0,
-        //         .y = @as(c_int, @intCast(index * game.box_h * SpriteScreenExtent)) - 1,
-        //         .w = @intCast(game.extent * SpriteScreenExtent),
-        //         .h = 3,
-        //     };
+                // Draw vertical lines
+                for (0..regular.box_w + 1) |index| {
+                    const rect = c.SDL_Rect{
+                        .x = 0,
+                        .y = @as(c_int, @intCast(index * regular.box_h * SpriteScreenExtent)) - 1,
+                        .w = @intCast(game.extent * SpriteScreenExtent),
+                        .h = 3,
+                    };
 
-        //     _ = c.SDL_RenderFillRect(ren, &rect);
-        // }
+                    _ = c.SDL_RenderFillRect(ren, &rect);
+                }
+            },
+            .squiggly => {},
+        }
 
         // Present
         c.SDL_RenderPresent(ren);
