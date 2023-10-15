@@ -18,12 +18,17 @@ const SpriteScreenExtent = 80;
 const FontSize: u32 = SpriteScreenExtent - 10;
 const FontSizeSmall: u32 = SpriteScreenExtent / 4;
 
+const BlackColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
 const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
 const HighlightRegionColor = c.SDL_Color{ .r = 160, .g = 208, .b = 232, .a = 80 };
 const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
-const TextColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
+const TextColor = BlackColor;
+const GridColor = BlackColor;
+
+const SquigglyRegionSaturation = 0.4;
+const SquigglyRegionValue = 1.0;
 
 fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     if (game_extent > 12) {
@@ -90,7 +95,7 @@ fn fill_box_regions_colors(game: *GameState, box_region_colors: []c.SDL_Color) v
             // Get a unique color for each region
             for (box_region_colors, 0..) |*box_region_color, box_index| {
                 const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
-                box_region_color.* = hsv_to_sdl_color(hue, 0.5, 1.0);
+                box_region_color.* = hsv_to_sdl_color(hue, SquigglyRegionSaturation, SquigglyRegionValue);
             }
         },
     }
@@ -391,57 +396,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        _ = c.SDL_SetRenderDrawColor(ren, TextColor.r, TextColor.g, TextColor.b, TextColor.a);
-
-        // Draw thin grid
-        for (0..game.extent + 1) |index| {
-            const horizontal_rect = c.SDL_Rect{
-                .x = @intCast(index * SpriteScreenExtent),
-                .y = 0,
-                .w = 1,
-                .h = @intCast(game.extent * SpriteScreenExtent),
-            };
-
-            const vertical_rect = c.SDL_Rect{
-                .x = 0,
-                .y = @intCast(index * SpriteScreenExtent),
-                .w = @intCast(game.extent * SpriteScreenExtent),
-                .h = 1,
-            };
-
-            _ = c.SDL_RenderFillRect(ren, &vertical_rect);
-            _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
-        }
-
-        // Draw region delimitations with thicker lines
-        switch (game.game_type) {
-            .regular => |regular| {
-                // Draw horizontal lines
-                for (0..regular.box_h + 1) |index| {
-                    const rect = c.SDL_Rect{
-                        .x = @as(c_int, @intCast(index * regular.box_w * SpriteScreenExtent)) - 1,
-                        .y = 0,
-                        .w = 3,
-                        .h = @intCast(game.extent * SpriteScreenExtent),
-                    };
-
-                    _ = c.SDL_RenderFillRect(ren, &rect);
-                }
-
-                // Draw vertical lines
-                for (0..regular.box_w + 1) |index| {
-                    const rect = c.SDL_Rect{
-                        .x = 0,
-                        .y = @as(c_int, @intCast(index * regular.box_h * SpriteScreenExtent)) - 1,
-                        .w = @intCast(game.extent * SpriteScreenExtent),
-                        .h = 3,
-                    };
-
-                    _ = c.SDL_RenderFillRect(ren, &rect);
-                }
-            },
-            .squiggly => {},
-        }
+        draw_sudoku_grid(game, ren);
 
         // Present
         c.SDL_RenderPresent(ren);
@@ -455,5 +410,79 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     for (text_small_textures, text_small_surfaces) |texture, surface| {
         c.SDL_DestroyTexture(texture);
         c.SDL_FreeSurface(surface);
+    }
+}
+
+fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
+    _ = c.SDL_SetRenderDrawColor(ren, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
+
+    for (0..game.board.len) |flat_index| {
+        const box_index = game.box_indices[flat_index];
+        const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
+
+        const cell_rect = c.SDL_Rect{
+            .x = @intCast(cell_coord[0] * SpriteScreenExtent),
+            .y = @intCast(cell_coord[1] * SpriteScreenExtent),
+            .w = SpriteScreenExtent,
+            .h = SpriteScreenExtent,
+        };
+
+        var thick_vertical = true;
+
+        if (cell_coord[0] + 1 < game.extent) {
+            const neighbor_flat_index = sudoku.get_flat_index(game.extent, cell_coord + u32_2{ 1, 0 });
+            const neighbor_box_index = game.box_indices[neighbor_flat_index];
+            thick_vertical = box_index != neighbor_box_index;
+        }
+
+        var thick_horizontal = true;
+
+        if (cell_coord[1] + 1 < game.extent) {
+            const neighbor_flat_index = sudoku.get_flat_index(game.extent, cell_coord + u32_2{ 0, 1 });
+            const neighbor_box_index = game.box_indices[neighbor_flat_index];
+            thick_horizontal = box_index != neighbor_box_index;
+        }
+
+        if (thick_vertical) {
+            const rect = c.SDL_Rect{
+                .x = cell_rect.w * @as(c_int, @intCast(cell_coord[0] + 1)) - 2,
+                .y = cell_rect.h * @as(c_int, @intCast(cell_coord[1])) - 2,
+                .w = 5,
+                .h = cell_rect.h + 5,
+            };
+
+            _ = c.SDL_RenderFillRect(ren, &rect);
+        }
+
+        if (thick_horizontal) {
+            const rect = c.SDL_Rect{
+                .x = cell_rect.w * @as(c_int, @intCast(cell_coord[0])) - 2,
+                .y = cell_rect.h * @as(c_int, @intCast(cell_coord[1] + 1)) - 2,
+                .w = cell_rect.w + 5,
+                .h = 5,
+            };
+
+            _ = c.SDL_RenderFillRect(ren, &rect);
+        }
+    }
+
+    // Draw thin grid
+    for (0..game.extent + 1) |index| {
+        const horizontal_rect = c.SDL_Rect{
+            .x = @intCast(index * SpriteScreenExtent),
+            .y = 0,
+            .w = 1,
+            .h = @intCast(game.extent * SpriteScreenExtent),
+        };
+
+        const vertical_rect = c.SDL_Rect{
+            .x = 0,
+            .y = @intCast(index * SpriteScreenExtent),
+            .w = @intCast(game.extent * SpriteScreenExtent),
+            .h = 1,
+        };
+
+        _ = c.SDL_RenderFillRect(ren, &vertical_rect);
+        _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
     }
 }
