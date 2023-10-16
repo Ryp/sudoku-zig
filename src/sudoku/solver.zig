@@ -37,9 +37,9 @@ pub fn solve_trivial_candidates_at(game: *GameState, flat_index: u32, number: u4
     const mask = sudoku.mask_for_number(number);
 
     for (col_region, row_region, box_region) |col_cell, row_cell, box_cell| {
-        game.board[col_cell].hint_mask &= ~mask;
-        game.board[row_cell].hint_mask &= ~mask;
-        game.board[box_cell].hint_mask &= ~mask;
+        game.hint_masks[col_cell] &= ~mask;
+        game.hint_masks[row_cell] &= ~mask;
+        game.hint_masks[box_cell] &= ~mask;
     }
 }
 
@@ -54,27 +54,28 @@ fn solve_eliminate_candidate_region(game: *GameState, region: []u32) void {
     var used_mask: u16 = 0;
 
     for (region) |cell_index| {
-        const cell = game.board[cell_index];
+        const cell_number = game.board[cell_index];
 
-        if (cell.number != UnsetNumber) {
-            used_mask |= sudoku.mask_for_number(@intCast(cell.number));
+        if (cell_number != UnsetNumber) {
+            used_mask |= sudoku.mask_for_number(@intCast(cell_number));
         }
     }
 
     for (region) |cell_index| {
-        var cell = &game.board[cell_index];
+        const cell_number = game.board[cell_index];
+        var cell_hint_mask = &game.hint_masks[cell_index];
 
-        if (cell.number == UnsetNumber) {
-            cell.hint_mask &= ~used_mask;
+        if (cell_number == UnsetNumber) {
+            cell_hint_mask.* &= ~used_mask;
         }
     }
 }
 
 // If there's a cell with a single possibility left, put it down
 pub fn solve_naked_singles(game: *GameState) void {
-    for (game.board, 0..) |cell, flat_index| {
-        if (cell.number == UnsetNumber and @popCount(cell.hint_mask) == 1) {
-            const number = first_bit_index_u16(cell.hint_mask);
+    for (game.board, game.hint_masks, 0..) |cell_number, hint_mask, flat_index| {
+        if (cell_number == UnsetNumber and @popCount(hint_mask) == 1) {
+            const number = first_bit_index_u16(hint_mask);
 
             // FIXME event should also add the candidates we removed here
             sudoku.place_number_remove_trivial_candidates(game, @intCast(flat_index), number);
@@ -97,7 +98,7 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32) void {
     var last_occurences: [sudoku.MaxSudokuExtent]u32 = undefined;
 
     for (region) |cell_index| {
-        var mask = game.board[cell_index].hint_mask;
+        var mask = game.hint_masks[cell_index];
 
         for (0..game.extent) |number| {
             if ((mask & 1) != 0) {
@@ -112,12 +113,13 @@ fn solve_hidden_singles_region(game: *GameState, region: []u32) void {
         if (count == 1) {
             const number: u4 = @intCast(number_usize);
             const cell_index = last_occurences[number];
-            const cell = game.board[cell_index];
+            const cell_number = game.board[cell_index];
+            const cell_hint_mask = game.hint_masks[cell_index];
 
-            if (cell.number == UnsetNumber) {
+            if (cell_number == UnsetNumber) {
                 event.allocate_hidden_single_event(game).* = event.HiddenSingleEvent{
                     .cell_index = cell_index,
-                    .deletion_mask = cell.hint_mask & ~sudoku.mask_for_number(number),
+                    .deletion_mask = cell_hint_mask & ~sudoku.mask_for_number(number),
                     .number = number,
                 };
 
@@ -142,7 +144,7 @@ fn solve_hidden_pairs_region(game: *GameState, region: []u32) void {
     var position_mask = std.mem.zeroes([sudoku.MaxSudokuExtent]u16);
 
     for (region, 0..) |cell_index, region_cell_index| {
-        var mask = game.board[cell_index].hint_mask;
+        var mask = game.hint_masks[cell_index];
 
         for (0..game.extent) |number| {
             if ((mask & 1) != 0) {
@@ -170,12 +172,10 @@ fn solve_hidden_pairs_region(game: *GameState, region: []u32) void {
             const pair_mask = sudoku.mask_for_number(@intCast(first_number)) | sudoku.mask_for_number(@intCast(second_number));
 
             for (region, 0..) |cell_index, i| {
-                var cell = &game.board[cell_index];
-
                 if (((position_mask[first_number] >> @intCast(i)) & 1) != 0) {
-                    cell.hint_mask = pair_mask;
+                    game.hint_masks[cell_index] = pair_mask;
                 } else {
-                    cell.hint_mask &= ~pair_mask;
+                    game.hint_masks[cell_index] &= ~pair_mask;
                 }
             }
         }
@@ -204,10 +204,10 @@ pub fn solve_pointing_lines(game: *GameState) void {
             aabb.min = u32_2{ game.extent, game.extent };
 
             for (box_region) |cell_index| {
-                const cell = game.board[cell_index];
+                const cell_hint_mask = game.hint_masks[cell_index];
                 const cell_coord = sudoku.flat_index_to_2d(game.extent, cell_index);
 
-                if ((cell.hint_mask & number_mask) != 0) {
+                if ((cell_hint_mask & number_mask) != 0) {
                     aabb.min = @min(aabb.min, cell_coord);
                     aabb.max = @max(aabb.max, cell_coord);
                     candidate_count.* += 1;
@@ -239,7 +239,7 @@ fn remove_candidates_from_pointing_line(game: *GameState, number: u4, box_index_
         const box_index = game.box_indices[cell_index];
 
         if (box_index != box_index_to_exclude) {
-            game.board[cell_index].hint_mask &= ~number_mask;
+            game.hint_masks[cell_index] &= ~number_mask;
         }
     }
 }

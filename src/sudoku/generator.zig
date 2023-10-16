@@ -30,10 +30,7 @@ fn swap_random_row(game: *GameState, regular_type: sudoku.RegularSudoku, rng: *s
 
 fn swap_region(game: *GameState, region_a: []u32, region_b: []u32) void {
     for (region_a, region_b) |cell_index_a, cell_index_b| {
-        var cell_a = &game.board[cell_index_a];
-        var cell_b = &game.board[cell_index_b];
-
-        std.mem.swap(u5, &cell_a.number, &cell_b.number);
+        std.mem.swap(u5, &game.board[cell_index_a], &game.board[cell_index_b]);
     }
 }
 
@@ -48,7 +45,7 @@ pub fn generate_dumb_board(game: *GameState) void {
             const box_offset = region_index / regular_type.box_h;
             const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % game.extent);
 
-            game.board[cell_index].number = number;
+            game.board[cell_index] = number;
         }
     }
 
@@ -81,10 +78,10 @@ pub fn generate_dumb_board(game: *GameState) void {
     while (numbers_to_remove > 0) {
         const cell_index = rng.random().uintLessThan(u32, game.extent * game.extent);
 
-        var cell = &game.board[cell_index];
+        var cell_number = &game.board[cell_index];
 
-        if (cell.number != UnsetNumber) {
-            cell.number = UnsetNumber;
+        if (cell_number.* != UnsetNumber) {
+            cell_number.* = UnsetNumber;
             numbers_to_remove -= 1;
         }
     }

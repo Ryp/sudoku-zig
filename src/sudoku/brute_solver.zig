@@ -21,8 +21,8 @@ fn solve_recursive(game: *GameState) bool {
     var free_cell_index: u32 = undefined;
 
     // Look for a free cell
-    for (game.board, 0..) |cell, flat_index| {
-        if (cell.number == UnsetNumber) {
+    for (game.board, 0..) |cell_number, flat_index| {
+        if (cell_number == UnsetNumber) {
             free_cell_index = @intCast(flat_index);
             break;
         }
@@ -38,11 +38,11 @@ fn solve_recursive(game: *GameState) bool {
     populate_valid_candidates(game, free_cell_index, valid_candidates);
 
     // Now let's place a number from the list of candidates and see if it sticks
-    var cell = &game.board[free_cell_index];
+    var cell_number = &game.board[free_cell_index];
 
     for (valid_candidates, 0..) |is_valid, number| {
         if (is_valid) {
-            cell.number = @intCast(number);
+            cell_number.* = @intCast(number);
 
             if (solve_recursive(game)) {
                 return true;
@@ -50,7 +50,7 @@ fn solve_recursive(game: *GameState) bool {
         }
     }
 
-    cell.number = UnsetNumber;
+    cell_number.* = UnsetNumber;
     return false;
 }
 
@@ -71,12 +71,12 @@ fn solve_iterative(game: *GameState) bool {
 
         populate_valid_candidates(game, free_cell_index, valid_candidates);
 
-        var cell = &game.board[free_cell_index];
+        var cell_number = &game.board[free_cell_index];
         var start: u32 = current_guess[list_index];
 
         for (valid_candidates[start..], start..) |is_valid, number| {
             if (is_valid) {
-                cell.number = @intCast(number);
+                cell_number.* = @intCast(number);
                 current_guess[list_index] = @intCast(number + 1);
 
                 list_index += 1;
@@ -84,7 +84,7 @@ fn solve_iterative(game: *GameState) bool {
                 break :main;
             }
         } else {
-            cell.number = UnsetNumber;
+            cell_number.* = UnsetNumber;
             current_guess[list_index] = 0;
 
             // Backtracking at index zero means we didn't find a solution
@@ -114,23 +114,23 @@ fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates
 
     // Remove possible solutions based on visible regions
     for (game.col_regions[col]) |cell_index| {
-        const cell = game.board[cell_index];
-        if (cell.number != UnsetNumber) {
-            valid_candidates[cell.number] = false;
+        const cell_number = game.board[cell_index];
+        if (cell_number != UnsetNumber) {
+            valid_candidates[cell_number] = false;
         }
     }
 
     for (game.row_regions[row]) |cell_index| {
-        const cell = game.board[cell_index];
-        if (cell.number != UnsetNumber) {
-            valid_candidates[cell.number] = false;
+        const cell_number = game.board[cell_index];
+        if (cell_number != UnsetNumber) {
+            valid_candidates[cell_number] = false;
         }
     }
 
     for (game.box_regions[box]) |cell_index| {
-        const cell = game.board[cell_index];
-        if (cell.number != UnsetNumber) {
-            valid_candidates[cell.number] = false;
+        const cell_number = game.board[cell_index];
+        if (cell_number != UnsetNumber) {
+            valid_candidates[cell_number] = false;
         }
     }
 }
@@ -138,8 +138,8 @@ fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates
 fn populate_free_list(game: *GameState, free_list_indices_full: []u32) []u32 {
     var list_index: u32 = 0;
 
-    for (game.board, 0..) |cell, flat_index| {
-        if (cell.number == UnsetNumber) {
+    for (game.board, 0..) |cell_number, flat_index| {
+        if (cell_number == UnsetNumber) {
             free_list_indices_full[list_index] = @intCast(flat_index);
             list_index += 1;
         }

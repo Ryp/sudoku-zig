@@ -294,10 +294,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         var highlight_mask: u16 = 0;
         if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
             const flat_index = sudoku.get_flat_index(game.extent, game.selected_cell);
-            const cell = game.board[flat_index];
+            const cell_number = game.board[flat_index];
 
-            if (cell.number != UnsetNumber) {
-                highlight_mask = sudoku.mask_for_number(@intCast(cell.number));
+            if (cell_number != UnsetNumber) {
+                highlight_mask = sudoku.mask_for_number(@intCast(cell_number));
             }
         }
 
@@ -312,7 +312,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         else
             game.extent;
 
-        for (game.board, 0..) |cell, flat_index| {
+        for (game.board, game.hint_masks, 0..) |cell_number, cell_hint_mask, flat_index| {
             const box_index = game.box_indices[flat_index];
             const box_region_color = box_region_colors[box_index];
             const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
@@ -340,8 +340,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
                 }
 
-                if (cell.number != UnsetNumber) {
-                    if (highlight_mask & sudoku.mask_for_number(@intCast(cell.number)) != 0) {
+                if (cell_number != UnsetNumber) {
+                    if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
                         _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
                         _ = c.SDL_RenderFillRect(ren, &cell_rect);
                     }
@@ -349,10 +349,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
 
             // Draw placed numbers
-            if (cell.number != UnsetNumber) {
+            if (cell_number != UnsetNumber) {
                 var glyph_rect = std.mem.zeroes(c.SDL_Rect);
 
-                if (c.TTF_SizeText(font, NumbersString[cell.number], &glyph_rect.w, &glyph_rect.h) != 0) {
+                if (c.TTF_SizeText(font, NumbersString[cell_number], &glyph_rect.w, &glyph_rect.h) != 0) {
                     c.SDL_Log("TTF error: %s", c.TTF_GetError());
                     return error.SDLInitializationFailed;
                 }
@@ -361,14 +361,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
                 glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
 
-                _ = c.SDL_RenderCopy(ren, text_textures[cell.number], &glyph_rect, &glyph_out_rect);
+                _ = c.SDL_RenderCopy(ren, text_textures[cell_number], &glyph_rect, &glyph_out_rect);
             }
 
             // Draw candidates
-            if (cell.number == UnsetNumber) {
+            if (cell_number == UnsetNumber) {
                 for (0..game.extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
-                    if (((cell.hint_mask >> number) & 1) != 0) {
+                    if (((cell_hint_mask >> number) & 1) != 0) {
                         var candidate_rect = cell_rect;
                         candidate_rect.x += @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
                         candidate_rect.y += @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
