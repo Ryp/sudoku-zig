@@ -40,4 +40,19 @@ pub fn build(b: *Builder) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&test_cmd.step);
+
+    // Bench
+    const bench_exe = b.addExecutable(.{
+        .name = "bench",
+        .root_source_file = .{ .path = "src/sudoku/bench.zig" },
+        .optimize = optimize,
+    });
+
+    b.installArtifact(bench_exe);
+
+    const bench_cmd = b.addRunArtifact(bench_exe);
+    bench_cmd.step.dependOn(b.getInstallStep());
+
+    const bench_step = b.step("bench", "Run bench");
+    bench_step.dependOn(&bench_cmd.step);
 }
