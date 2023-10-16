@@ -188,16 +188,18 @@ pub fn solve_pointing_lines(game: *GameState) void {
     for (0..game.extent) |box_index| {
         const box_region = game.box_regions[box_index];
 
-        var box_aabbs: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
-        var candidate_counts = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+        var box_aabbs_full: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
+        var box_aabbs = box_aabbs_full[0..game.extent];
+
+        var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+        var candidate_counts = candidate_counts_full[0..game.extent];
 
         // Compute AABB of candidates for each number
         // FIXME cache remaining candidates per box and only iterate on this?
-        for (0..game.extent) |number_usize| {
+        for (box_aabbs, candidate_counts, 0..) |*aabb, *candidate_count, number_usize| {
             const number: u4 = @intCast(number_usize);
             const number_mask = sudoku.mask_for_number(number);
 
-            var aabb = &box_aabbs[number];
             aabb.max = u32_2{ 0, 0 };
             aabb.min = u32_2{ game.extent, game.extent };
 
@@ -208,13 +210,13 @@ pub fn solve_pointing_lines(game: *GameState) void {
                 if ((cell.hint_mask & number_mask) != 0) {
                     aabb.min = @min(aabb.min, cell_coord);
                     aabb.max = @max(aabb.max, cell_coord);
-                    candidate_counts[number] += 1;
+                    candidate_count.* += 1;
                 }
             }
 
             // Test if we have a valid AABB
             // We don't care about single candidates, they should be found with simpler solving method already
-            if (candidate_counts[number] >= 2) {
+            if (candidate_count.* >= 2) {
                 const aabb_extent = aabb.max - aabb.min;
                 assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles
 

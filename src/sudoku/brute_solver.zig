@@ -76,15 +76,14 @@ fn solve_iterative(game: *GameState) bool {
         var start: u32 = current_guess[list_index];
 
         for (valid_candidates[start..], start..) |is_valid, number| {
-            if (!is_valid)
-                continue;
+            if (is_valid) {
+                cell.number = @intCast(number);
+                current_guess[list_index] = @intCast(number + 1);
 
-            cell.number = @intCast(number);
-            current_guess[list_index] = @intCast(number + 1);
+                list_index += 1;
 
-            list_index += 1;
-
-            break :main;
+                break :main;
+            }
         } else {
             cell.number = UnsetNumber;
             current_guess[list_index] = 0;
