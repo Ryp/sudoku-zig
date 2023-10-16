@@ -32,19 +32,19 @@ pub const RegularSudoku = struct {
     box_h: u32,
 };
 
-pub const SquigglySudoku = struct {
+pub const JigsawSudoku = struct {
     size: u32,
     box_indices_string: []const u8,
 };
 
 pub const GameTypeTag = enum {
     regular,
-    squiggly,
+    jigsaw,
 };
 
 pub const GameType = union(GameTypeTag) {
     regular: RegularSudoku,
-    squiggly: SquigglySudoku,
+    jigsaw: JigsawSudoku,
 };
 
 pub const GameState = struct {
@@ -97,7 +97,7 @@ pub fn full_hint_mask(game_extent: u32) u16 {
 pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudoku_string: []const u8) !GameState {
     const extent = switch (game_type) {
         .regular => |regular| regular.box_w * regular.box_h,
-        .squiggly => |squiggly| squiggly.size,
+        .jigsaw => |jigsaw| jigsaw.size,
     };
     const cell_count = extent * extent;
 
@@ -129,8 +129,8 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .regular => |regular| {
             fill_region_indices_regular(box_indices, extent, regular.box_w, regular.box_h);
         },
-        .squiggly => |squiggly| {
-            fill_region_indices_from_string(box_indices, squiggly.box_indices_string, extent);
+        .jigsaw => |jigsaw| {
+            fill_region_indices_from_string(box_indices, jigsaw.box_indices_string, extent);
         },
     }
 

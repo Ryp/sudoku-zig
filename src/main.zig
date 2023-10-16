@@ -27,7 +27,7 @@ pub fn main() !void {
         } }
     else
         sudoku.GameType{
-            .squiggly = .{
+            .jigsaw = .{
                 .size = box_w * box_h, // FIXME use different format like 3x3 for regular
                 .box_indices_string = args[4],
             },

@@ -27,8 +27,8 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const TextColor = BlackColor;
 const GridColor = BlackColor;
 
-const SquigglyRegionSaturation = 0.4;
-const SquigglyRegionValue = 1.0;
+const JigsawRegionSaturation = 0.4;
+const JigsawRegionValue = 1.0;
 
 fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     if (game_extent > 12) {
@@ -91,11 +91,11 @@ fn fill_box_regions_colors(game: *GameState, box_region_colors: []c.SDL_Color) v
                 }
             }
         },
-        .squiggly => {
+        .jigsaw => {
             // Get a unique color for each region
             for (box_region_colors, 0..) |*box_region_color, box_index| {
                 const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
-                box_region_color.* = hsv_to_sdl_color(hue, SquigglyRegionSaturation, SquigglyRegionValue);
+                box_region_color.* = hsv_to_sdl_color(hue, JigsawRegionSaturation, JigsawRegionValue);
             }
         },
     }
