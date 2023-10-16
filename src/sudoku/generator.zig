@@ -5,8 +5,6 @@ const sudoku = @import("game.zig");
 // FIXME Use another simpler struct for the board?
 const GameState = sudoku.GameState;
 const UnsetNumber = sudoku.UnsetNumber;
-const cell_at = sudoku.cell_at;
-const u32_2 = sudoku.u32_2;
 
 fn swap_random_col(game: *GameState, regular_type: sudoku.RegularSudoku, rng: *std.rand.Xoroshiro128) void {
     // FIXME Use box count var
@@ -30,10 +28,10 @@ fn swap_random_row(game: *GameState, regular_type: sudoku.RegularSudoku, rng: *s
     swap_region(game, game.row_regions[row_a], game.row_regions[row_b]);
 }
 
-fn swap_region(game: *GameState, region_a: []u32_2, region_b: []u32_2) void {
-    for (region_a, region_b) |cell_coord_a, cell_coord_b| {
-        var cell_a = cell_at(game, cell_coord_a);
-        var cell_b = cell_at(game, cell_coord_b);
+fn swap_region(game: *GameState, region_a: []u32, region_b: []u32) void {
+    for (region_a, region_b) |cell_index_a, cell_index_b| {
+        var cell_a = &game.board[cell_index_a];
+        var cell_b = &game.board[cell_index_b];
 
         std.mem.swap(u5, &cell_a.number, &cell_b.number);
     }
@@ -45,13 +43,12 @@ pub fn generate_dumb_board(game: *GameState) void {
     // Generate a full board by using an ordered sequence
     // that guarantees a valid output
     for (0..game.extent) |region_index| {
-        for (game.row_regions[region_index], 0..game.extent) |cell_coord, i| {
-            var cell = cell_at(game, cell_coord);
+        for (game.row_regions[region_index], 0..) |cell_index, i| {
             const line_offset = region_index * regular_type.box_w;
             const box_offset = region_index / regular_type.box_h;
             const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % game.extent);
 
-            cell.number = number;
+            game.board[cell_index].number = number;
         }
     }
 
@@ -82,10 +79,9 @@ pub fn generate_dumb_board(game: *GameState) void {
     assert(numbers_to_remove < cell_count);
 
     while (numbers_to_remove > 0) {
-        const x = rng.random().uintLessThan(u32, game.extent);
-        const y = rng.random().uintLessThan(u32, game.extent);
+        const cell_index = rng.random().uintLessThan(u32, game.extent * game.extent);
 
-        var cell = cell_at(game, .{ x, y });
+        var cell = &game.board[cell_index];
 
         if (cell.number != UnsetNumber) {
             cell.number = UnsetNumber;

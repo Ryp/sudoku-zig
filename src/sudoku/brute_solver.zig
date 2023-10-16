@@ -4,9 +4,6 @@ const assert = std.debug.assert;
 const sudoku = @import("game.zig");
 const GameState = sudoku.GameState;
 const UnsetNumber = sudoku.UnsetNumber;
-const cell_at = sudoku.cell_at;
-const u32_2 = sudoku.u32_2;
-const all = sudoku.all;
 
 const Options = struct {
     recursive: bool = false,
@@ -21,12 +18,12 @@ pub fn solve(game: *GameState, options: Options) bool {
 }
 
 fn solve_recursive(game: *GameState) bool {
-    var free_cell_flat_index: u32 = undefined;
+    var free_cell_index: u32 = undefined;
 
     // Look for a free cell
     for (game.board, 0..) |cell, flat_index| {
         if (cell.number == UnsetNumber) {
-            free_cell_flat_index = @intCast(flat_index);
+            free_cell_index = @intCast(flat_index);
             break;
         }
     } else {
@@ -38,10 +35,10 @@ fn solve_recursive(game: *GameState) bool {
     var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
     var valid_candidates = valid_candidates_full[0..game.extent];
 
-    populate_valid_candidates(game, free_cell_flat_index, valid_candidates);
+    populate_valid_candidates(game, free_cell_index, valid_candidates);
 
     // Now let's place a number from the list of candidates and see if it sticks
-    var cell = &game.board[free_cell_flat_index];
+    var cell = &game.board[free_cell_index];
 
     for (valid_candidates, 0..) |is_valid, number| {
         if (!is_valid)
@@ -71,11 +68,11 @@ fn solve_iterative(game: *GameState) bool {
     var list_index: u32 = 0;
 
     while (list_index < free_list_indices.len) main: {
-        const free_cell_flat_index = free_list_indices[list_index];
+        const free_cell_index = free_list_indices[list_index];
 
-        populate_valid_candidates(game, free_cell_flat_index, valid_candidates);
+        populate_valid_candidates(game, free_cell_index, valid_candidates);
 
-        var cell = &game.board[free_cell_flat_index];
+        var cell = &game.board[free_cell_index];
         var start: u32 = current_guess[list_index];
 
         for (valid_candidates[start..], start..) |is_valid, number| {
@@ -118,22 +115,22 @@ fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates
     }
 
     // Remove possible solutions based on visible regions
-    for (game.col_regions[col]) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
+    for (game.col_regions[col]) |cell_index| {
+        const cell = game.board[cell_index];
         if (cell.number != UnsetNumber) {
             valid_candidates[cell.number] = false;
         }
     }
 
-    for (game.row_regions[row]) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
+    for (game.row_regions[row]) |cell_index| {
+        const cell = game.board[cell_index];
         if (cell.number != UnsetNumber) {
             valid_candidates[cell.number] = false;
         }
     }
 
-    for (game.box_regions[box]) |cell_coord| {
-        const cell = cell_at(game, cell_coord);
+    for (game.box_regions[box]) |cell_index| {
+        const cell = game.board[cell_index];
         if (cell.number != UnsetNumber) {
             valid_candidates[cell.number] = false;
         }

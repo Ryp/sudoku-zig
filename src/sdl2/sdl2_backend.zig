@@ -293,7 +293,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         var highlight_mask: u16 = 0;
         if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-            const cell = sudoku.cell_at(game, game.selected_cell);
+            const flat_index = sudoku.get_flat_index(game.extent, game.selected_cell);
+            const cell = game.board[flat_index];
 
             if (cell.number != UnsetNumber) {
                 highlight_mask = sudoku.mask_for_number(@intCast(cell.number));

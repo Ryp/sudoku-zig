@@ -2,11 +2,10 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("game.zig");
-const u32_2 = sudoku.u32_2;
 const GameState = sudoku.GameState;
 
 pub const HiddenSingleEvent = struct {
-    coords: u32_2,
+    cell_index: u32,
     deletion_mask: u16,
     number: u4,
 };

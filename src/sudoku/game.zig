@@ -18,13 +18,6 @@ pub fn all(vector: anytype) bool {
 
 pub const u32_2 = @Vector(2, u32);
 
-pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
-    const x: u32 = @intCast(flat_index % extent);
-    const y: u32 = @intCast(flat_index / extent);
-
-    return .{ x, y };
-}
-
 pub const MaxSudokuExtent = 16;
 pub const UnsetNumber: u5 = 0x1F;
 const MaxHistorySize = 512;
@@ -60,11 +53,11 @@ pub const GameState = struct {
     board: []CellState,
     selected_cell: u32_2,
 
-    region_offsets: []u32_2,
-    all_regions: [][]u32_2,
-    col_regions: [][]u32_2,
-    row_regions: [][]u32_2,
-    box_regions: [][]u32_2,
+    region_offsets: []u32,
+    all_regions: [][]u32,
+    col_regions: [][]u32,
+    row_regions: [][]u32,
+    box_regions: [][]u32,
     box_indices: []u4,
 
     history: []CellState,
@@ -75,14 +68,15 @@ pub const GameState = struct {
     solver_event_index: u32 = 0,
 };
 
-pub fn get_flat_index(extent: u32, position: u32_2) u32 // FIXME flatten all?
-{
-    return position[0] + extent * position[1];
+pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
+    const x: u32 = @intCast(flat_index % extent);
+    const y: u32 = @intCast(flat_index / extent);
+
+    return .{ x, y };
 }
 
-pub fn cell_at(game: *GameState, position: u32_2) *CellState {
-    const flat_index = get_flat_index(game.extent, position);
-    return &game.board[flat_index];
+pub fn get_flat_index(extent: u32, position: u32_2) u32 {
+    return position[0] + extent * position[1];
 }
 
 pub fn box_index_from_cell(game: *GameState, cell_coord: u32_2) u32 {
@@ -122,10 +116,10 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     const history = try allocator.alloc(CellState, cell_count * MaxHistorySize);
     errdefer allocator.free(history);
 
-    const region_offsets = try allocator.alloc(u32_2, cell_count * 3);
+    const region_offsets = try allocator.alloc(u32, cell_count * 3);
     errdefer allocator.free(region_offsets);
 
-    const all_regions = try allocator.alloc([]u32_2, extent * 3);
+    const all_regions = try allocator.alloc([]u32, extent * 3);
     errdefer allocator.free(all_regions);
 
     const box_indices = try allocator.alloc(u4, cell_count);
@@ -192,7 +186,7 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.board);
 }
 
-fn fill_regions(extent: u32, col_regions: [][]u32_2, row_regions: [][]u32_2, box_regions: [][]u32_2, box_indices: []const u4) void {
+fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_regions: [][]u32, box_indices: []const u4) void {
     for (0..extent) |region_index_usize| {
         var col_region = col_regions[region_index_usize];
         var row_region = row_regions[region_index_usize];
@@ -204,8 +198,8 @@ fn fill_regions(extent: u32, col_regions: [][]u32_2, row_regions: [][]u32_2, box
 
         for (col_region, row_region, 0..) |*col_cell, *row_cell, cell_index_usize| {
             const cell_index: u32 = @intCast(cell_index_usize);
-            col_cell.* = .{ region_index, cell_index };
-            row_cell.* = .{ cell_index, region_index };
+            col_cell.* = get_flat_index(extent, .{ region_index, cell_index });
+            row_cell.* = get_flat_index(extent, .{ cell_index, region_index });
         }
     }
 
@@ -216,7 +210,7 @@ fn fill_regions(extent: u32, col_regions: [][]u32_2, row_regions: [][]u32_2, box
         const slot = region_slot[box_index];
 
         var box_region = box_regions[box_index];
-        box_region[slot] = flat_index_to_2d(extent, flat_index);
+        box_region[slot] = @intCast(flat_index);
 
         region_slot[box_index] += 1;
     }
@@ -297,7 +291,9 @@ pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
 
 pub fn player_clear_number(game: *GameState) void {
     if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        var cell = cell_at(game, game.selected_cell);
+        const cell_index = get_flat_index(game.extent, game.selected_cell);
+        var cell = &game.board[cell_index];
+
         cell.number = UnsetNumber;
         cell.hint_mask = 0;
 
@@ -307,14 +303,15 @@ pub fn player_clear_number(game: *GameState) void {
 
 pub fn player_input_number(game: *GameState, number: u4) void {
     if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        place_number_remove_trivial_candidates(game, game.selected_cell, number);
+        place_number_remove_trivial_candidates(game, get_flat_index(game.extent, game.selected_cell), number);
         push_state_to_history(game);
     }
 }
 
 pub fn player_toggle_guess(game: *GameState, number: u4) void {
     if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        var cell = cell_at(game, game.selected_cell);
+        const cell_index = get_flat_index(game.extent, game.selected_cell);
+        var cell = &game.board[cell_index];
 
         if (cell.number == UnsetNumber) {
             cell.hint_mask ^= mask_for_number(number);
@@ -329,11 +326,11 @@ pub fn place_number(cell: *CellState, number: u4) void {
     cell.hint_mask = mask_for_number(number);
 }
 
-pub fn place_number_remove_trivial_candidates(game: *GameState, coord: u32_2, number: u4) void {
-    var cell = cell_at(game, coord);
+pub fn place_number_remove_trivial_candidates(game: *GameState, flat_index: u32, number: u4) void {
+    var cell = &game.board[flat_index];
 
     place_number(cell, number);
-    solver.solve_trivial_candidates_at(game, coord, number);
+    solver.solve_trivial_candidates_at(game, flat_index, number);
 }
 
 // FIXME We need a good way to communicate this to the user
@@ -405,8 +402,7 @@ pub fn player_fill_hints(game: *GameState) void {
 
     for (game.board, 0..) |*cell, flat_index| {
         if (cell.number != UnsetNumber) {
-            const index = flat_index_to_2d(game.extent, flat_index);
-            place_number_remove_trivial_candidates(game, index, @intCast(cell.number));
+            place_number_remove_trivial_candidates(game, @intCast(flat_index), @intCast(cell.number));
         }
     }
 
