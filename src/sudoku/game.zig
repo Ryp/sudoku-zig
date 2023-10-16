@@ -100,7 +100,7 @@ pub fn full_hint_mask(game_extent: u32) u16 {
     return @intCast((@as(u32, 1) << @intCast(game_extent)) - 1);
 }
 
-pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType) !GameState {
+pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudoku_string: []const u8) !GameState {
     const extent = switch (game_type) {
         .regular => |regular| regular.box_w * regular.box_h,
         .squiggly => |squiggly| squiggly.size,
@@ -156,7 +156,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType) !Gam
     const solver_events = try allocator.alloc(SolverEvent, cell_count * extent);
     errdefer allocator.free(solver_events);
 
-    return GameState{
+    var game = GameState{
         .extent = extent,
         .game_type = game_type,
         .board = board,
@@ -170,6 +170,17 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType) !Gam
         .selected_cell = u32_2{ extent, extent }, // Invalid value
         .solver_events = solver_events,
     };
+
+    if (sudoku_string.len == 0) {
+        generator.generate_dumb_board(&game);
+    } else {
+        fill_board_from_string(&game, sudoku_string);
+    }
+
+    // The history should contain the initial state to function correctly
+    std.mem.copy(CellState, get_history_slice(&game, 0), game.board);
+
+    return game;
 }
 
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
@@ -215,10 +226,10 @@ fn fill_regions(extent: u32, col_regions: [][]u32_2, row_regions: [][]u32_2, box
     }
 }
 
-pub fn fill_grid_from_string(game: *GameState, clues_string: []const u8) void {
-    assert(clues_string.len == game.extent * game.extent);
+fn fill_board_from_string(game: *GameState, sudoku_string: []const u8) void {
+    assert(sudoku_string.len == game.extent * game.extent);
 
-    for (game.board, clues_string) |*cell, char| {
+    for (game.board, sudoku_string) |*cell, char| {
         var number: u8 = UnsetNumber;
 
         if (char >= '1' and char <= '9') {
@@ -272,15 +283,6 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
     for (region_sizes) |region_size| {
         assert(region_size == extent);
     }
-}
-
-pub fn fill_grid_from_generator(game: *GameState) void {
-    generator.generate_dumb_grid(game);
-}
-
-pub fn start_game(game: *GameState) void {
-    // The history should contain the initial state to function correctly
-    std.mem.copy(CellState, get_history_slice(game, 0), game.board);
 }
 
 pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {

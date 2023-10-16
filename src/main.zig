@@ -8,11 +8,15 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
+    const gpa_allocator = gpa.allocator();
+    // const allocator = std.heap.page_allocator;
+
     // Parse arguments
-    const args = try std.process.argsAlloc(gpa.allocator());
-    defer std.process.argsFree(gpa.allocator(), args);
+    const args = try std.process.argsAlloc(gpa_allocator);
+    defer std.process.argsFree(gpa_allocator, args);
 
     assert(args.len >= 3);
+
     const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
@@ -29,17 +33,11 @@ pub fn main() !void {
             },
         };
 
+    const sudoku_string = if (args.len > 3) args[3] else "";
+
     // Create game state
-    var game = try sudoku.create_game_state(gpa.allocator(), game_type);
-    defer sudoku.destroy_game_state(gpa.allocator(), &game);
+    var game = try sudoku.create_game_state(gpa_allocator, game_type, sudoku_string);
+    defer sudoku.destroy_game_state(gpa_allocator, &game);
 
-    if (args.len == 3) {
-        sudoku.fill_grid_from_generator(&game);
-    } else if (args.len == 4 or args.len == 5) {
-        sudoku.fill_grid_from_string(&game, args[3]);
-    }
-
-    sudoku.start_game(&game);
-
-    try sdl2.execute_main_loop(gpa.allocator(), &game);
+    try sdl2.execute_main_loop(gpa_allocator, &game);
 }

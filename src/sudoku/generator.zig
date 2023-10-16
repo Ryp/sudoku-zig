@@ -39,10 +39,10 @@ fn swap_region(game: *GameState, region_a: []u32_2, region_b: []u32_2) void {
     }
 }
 
-pub fn generate_dumb_grid(game: *GameState) void {
+pub fn generate_dumb_board(game: *GameState) void {
     const regular_type = game.game_type.regular;
 
-    // Generate a full grid by using an ordered sequence
+    // Generate a full board by using an ordered sequence
     // that guarantees a valid output
     for (0..game.extent) |region_index| {
         for (game.row_regions[region_index], 0..game.extent) |cell_coord, i| {
@@ -63,7 +63,7 @@ pub fn generate_dumb_grid(game: *GameState) void {
     var rng = std.rand.Xoroshiro128.init(seed);
     const rounds = 1000; // FIXME
 
-    // Apply isomorphisms to that grid to make it look more interesting
+    // Apply isomorphisms to that board to make it look more interesting
     // Possible candidates:
     // - Swap two parallel lines going through the same box
     // - Flip horizontally or vertically
@@ -75,7 +75,7 @@ pub fn generate_dumb_grid(game: *GameState) void {
 
     // Remove numbers at random places to give a challenge to the player.
     // FIXME The biggest issue here is that we don't control resulting difficulty very well,
-    // and we might even generate a grid that has too many holes therefore multiple solutions.
+    // and we might even generate a board that has too many holes therefore multiple solutions.
     const cell_count = game.extent * game.extent;
     var numbers_to_remove = (cell_count * 2) / 4;
 
