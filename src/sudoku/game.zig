@@ -348,7 +348,7 @@ pub fn player_solve_human_step(game: *GameState) void {
 }
 
 pub fn player_solve_brute_force(game: *GameState) void {
-    if (brute_solver.solve(game)) {
+    if (brute_solver.solve(game, .{})) {
         push_state_to_history(game);
     } else {
         // We didn't manage to solve the puzzle

@@ -21,7 +21,7 @@ test "Critical path" {
 
     try expectEqual(game.extent, 9);
 
-    const solved = brute_solver.solve(&game);
+    const solved = brute_solver.solve(&game, .{});
     try expect(solved);
 }
 
@@ -41,6 +41,6 @@ test "Slow solver" {
 
     try expectEqual(game.extent, 12);
 
-    const solved = brute_solver.solve(&game);
+    const solved = brute_solver.solve(&game, .{});
     try expect(solved);
 }

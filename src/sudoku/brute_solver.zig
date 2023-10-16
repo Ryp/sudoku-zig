@@ -8,8 +8,16 @@ const cell_at = sudoku.cell_at;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
 
-pub fn solve(game: *GameState) bool {
-    return solve_iterative(game);
+const Options = struct {
+    recursive: bool = false,
+};
+
+pub fn solve(game: *GameState, options: Options) bool {
+    if (options.recursive) {
+        return solve_recursive(game);
+    } else {
+        return solve_iterative(game);
+    }
 }
 
 fn solve_recursive(game: *GameState) bool {
@@ -41,7 +49,7 @@ fn solve_recursive(game: *GameState) bool {
 
         cell.number = @intCast(number);
 
-        if (solve(game)) {
+        if (solve_recursive(game)) {
             return true;
         }
     }
