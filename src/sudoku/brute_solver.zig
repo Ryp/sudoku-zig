@@ -41,13 +41,12 @@ fn solve_recursive(game: *GameState) bool {
     var cell = &game.board[free_cell_index];
 
     for (valid_candidates, 0..) |is_valid, number| {
-        if (!is_valid)
-            continue;
+        if (is_valid) {
+            cell.number = @intCast(number);
 
-        cell.number = @intCast(number);
-
-        if (solve_recursive(game)) {
-            return true;
+            if (solve_recursive(game)) {
+                return true;
+            }
         }
     }
 

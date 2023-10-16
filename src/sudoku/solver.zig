@@ -238,9 +238,8 @@ fn remove_candidates_from_pointing_line(game: *GameState, number: u4, box_index_
     for (line_region) |cell_index| {
         const box_index = game.box_indices[cell_index];
 
-        if (box_index == box_index_to_exclude)
-            continue;
-
-        game.board[cell_index].hint_mask &= ~number_mask;
+        if (box_index != box_index_to_exclude) {
+            game.board[cell_index].hint_mask &= ~number_mask;
+        }
     }
 }
