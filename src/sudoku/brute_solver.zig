@@ -18,7 +18,7 @@ pub fn solve(game: *GameState, options: Options) bool {
 }
 
 fn solve_recursive(game: *GameState) bool {
-    var free_cell_index: u32 = undefined;
+    var free_cell_index: u8 = undefined;
 
     // Look for a free cell
     for (game.board, 0..) |cell_number, flat_index| {
@@ -55,7 +55,7 @@ fn solve_recursive(game: *GameState) bool {
 }
 
 fn solve_iterative(game: *GameState) bool {
-    var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u32 = undefined;
+    var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u8 = undefined;
     var free_list_indices = populate_free_list(game, &free_list_indices_full);
 
     var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
@@ -99,7 +99,7 @@ fn solve_iterative(game: *GameState) bool {
     return true;
 }
 
-fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates: []bool) void {
+fn populate_valid_candidates(game: *GameState, index_flat: u8, valid_candidates: []bool) void {
     const cell_coord = sudoku.cell_coord_from_index(game.extent, index_flat);
     const col = cell_coord[0];
     const row = cell_coord[1];
@@ -135,8 +135,8 @@ fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates
     }
 }
 
-fn populate_free_list(game: *GameState, free_list_indices_full: []u32) []u32 {
-    var list_index: u32 = 0;
+fn populate_free_list(game: *GameState, free_list_indices_full: []u8) []u8 {
+    var list_index: u8 = 0;
 
     for (game.board, 0..) |cell_number, flat_index| {
         if (cell_number == UnsetNumber) {
