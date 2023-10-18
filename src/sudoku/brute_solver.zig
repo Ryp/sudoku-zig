@@ -16,32 +16,24 @@ const Options = struct {
 };
 
 pub fn solve(game: *GameState, options: Options) bool {
+    var free_cell_list_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
+    var free_cell_list = populate_free_list(game, &free_cell_list_full);
+
+    sort_free_cell_list(game, free_cell_list);
+
     if (options.recursive) {
-        return solve_recursive(game);
+        return solve_recursive(game, free_cell_list, 0);
     } else {
-        return solve_iterative(game);
+        return solve_iterative(game, free_cell_list);
     }
 }
 
-fn solve_recursive(game: *GameState) bool {
-    var free_cell: CellInfo = undefined;
-
-    // Look for a free cell
-    for (game.board, 0..) |cell_number, cell_index| {
-        if (cell_number == UnsetNumber) {
-            const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
-
-            free_cell = CellInfo{
-                .index = @intCast(cell_index),
-                .col = @intCast(cell_coord[0]),
-                .row = @intCast(cell_coord[1]),
-            };
-            break;
-        }
-    } else {
-        // If we didn't our job is done!
+fn solve_recursive(game: *GameState, free_cell_list: []CellInfo, list_index: u32) bool {
+    if (list_index >= free_cell_list.len) {
         return true;
     }
+
+    const free_cell: CellInfo = free_cell_list[list_index];
 
     // List all possible candidates for this cell
     var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
@@ -56,7 +48,7 @@ fn solve_recursive(game: *GameState) bool {
         if (is_valid) {
             cell_number.* = @intCast(number);
 
-            if (solve_recursive(game)) {
+            if (solve_recursive(game, free_cell_list, list_index + 1)) {
                 return true;
             }
         }
@@ -66,22 +58,17 @@ fn solve_recursive(game: *GameState) bool {
     return false;
 }
 
-fn solve_iterative(game: *GameState) bool {
-    var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
-    var free_list_indices = populate_free_list(game, &free_list_indices_full);
-
-    sort_free_list(game, free_list_indices);
-
+fn solve_iterative(game: *GameState, free_cell_list: []CellInfo) bool {
     var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
-    var current_guess = current_guess_full[0..free_list_indices.len];
+    var current_guess = current_guess_full[0..free_cell_list.len];
 
     var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
     var valid_candidates = valid_candidates_full[0..game.extent];
 
     var list_index: u32 = 0;
 
-    while (list_index < free_list_indices.len) main: {
-        const free_cell = free_list_indices[list_index];
+    while (list_index < free_cell_list.len) main: {
+        const free_cell = free_cell_list[list_index];
 
         populate_valid_candidates(game, free_cell, valid_candidates);
 
@@ -146,14 +133,14 @@ fn populate_valid_candidates(game: *GameState, cell_info: CellInfo, valid_candid
     }
 }
 
-fn populate_free_list(game: *GameState, free_list_indices_full: []CellInfo) []CellInfo {
+fn populate_free_list(game: *GameState, free_cell_list_full: []CellInfo) []CellInfo {
     var list_index: u8 = 0;
 
     for (game.board, 0..) |cell_number, cell_index| {
         if (cell_number == UnsetNumber) {
             const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
 
-            free_list_indices_full[list_index] = CellInfo{
+            free_cell_list_full[list_index] = CellInfo{
                 .index = @intCast(cell_index),
                 .col = @intCast(cell_coord[0]),
                 .row = @intCast(cell_coord[1]),
@@ -162,10 +149,10 @@ fn populate_free_list(game: *GameState, free_list_indices_full: []CellInfo) []Ce
         }
     }
 
-    return free_list_indices_full[0..list_index];
+    return free_cell_list_full[0..list_index];
 }
 
-fn sort_free_list(game: *GameState, free_list_indices: []CellInfo) void {
+fn sort_free_cell_list(game: *GameState, free_cell_list: []CellInfo) void {
     const full_mask = sudoku.full_hint_mask(game.extent);
 
     var col_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
@@ -223,7 +210,7 @@ fn sort_free_list(game: *GameState, free_list_indices: []CellInfo) void {
         candidate_count.* = @popCount(mask);
     }
 
-    std.sort.pdq(CellInfo, free_list_indices, candidate_counts, cell_info_candidate_count_compare_less);
+    std.sort.pdq(CellInfo, free_cell_list, candidate_counts, cell_info_candidate_count_compare_less);
 }
 
 fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo, rhs: CellInfo) bool {
