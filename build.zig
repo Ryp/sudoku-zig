@@ -29,7 +29,7 @@ pub fn build(b: *Builder) void {
     // Test
     const test_a = b.addTest(.{
         .name = "test",
-        .root_source_file = .{ .path = "src/sudoku/brute_solver_test.zig" },
+        .root_source_file = .{ .path = "src/sudoku/test.zig" },
         .optimize = optimize,
     });
 
