@@ -5,6 +5,12 @@ const sudoku = @import("game.zig");
 const GameState = sudoku.GameState;
 const UnsetNumber = sudoku.UnsetNumber;
 
+const CellInfo = struct {
+    index: u8,
+    col: u4,
+    row: u4,
+};
+
 const Options = struct {
     recursive: bool = false,
 };
@@ -18,12 +24,18 @@ pub fn solve(game: *GameState, options: Options) bool {
 }
 
 fn solve_recursive(game: *GameState) bool {
-    var free_cell_index: u8 = undefined;
+    var free_cell: CellInfo = undefined;
 
     // Look for a free cell
-    for (game.board, 0..) |cell_number, flat_index| {
+    for (game.board, 0..) |cell_number, cell_index| {
         if (cell_number == UnsetNumber) {
-            free_cell_index = @intCast(flat_index);
+            const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+
+            free_cell = CellInfo{
+                .index = @intCast(cell_index),
+                .col = @intCast(cell_coord[0]),
+                .row = @intCast(cell_coord[1]),
+            };
             break;
         }
     } else {
@@ -35,10 +47,10 @@ fn solve_recursive(game: *GameState) bool {
     var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
     var valid_candidates = valid_candidates_full[0..game.extent];
 
-    populate_valid_candidates(game, free_cell_index, valid_candidates);
+    populate_valid_candidates(game, free_cell, valid_candidates);
 
     // Now let's place a number from the list of candidates and see if it sticks
-    var cell_number = &game.board[free_cell_index];
+    var cell_number = &game.board[free_cell.index];
 
     for (valid_candidates, 0..) |is_valid, number| {
         if (is_valid) {
@@ -55,7 +67,7 @@ fn solve_recursive(game: *GameState) bool {
 }
 
 fn solve_iterative(game: *GameState) bool {
-    var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u8 = undefined;
+    var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
     var free_list_indices = populate_free_list(game, &free_list_indices_full);
 
     var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
@@ -67,11 +79,11 @@ fn solve_iterative(game: *GameState) bool {
     var list_index: u32 = 0;
 
     while (list_index < free_list_indices.len) main: {
-        const free_cell_index = free_list_indices[list_index];
+        const free_cell = free_list_indices[list_index];
 
-        populate_valid_candidates(game, free_cell_index, valid_candidates);
+        populate_valid_candidates(game, free_cell, valid_candidates);
 
-        var cell_number = &game.board[free_cell_index];
+        var cell_number = &game.board[free_cell.index];
         var start: u32 = current_guess[list_index];
 
         for (valid_candidates[start..], start..) |is_valid, number| {
@@ -99,13 +111,10 @@ fn solve_iterative(game: *GameState) bool {
     return true;
 }
 
-fn populate_valid_candidates(game: *GameState, index_flat: u8, valid_candidates: []bool) void {
-    const cell_coord = sudoku.cell_coord_from_index(game.extent, index_flat);
-    const col = cell_coord[0];
-    const row = cell_coord[1];
-    const box = game.box_indices[index_flat];
-
+fn populate_valid_candidates(game: *GameState, cell_info: CellInfo, valid_candidates: []bool) void {
     assert(valid_candidates.len == game.extent);
+
+    const box = game.box_indices[cell_info.index];
 
     // Clear
     for (valid_candidates) |*candidate| {
@@ -113,14 +122,14 @@ fn populate_valid_candidates(game: *GameState, index_flat: u8, valid_candidates:
     }
 
     // Remove possible solutions based on visible regions
-    for (game.col_regions[col]) |cell_index| {
+    for (game.col_regions[cell_info.col]) |cell_index| {
         const cell_number = game.board[cell_index];
         if (cell_number != UnsetNumber) {
             valid_candidates[cell_number] = false;
         }
     }
 
-    for (game.row_regions[row]) |cell_index| {
+    for (game.row_regions[cell_info.row]) |cell_index| {
         const cell_number = game.board[cell_index];
         if (cell_number != UnsetNumber) {
             valid_candidates[cell_number] = false;
@@ -135,12 +144,18 @@ fn populate_valid_candidates(game: *GameState, index_flat: u8, valid_candidates:
     }
 }
 
-fn populate_free_list(game: *GameState, free_list_indices_full: []u8) []u8 {
+fn populate_free_list(game: *GameState, free_list_indices_full: []CellInfo) []CellInfo {
     var list_index: u8 = 0;
 
-    for (game.board, 0..) |cell_number, flat_index| {
+    for (game.board, 0..) |cell_number, cell_index| {
         if (cell_number == UnsetNumber) {
-            free_list_indices_full[list_index] = @intCast(flat_index);
+            const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+
+            free_list_indices_full[list_index] = CellInfo{
+                .index = @intCast(cell_index),
+                .col = @intCast(cell_coord[0]),
+                .row = @intCast(cell_coord[1]),
+            };
             list_index += 1;
         }
     }
