@@ -65,9 +65,9 @@ pub const GameState = struct {
     solver_event_index: u32 = 0,
 };
 
-pub fn cell_coord_from_index(extent: u32, flat_index: usize) u32_2 {
-    const x: u32 = @intCast(flat_index % extent);
-    const y: u32 = @intCast(flat_index / extent);
+pub fn cell_coord_from_index(extent: u32, cell_index: usize) u32_2 {
+    const x: u32 = @intCast(cell_index % extent);
+    const y: u32 = @intCast(cell_index / extent);
 
     return .{ x, y };
 }
@@ -208,11 +208,11 @@ fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_reg
     var region_slot_full = std.mem.zeroes([MaxSudokuExtent]u32);
     var region_slot = region_slot_full[0..extent];
 
-    for (box_indices, 0..) |box_index, flat_index| {
+    for (box_indices, 0..) |box_index, cell_index| {
         const slot = region_slot[box_index];
 
         var box_region = box_regions[box_index];
-        box_region[slot] = @intCast(flat_index);
+        box_region[slot] = @intCast(cell_index);
 
         region_slot[box_index] += 1;
     }
@@ -321,11 +321,11 @@ pub fn player_toggle_guess(game: *GameState, number: u4) void {
     }
 }
 
-pub fn place_number_remove_trivial_candidates(game: *GameState, flat_index: u32, number: u4) void {
-    game.board[flat_index] = number;
-    game.hint_masks[flat_index] = mask_for_number(number);
+pub fn place_number_remove_trivial_candidates(game: *GameState, cell_index: u32, number: u4) void {
+    game.board[cell_index] = number;
+    game.hint_masks[cell_index] = mask_for_number(number);
 
-    solver.solve_trivial_candidates_at(game, flat_index, number);
+    solver.solve_trivial_candidates_at(game, cell_index, number);
 }
 
 // FIXME We need a good way to communicate this to the user
@@ -410,9 +410,9 @@ pub fn player_fill_hints(game: *GameState) void {
         }
     }
 
-    for (game.board, 0..) |cell_number, flat_index| {
+    for (game.board, 0..) |cell_number, cell_index| {
         if (cell_number != UnsetNumber) {
-            place_number_remove_trivial_candidates(game, @intCast(flat_index), @intCast(cell_number));
+            place_number_remove_trivial_candidates(game, @intCast(cell_index), @intCast(cell_number));
         }
     }
 

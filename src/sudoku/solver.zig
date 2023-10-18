@@ -26,9 +26,9 @@ fn first_bit_index_u16(mask_ro: u16) u4 {
     return 0;
 }
 
-pub fn solve_trivial_candidates_at(game: *GameState, flat_index: u32, number: u4) void {
-    const cell_coord = sudoku.cell_coord_from_index(game.extent, flat_index);
-    const box_index = game.box_indices[flat_index];
+pub fn solve_trivial_candidates_at(game: *GameState, cell_index: u32, number: u4) void {
+    const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+    const box_index = game.box_indices[cell_index];
 
     const col_region = game.col_regions[cell_coord[0]];
     const row_region = game.row_regions[cell_coord[1]];
@@ -73,12 +73,12 @@ fn solve_eliminate_candidate_region(game: *GameState, region: []u32) void {
 
 // If there's a cell with a single possibility left, put it down
 pub fn solve_naked_singles(game: *GameState) void {
-    for (game.board, game.hint_masks, 0..) |cell_number, hint_mask, flat_index| {
+    for (game.board, game.hint_masks, 0..) |cell_number, hint_mask, cell_index| {
         if (cell_number == UnsetNumber and @popCount(hint_mask) == 1) {
             const number = first_bit_index_u16(hint_mask);
 
             // FIXME event should also add the candidates we removed here
-            sudoku.place_number_remove_trivial_candidates(game, @intCast(flat_index), number);
+            sudoku.place_number_remove_trivial_candidates(game, @intCast(cell_index), number);
         }
     }
 }
