@@ -70,6 +70,8 @@ fn solve_iterative(game: *GameState) bool {
     var free_list_indices_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
     var free_list_indices = populate_free_list(game, &free_list_indices_full);
 
+    sort_free_list(game, free_list_indices);
+
     var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
     var current_guess = current_guess_full[0..free_list_indices.len];
 
@@ -161,4 +163,69 @@ fn populate_free_list(game: *GameState, free_list_indices_full: []CellInfo) []Ce
     }
 
     return free_list_indices_full[0..list_index];
+}
+
+fn sort_free_list(game: *GameState, free_list_indices: []CellInfo) void {
+    const full_mask = sudoku.full_hint_mask(game.extent);
+
+    var col_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var col_region_masks = col_region_masks_full[0..game.extent];
+
+    for (game.col_regions, col_region_masks) |region, *region_mask| {
+        region_mask.* = full_mask;
+
+        for (region) |cell_index| {
+            const cell_number = game.board[cell_index];
+            if (cell_number != UnsetNumber) {
+                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+            }
+        }
+    }
+
+    var row_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var row_region_masks = row_region_masks_full[0..game.extent];
+
+    for (game.row_regions, row_region_masks) |region, *region_mask| {
+        region_mask.* = full_mask;
+
+        for (region) |cell_index| {
+            const cell_number = game.board[cell_index];
+            if (cell_number != UnsetNumber) {
+                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+            }
+        }
+    }
+
+    var box_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var box_region_masks = box_region_masks_full[0..game.extent];
+
+    for (game.box_regions, box_region_masks) |region, *region_mask| {
+        region_mask.* = full_mask;
+
+        for (region) |cell_index| {
+            const cell_number = game.board[cell_index];
+            if (cell_number != UnsetNumber) {
+                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+            }
+        }
+    }
+
+    var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u8);
+    var candidate_counts = candidate_counts_full[0..game.board.len];
+
+    for (candidate_counts, 0..) |*candidate_count, cell_index| {
+        const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+        const col = cell_coord[0];
+        const row = cell_coord[1];
+        const box = game.box_indices[cell_index];
+
+        const mask = col_region_masks[col] & row_region_masks[row] & box_region_masks[box];
+        candidate_count.* = @popCount(mask);
+    }
+
+    std.sort.pdq(CellInfo, free_list_indices, candidate_counts, cell_info_candidate_count_compare_less);
+}
+
+fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo, rhs: CellInfo) bool {
+    return candidate_counts[lhs.index] < candidate_counts[rhs.index];
 }
