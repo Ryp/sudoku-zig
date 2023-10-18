@@ -100,9 +100,9 @@ fn solve_iterative(game: *GameState) bool {
 }
 
 fn populate_valid_candidates(game: *GameState, index_flat: u32, valid_candidates: []bool) void {
-    const target_cell_coord = sudoku.flat_index_to_2d(game.extent, index_flat);
-    const col = target_cell_coord[0];
-    const row = target_cell_coord[1];
+    const cell_coord = sudoku.cell_coord_from_index(game.extent, index_flat);
+    const col = cell_coord[0];
+    const row = cell_coord[1];
     const box = game.box_indices[index_flat];
 
     assert(valid_candidates.len == game.extent);

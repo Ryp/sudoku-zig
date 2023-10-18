@@ -293,7 +293,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         var highlight_mask: u16 = 0;
         if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-            const flat_index = sudoku.get_flat_index(game.extent, game.selected_cell);
+            const flat_index = sudoku.cell_index_from_coord(game.extent, game.selected_cell);
             const cell_number = game.board[flat_index];
 
             if (cell_number != UnsetNumber) {
@@ -307,15 +307,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         const selected_col = game.selected_cell[0];
         const selected_row = game.selected_cell[1];
-        const selected_box = if (all(game.selected_cell < u32_2{ game.extent, game.extent }))
-            sudoku.box_index_from_cell(game, game.selected_cell)
+        const selected_cell_index = sudoku.cell_index_from_coord(game.extent, game.selected_cell);
+        const selected_box = if (selected_cell_index < game.extent * game.extent)
+            game.box_indices[selected_cell_index]
         else
             game.extent;
 
         for (game.board, game.hint_masks, 0..) |cell_number, cell_hint_mask, flat_index| {
             const box_index = game.box_indices[flat_index];
             const box_region_color = box_region_colors[box_index];
-            const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
+            const cell_coord = sudoku.cell_coord_from_index(game.extent, flat_index);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -419,7 +420,7 @@ fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
 
     for (0..game.board.len) |flat_index| {
         const box_index = game.box_indices[flat_index];
-        const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
+        const cell_coord = sudoku.cell_coord_from_index(game.extent, flat_index);
 
         const cell_rect = c.SDL_Rect{
             .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -431,7 +432,7 @@ fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
         var thick_vertical = true;
 
         if (cell_coord[0] + 1 < game.extent) {
-            const neighbor_flat_index = sudoku.get_flat_index(game.extent, cell_coord + u32_2{ 1, 0 });
+            const neighbor_flat_index = sudoku.cell_index_from_coord(game.extent, cell_coord + u32_2{ 1, 0 });
             const neighbor_box_index = game.box_indices[neighbor_flat_index];
             thick_vertical = box_index != neighbor_box_index;
         }
@@ -439,7 +440,7 @@ fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
         var thick_horizontal = true;
 
         if (cell_coord[1] + 1 < game.extent) {
-            const neighbor_flat_index = sudoku.get_flat_index(game.extent, cell_coord + u32_2{ 0, 1 });
+            const neighbor_flat_index = sudoku.cell_index_from_coord(game.extent, cell_coord + u32_2{ 0, 1 });
             const neighbor_box_index = game.box_indices[neighbor_flat_index];
             thick_horizontal = box_index != neighbor_box_index;
         }

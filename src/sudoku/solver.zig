@@ -27,7 +27,7 @@ fn first_bit_index_u16(mask_ro: u16) u4 {
 }
 
 pub fn solve_trivial_candidates_at(game: *GameState, flat_index: u32, number: u4) void {
-    const cell_coord = sudoku.flat_index_to_2d(game.extent, flat_index);
+    const cell_coord = sudoku.cell_coord_from_index(game.extent, flat_index);
     const box_index = game.box_indices[flat_index];
 
     const col_region = game.col_regions[cell_coord[0]];
@@ -205,7 +205,7 @@ pub fn solve_pointing_lines(game: *GameState) void {
 
             for (box_region) |cell_index| {
                 const cell_hint_mask = game.hint_masks[cell_index];
-                const cell_coord = sudoku.flat_index_to_2d(game.extent, cell_index);
+                const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
 
                 if ((cell_hint_mask & number_mask) != 0) {
                     aabb.min = @min(aabb.min, cell_coord);

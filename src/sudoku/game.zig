@@ -65,22 +65,15 @@ pub const GameState = struct {
     solver_event_index: u32 = 0,
 };
 
-pub fn flat_index_to_2d(extent: u32, flat_index: usize) u32_2 {
+pub fn cell_coord_from_index(extent: u32, flat_index: usize) u32_2 {
     const x: u32 = @intCast(flat_index % extent);
     const y: u32 = @intCast(flat_index / extent);
 
     return .{ x, y };
 }
 
-pub fn get_flat_index(extent: u32, position: u32_2) u32 {
+pub fn cell_index_from_coord(extent: u32, position: u32_2) u32 {
     return position[0] + extent * position[1];
-}
-
-pub fn box_index_from_cell(game: *GameState, cell_coord: u32_2) u32 {
-    assert(all(cell_coord < u32_2{ game.extent, game.extent }));
-
-    const flat_index = get_flat_index(game.extent, cell_coord);
-    return game.box_indices[flat_index];
 }
 
 pub fn mask_for_number(number: u4) u16 {
@@ -207,8 +200,8 @@ fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_reg
 
         for (col_region, row_region, 0..) |*col_cell, *row_cell, cell_index_usize| {
             const cell_index: u32 = @intCast(cell_index_usize);
-            col_cell.* = get_flat_index(extent, .{ region_index, cell_index });
-            row_cell.* = get_flat_index(extent, .{ cell_index, region_index });
+            col_cell.* = cell_index_from_coord(extent, .{ region_index, cell_index });
+            row_cell.* = cell_index_from_coord(extent, .{ cell_index, region_index });
         }
     }
 
@@ -251,7 +244,7 @@ fn fill_board_from_string(game: *GameState, sudoku_string: []const u8) void {
 
 fn fill_region_indices_regular(box_indices: []u4, extent: u32, box_w: u32, box_h: u32) void {
     for (box_indices, 0..) |*box_index, i| {
-        const cell_coord = flat_index_to_2d(extent, i);
+        const cell_coord = cell_coord_from_index(extent, i);
         const box_coord_x = (cell_coord[0] / box_w);
         const box_coord_y = (cell_coord[1] / box_h);
 
@@ -300,7 +293,7 @@ pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
 
 pub fn player_clear_number(game: *GameState) void {
     if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        const cell_index = get_flat_index(game.extent, game.selected_cell);
+        const cell_index = cell_index_from_coord(game.extent, game.selected_cell);
 
         game.board[cell_index] = UnsetNumber;
         game.hint_masks[cell_index] = 0;
@@ -311,14 +304,14 @@ pub fn player_clear_number(game: *GameState) void {
 
 pub fn player_input_number(game: *GameState, number: u4) void {
     if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        place_number_remove_trivial_candidates(game, get_flat_index(game.extent, game.selected_cell), number);
+        place_number_remove_trivial_candidates(game, cell_index_from_coord(game.extent, game.selected_cell), number);
         push_state_to_history(game);
     }
 }
 
 pub fn player_toggle_guess(game: *GameState, number: u4) void {
     if (number < game.extent and all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-        const cell_index = get_flat_index(game.extent, game.selected_cell);
+        const cell_index = cell_index_from_coord(game.extent, game.selected_cell);
 
         if (game.board[cell_index] == UnsetNumber) {
             game.hint_masks[cell_index] ^= mask_for_number(number);
