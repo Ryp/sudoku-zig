@@ -249,9 +249,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         },
                         c.SDLK_h => {
                             if (is_any_shift_pressed) {
-                                sudoku.player_clear_hints(game);
+                                sudoku.player_clear_candidates(game);
                             } else {
-                                sudoku.player_fill_hints(game);
+                                sudoku.player_fill_candidates(game);
                             }
                         },
                         c.SDLK_LEFT => {
@@ -313,7 +313,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         else
             game.extent;
 
-        for (game.board, game.hint_masks, 0..) |cell_number, cell_hint_mask, cell_index| {
+        for (game.board, game.candidate_masks, 0..) |cell_number, cell_candidate_mask, cell_index| {
             const box_index = game.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
             const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
@@ -369,7 +369,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             if (cell_number == UnsetNumber) {
                 for (0..game.extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
-                    if (((cell_hint_mask >> number) & 1) != 0) {
+                    if (((cell_candidate_mask >> number) & 1) != 0) {
                         var candidate_rect = cell_rect;
                         candidate_rect.x += @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
                         candidate_rect.y += @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);

@@ -153,7 +153,7 @@ fn populate_free_list(game: *GameState, free_cell_list_full: []CellInfo) []CellI
 }
 
 fn sort_free_cell_list(game: *GameState, free_cell_list: []CellInfo) void {
-    const full_mask = sudoku.full_hint_mask(game.extent);
+    const full_mask = sudoku.full_candidate_mask(game.extent);
 
     var col_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
     var col_region_masks = col_region_masks_full[0..game.extent];
