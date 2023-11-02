@@ -255,19 +255,19 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             }
                         },
                         c.SDLK_LEFT => {
-                            if (game.selected_cell[0] > 0)
+                            if (game.selected_cell[0] > 0 and game.selected_cell[1] < game.extent)
                                 sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 1, 0 });
                         },
                         c.SDLK_RIGHT => {
-                            if (game.selected_cell[0] + 1 < game.extent)
+                            if (game.selected_cell[0] + 1 < game.extent and game.selected_cell[1] < game.extent)
                                 sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 1, 0 });
                         },
                         c.SDLK_UP => {
-                            if (game.selected_cell[1] > 0)
+                            if (game.selected_cell[1] > 0 and game.selected_cell[0] < game.extent)
                                 sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 0, 1 });
                         },
                         c.SDLK_DOWN => {
-                            if (game.selected_cell[1] + 1 < game.extent)
+                            if (game.selected_cell[1] + 1 < game.extent and game.selected_cell[0] < game.extent)
                                 sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 0, 1 });
                         },
                         c.SDLK_RETURN => {
