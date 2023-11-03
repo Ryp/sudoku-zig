@@ -46,7 +46,7 @@ pub const GameState = struct {
     extent: u32,
     game_type: GameType,
     board: []u5,
-    candidate_masks: []u16,
+    candidate_masks: []u16, // Should be set to zero when setting number
     selected_cell: u32_2,
 
     region_offsets: []u32,
@@ -337,7 +337,7 @@ pub fn player_toggle_guess(game: *GameState, number: u4) void {
 
 pub fn place_number_remove_trivial_candidates(game: *GameState, cell_index: u32, number: u4) void {
     game.board[cell_index] = number;
-    game.candidate_masks[cell_index] = mask_for_number(number);
+    game.candidate_masks[cell_index] = 0;
 
     solver.solve_trivial_candidates_at(game, cell_index, number);
 }
@@ -415,18 +415,30 @@ fn load_state_from_history(game: *GameState, index: u32) void {
 }
 
 pub fn player_fill_candidates(game: *GameState) void {
-    // Prepare candidate mask for the solver
-    for (game.board, game.candidate_masks) |cell_number, *candidate_mask| {
-        if (cell_number != UnsetNumber) {
-            candidate_mask.* = mask_for_number(@intCast(cell_number));
-        } else {
-            candidate_mask.* = full_candidate_mask(game.extent);
-        }
-    }
+    var col_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
+    var row_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
+    var box_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
+    var col_region_candidate_masks = col_region_candidate_masks_full[0..game.extent];
+    var row_region_candidate_masks = row_region_candidate_masks_full[0..game.extent];
+    var box_region_candidate_masks = box_region_candidate_masks_full[0..game.extent];
 
-    for (game.board, 0..) |cell_number, cell_index| {
-        if (cell_number != UnsetNumber) {
-            place_number_remove_trivial_candidates(game, @intCast(cell_index), @intCast(cell_number));
+    fill_candidate_mask_regions(game, col_region_candidate_masks, row_region_candidate_masks, box_region_candidate_masks);
+
+    for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
+        if (game.board[cell_index] == UnsetNumber) {
+            const cell_coord = cell_coord_from_index(game.extent, cell_index);
+            const col = cell_coord[0];
+            const row = cell_coord[1];
+            const box = game.box_indices[cell_index];
+
+            const col_candidate_mask = col_region_candidate_masks[col];
+            const row_candidate_mask = row_region_candidate_masks[row];
+            const box_candidate_mask = box_region_candidate_masks[box];
+
+            cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
+        } else {
+            // It should already be zero for set numbers
+            assert(cell_candidate_mask.* == 0);
         }
     }
 
@@ -439,4 +451,36 @@ pub fn player_clear_candidates(game: *GameState) void {
     }
 
     push_state_to_history(game);
+}
+
+pub fn fill_candidate_mask_regions(game: *GameState, col_region_candidate_masks: []u16, row_region_candidate_masks: []u16, box_region_candidate_masks: []u16) void {
+    const full_mask = full_candidate_mask(game.extent);
+
+    for (col_region_candidate_masks) |*col_region_candidate_mask| {
+        col_region_candidate_mask.* = full_mask;
+    }
+
+    for (row_region_candidate_masks) |*row_region_candidate_mask| {
+        row_region_candidate_mask.* = full_mask;
+    }
+
+    for (box_region_candidate_masks) |*box_region_candidate_mask| {
+        box_region_candidate_mask.* = full_mask;
+    }
+
+    for (game.board, 0..) |cell_number, cell_index| {
+        if (cell_number != UnsetNumber) {
+            const cell_coord = cell_coord_from_index(game.extent, cell_index);
+
+            const col = cell_coord[0];
+            const row = cell_coord[1];
+            const box = game.box_indices[cell_index];
+
+            const mask = ~mask_for_number(@intCast(cell_number));
+
+            col_region_candidate_masks[col] &= mask;
+            row_region_candidate_masks[row] &= mask;
+            box_region_candidate_masks[box] &= mask;
+        }
+    }
 }
