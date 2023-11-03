@@ -8,6 +8,7 @@ const c = @cImport({
 
 const sudoku = @import("../sudoku/game.zig");
 const GameState = sudoku.GameState;
+const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
@@ -76,8 +77,8 @@ fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
     };
 }
 
-fn fill_box_regions_colors(game: *GameState, box_region_colors: []c.SDL_Color) void {
-    switch (game.game_type) {
+fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SDL_Color) void {
+    switch (game_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern
             for (box_region_colors, 0..) |*box_region_color, box_index| {
@@ -102,10 +103,12 @@ fn fill_box_regions_colors(game: *GameState, box_region_colors: []c.SDL_Color) v
 }
 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
-    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
-    var box_region_colors = box_region_colors_full[0..game.extent];
+    const extent = game.board.extent;
 
-    fill_box_regions_colors(game, box_region_colors);
+    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
+    var box_region_colors = box_region_colors_full[0..extent];
+
+    fill_box_regions_colors(game.board.game_type, box_region_colors);
 
     if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
@@ -131,8 +134,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     };
     defer c.TTF_CloseFont(font_small);
 
-    const window_width = game.extent * SpriteScreenExtent;
-    const window_height = game.extent * SpriteScreenExtent;
+    const window_width = extent * SpriteScreenExtent;
+    const window_height = extent * SpriteScreenExtent;
 
     const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
@@ -151,13 +154,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     };
     defer c.SDL_DestroyRenderer(ren);
 
-    var text_surfaces = try allocator.alloc(*c.SDL_Surface, game.extent);
+    var text_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
     defer allocator.free(text_surfaces);
 
-    var text_textures = try allocator.alloc(*c.SDL_Texture, game.extent);
+    var text_textures = try allocator.alloc(*c.SDL_Texture, extent);
     defer allocator.free(text_textures);
 
-    const numbers_string = NumbersString[0..game.extent];
+    const numbers_string = NumbersString[0..extent];
 
     for (text_surfaces, text_textures, numbers_string) |*surface, *texture, number_string| {
         surface.* = c.TTF_RenderText_LCD(font, number_string, TextColor, BgColor);
@@ -169,10 +172,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
 
-    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, game.extent);
+    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
     defer allocator.free(text_small_surfaces);
 
-    var text_small_textures = try allocator.alloc(*c.SDL_Texture, game.extent);
+    var text_small_textures = try allocator.alloc(*c.SDL_Texture, extent);
     defer allocator.free(text_small_textures);
 
     for (text_small_surfaces, text_small_textures, numbers_string) |*surface, *texture, number_string| {
@@ -190,7 +193,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
     c.SDL_SetWindowTitle(window, title_string.ptr);
 
-    const candidate_layout = get_candidate_layout(game.extent);
+    const candidate_layout = get_candidate_layout(extent);
 
     var should_exit = false;
 
@@ -255,19 +258,19 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             }
                         },
                         c.SDLK_LEFT => {
-                            if (game.selected_cell[0] > 0 and game.selected_cell[1] < game.extent)
+                            if (game.selected_cell[0] > 0 and game.selected_cell[1] < extent)
                                 sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 1, 0 });
                         },
                         c.SDLK_RIGHT => {
-                            if (game.selected_cell[0] + 1 < game.extent and game.selected_cell[1] < game.extent)
+                            if (game.selected_cell[0] + 1 < extent and game.selected_cell[1] < extent)
                                 sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 1, 0 });
                         },
                         c.SDLK_UP => {
-                            if (game.selected_cell[1] > 0 and game.selected_cell[0] < game.extent)
+                            if (game.selected_cell[1] > 0 and game.selected_cell[0] < extent)
                                 sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 0, 1 });
                         },
                         c.SDLK_DOWN => {
-                            if (game.selected_cell[1] + 1 < game.extent and game.selected_cell[0] < game.extent)
+                            if (game.selected_cell[1] + 1 < extent and game.selected_cell[0] < extent)
                                 sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 0, 1 });
                         },
                         c.SDLK_RETURN => {
@@ -292,9 +295,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         var highlight_mask: u16 = 0;
-        if (all(game.selected_cell < u32_2{ game.extent, game.extent })) {
-            const cell_index = sudoku.cell_index_from_coord(game.extent, game.selected_cell);
-            const cell_number = game.board[cell_index];
+        if (all(game.selected_cell < u32_2{ extent, extent })) {
+            const cell_index = sudoku.cell_index_from_coord(extent, game.selected_cell);
+            const cell_number = game.board.numbers[cell_index];
 
             if (cell_number != UnsetNumber) {
                 highlight_mask = sudoku.mask_for_number(@intCast(cell_number));
@@ -307,16 +310,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         const selected_col = game.selected_cell[0];
         const selected_row = game.selected_cell[1];
-        const selected_cell_index = sudoku.cell_index_from_coord(game.extent, game.selected_cell);
-        const selected_box = if (selected_cell_index < game.extent * game.extent)
-            game.box_indices[selected_cell_index]
+        const selected_cell_index = sudoku.cell_index_from_coord(extent, game.selected_cell);
+        const selected_box = if (selected_cell_index < extent * extent)
+            game.board.box_indices[selected_cell_index]
         else
-            game.extent;
+            extent;
 
-        for (game.board, game.candidate_masks, 0..) |cell_number, cell_candidate_mask, cell_index| {
-            const box_index = game.box_indices[cell_index];
+        for (game.board.numbers, game.candidate_masks, 0..) |cell_number, cell_candidate_mask, cell_index| {
+            const box_index = game.board.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
-            const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
 
             const cell_rect = c.SDL_Rect{
                 .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -367,7 +370,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
             // Draw candidates
             if (cell_number == UnsetNumber) {
-                for (0..game.extent) |number_usize| {
+                for (0..extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
                     if (((cell_candidate_mask >> number) & 1) != 0) {
                         var candidate_rect = cell_rect;
@@ -398,7 +401,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        draw_sudoku_grid(game, ren);
+        draw_sudoku_grid(game.board, ren);
 
         // Present
         c.SDL_RenderPresent(ren);
@@ -415,12 +418,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     }
 }
 
-fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
+fn draw_sudoku_grid(board: BoardState, ren: *c.SDL_Renderer) void {
     _ = c.SDL_SetRenderDrawColor(ren, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
 
-    for (0..game.board.len) |cell_index| {
-        const box_index = game.box_indices[cell_index];
-        const cell_coord = sudoku.cell_coord_from_index(game.extent, cell_index);
+    for (0..board.numbers.len) |cell_index| {
+        const box_index = board.box_indices[cell_index];
+        const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
 
         const cell_rect = c.SDL_Rect{
             .x = @intCast(cell_coord[0] * SpriteScreenExtent),
@@ -431,17 +434,17 @@ fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
 
         var thick_vertical = true;
 
-        if (cell_coord[0] + 1 < game.extent) {
-            const neighbor_cell_index = sudoku.cell_index_from_coord(game.extent, cell_coord + u32_2{ 1, 0 });
-            const neighbor_box_index = game.box_indices[neighbor_cell_index];
+        if (cell_coord[0] + 1 < board.extent) {
+            const neighbor_cell_index = sudoku.cell_index_from_coord(board.extent, cell_coord + u32_2{ 1, 0 });
+            const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_vertical = box_index != neighbor_box_index;
         }
 
         var thick_horizontal = true;
 
-        if (cell_coord[1] + 1 < game.extent) {
-            const neighbor_cell_index = sudoku.cell_index_from_coord(game.extent, cell_coord + u32_2{ 0, 1 });
-            const neighbor_box_index = game.box_indices[neighbor_cell_index];
+        if (cell_coord[1] + 1 < board.extent) {
+            const neighbor_cell_index = sudoku.cell_index_from_coord(board.extent, cell_coord + u32_2{ 0, 1 });
+            const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_horizontal = box_index != neighbor_box_index;
         }
 
@@ -469,18 +472,18 @@ fn draw_sudoku_grid(game: *GameState, ren: *c.SDL_Renderer) void {
     }
 
     // Draw thin grid
-    for (0..game.extent + 1) |index| {
+    for (0..board.extent + 1) |index| {
         const horizontal_rect = c.SDL_Rect{
             .x = @intCast(index * SpriteScreenExtent),
             .y = 0,
             .w = 1,
-            .h = @intCast(game.extent * SpriteScreenExtent),
+            .h = @intCast(board.extent * SpriteScreenExtent),
         };
 
         const vertical_rect = c.SDL_Rect{
             .x = 0,
             .y = @intCast(index * SpriteScreenExtent),
-            .w = @intCast(game.extent * SpriteScreenExtent),
+            .w = @intCast(board.extent * SpriteScreenExtent),
             .h = 1,
         };
 

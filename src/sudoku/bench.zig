@@ -8,11 +8,13 @@ const boards = @import("boards.zig");
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var game = try sudoku.create_game_state(allocator, sudoku.GameType{ .regular = .{
+    var board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
         .box_w = 3,
         .box_h = 3,
-    } }, boards.special_17_clues.board);
-    defer sudoku.destroy_game_state(allocator, &game);
+    } });
+    defer sudoku.destroy_board_state(allocator, board);
 
-    assert(brute_solver.solve(&game, .{}));
+    sudoku.fill_board_from_string(board.numbers, boards.special_17_clues.board, board.extent);
+
+    assert(brute_solver.solve(&board, .{}));
 }
