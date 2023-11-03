@@ -169,7 +169,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     if (sudoku_string.len == 0) {
         generator.generate_dumb_board(&game);
     } else {
-        fill_board_from_string(&game, sudoku_string);
+        fill_board_from_string(game.board, sudoku_string, game.extent);
     }
 
     init_history_state(&game);
@@ -222,10 +222,11 @@ fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_reg
     }
 }
 
-fn fill_board_from_string(game: *GameState, sudoku_string: []const u8) void {
-    assert(sudoku_string.len == game.extent * game.extent);
+pub fn fill_board_from_string(board: []u5, sudoku_string: []const u8, extent: u32) void {
+    assert(board.len == extent * extent);
+    assert(sudoku_string.len == extent * extent);
 
-    for (game.board, sudoku_string) |*cell_number, char| {
+    for (board, sudoku_string) |*cell_number, char| {
         var number: u8 = UnsetNumber;
 
         if (char >= '1' and char <= '9') {
@@ -236,9 +237,22 @@ fn fill_board_from_string(game: *GameState, sudoku_string: []const u8) void {
             number = char - 'a' + 9;
         }
 
-        assert(number < game.extent or number == UnsetNumber);
+        assert(number < extent or number == UnsetNumber);
 
         cell_number.* = @intCast(number);
+    }
+}
+
+pub fn fill_string_from_board(sudoku_string: []u8, board: []const u5, extent: u32) void {
+    assert(board.len == extent * extent);
+    assert(sudoku_string.len == extent * extent);
+
+    for (board, sudoku_string) |cell_number, *char| {
+        if (cell_number == UnsetNumber) {
+            char.* = '.';
+        } else {
+            char.* = '1' + @as(u8, @intCast(cell_number));
+        }
     }
 }
 
