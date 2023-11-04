@@ -230,9 +230,16 @@ fn solve_hidden_pairs_region(board: BoardState, candidate_masks: []const u16, re
     return null;
 }
 
+pub const PointingLine = struct {
+    region_cell_index_mask: u16,
+    line_region: []u32,
+    box_index: u4,
+    number: u4,
+};
+
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
 // Also called pointing pairs or triples in 9x9 sudoku.
-pub fn solve_pointing_lines(board: *BoardState, candidate_masks: []u16) void {
+pub fn solve_pointing_lines(board: BoardState, candidate_masks: []const u16) ?PointingLine {
     for (0..board.extent) |box_index| {
         const box_region = board.box_regions[box_index];
 
@@ -266,28 +273,41 @@ pub fn solve_pointing_lines(board: *BoardState, candidate_masks: []u16) void {
             // We don't care about single candidates, they should be found with simpler solving method already
             if (candidate_count.* >= 2) {
                 const aabb_extent = aabb.max - aabb.min;
-                assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles
+                assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles already
 
-                if (aabb_extent[0] == 0) {
-                    const col_region = board.col_regions[aabb.min[0]];
-                    remove_candidates_from_pointing_line(board, candidate_masks, number, @intCast(box_index), col_region);
-                } else if (aabb_extent[1] == 0) {
-                    const row_region = board.row_regions[aabb.min[1]];
-                    remove_candidates_from_pointing_line(board, candidate_masks, number, @intCast(box_index), row_region);
+                if (aabb_extent[0] == 0 or aabb_extent[1] == 0) {
+                    const line_region = if (aabb_extent[0] == 0) board.col_regions[aabb.min[0]] else board.row_regions[aabb.min[1]];
+                    const mask = removed_candidate_mask_from_pointing_line(board, candidate_masks, number, @intCast(box_index), line_region);
+
+                    if (mask != 0) {
+                        return PointingLine{
+                            .region_cell_index_mask = mask,
+                            .line_region = line_region,
+                            .box_index = @intCast(box_index),
+                            .number = number,
+                        };
+                    }
                 }
             }
         }
     }
+
+    return null;
 }
 
-fn remove_candidates_from_pointing_line(board: *BoardState, candidate_masks: []u16, number: u4, box_index_to_exclude: u32, line_region: []u32) void {
+fn removed_candidate_mask_from_pointing_line(board: BoardState, candidate_masks: []const u16, number: u4, box_index_to_exclude: u32, line_region: []u32) u16 {
     const number_mask = sudoku.mask_for_number(number);
+    var region_cell_index_mask: u16 = 0;
 
-    for (line_region) |cell_index| {
+    for (line_region, 0..) |cell_index, region_cell_index| {
         const box_index = board.box_indices[cell_index];
 
         if (box_index != box_index_to_exclude) {
-            candidate_masks[cell_index] &= ~number_mask;
+            if (candidate_masks[cell_index] & number_mask != 0) {
+                region_cell_index_mask |= sudoku.mask_for_number(@intCast(region_cell_index)); // FIXME super confusing
+            }
         }
     }
+
+    return region_cell_index_mask;
 }

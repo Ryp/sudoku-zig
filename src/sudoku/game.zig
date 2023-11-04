@@ -388,12 +388,14 @@ const SolverEventTag = enum {
     naked_single,
     hidden_single,
     hidden_pair,
+    pointing_line,
 };
 
 const SolverEvent = union(SolverEventTag) {
     naked_single: solver.NakedSingle,
     hidden_single: solver.HiddenSingle,
     hidden_pair: solver.HiddenPair,
+    pointing_line: solver.PointingLine,
 };
 
 pub fn player_solve_human_step(game: *GameState) void {
@@ -408,7 +410,7 @@ pub fn player_solve_human_step(game: *GameState) void {
 }
 
 fn solve_human_step(game: *GameState) ?SolverEvent {
-    // solver.solve_trivial_candidates(&game.board, game.candidate_masks);
+    solver.solve_trivial_candidates(&game.board, game.candidate_masks);
 
     if (solver.solve_naked_singles(game.board, game.candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
@@ -416,11 +418,11 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
         return .{ .hidden_single = hidden_single };
     } else if (solver.solve_hidden_pairs(game.board, game.candidate_masks)) |hidden_pair| {
         return .{ .hidden_pair = hidden_pair };
+    } else if (solver.solve_pointing_lines(game.board, game.candidate_masks)) |pointing_line| {
+        return .{ .pointing_line = pointing_line };
+    } else {
+        return null;
     }
-
-    solver.solve_pointing_lines(&game.board, game.candidate_masks);
-
-    return null;
 }
 
 fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
@@ -433,13 +435,25 @@ fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: 
         .hidden_single => |hidden_single| {
             std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
 
-            candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
+            place_number_remove_trivial_candidates(board, candidate_masks, hidden_single.cell_index, hidden_single.number);
+            // candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
         },
         .hidden_pair => |hidden_pair| {
             std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });
 
             candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
             candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
+        },
+        .pointing_line => |pointing_line| {
+            std.debug.print("solver: pointing line of {}\n", .{pointing_line.number + 1});
+
+            const number_mask = mask_for_number(pointing_line.number);
+            for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
+                // FIXME super confusing
+                if (mask_for_number(@intCast(region_cell_index)) & pointing_line.region_cell_index_mask != 0) {
+                    candidate_masks[cell_index] &= ~number_mask;
+                }
+            }
         },
     }
 }
@@ -494,6 +508,18 @@ fn init_history_state(game: *GameState) void {
 fn load_state_from_history(game: *GameState, index: u32) void {
     std.mem.copy(u5, game.board.numbers, get_board_history_slice(game, index));
     std.mem.copy(u16, game.candidate_masks, get_candidate_masks_history_slice(game, index));
+}
+
+pub fn player_fill_candidates_all(game: *GameState) void {
+    const full_mask = full_candidate_mask(game.board.extent);
+
+    for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
+        if (game.board.numbers[cell_index] == UnsetNumber) {
+            cell_candidate_mask.* = full_mask;
+        }
+    }
+
+    push_state_to_history(game);
 }
 
 pub fn player_fill_candidates(game: *GameState) void {
