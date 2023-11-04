@@ -385,11 +385,13 @@ pub fn player_solve_brute_force(game: *GameState) void {
 }
 
 const SolverEventTag = enum {
+    naked_single,
     hidden_single,
     hidden_pair,
 };
 
 const SolverEvent = union(SolverEventTag) {
+    naked_single: solver.NakedSingle,
     hidden_single: solver.HiddenSingle,
     hidden_pair: solver.HiddenPair,
 };
@@ -406,14 +408,13 @@ pub fn player_solve_human_step(game: *GameState) void {
 }
 
 fn solve_human_step(game: *GameState) ?SolverEvent {
-    solver.solve_trivial_candidates(&game.board, game.candidate_masks);
-    solver.solve_naked_singles(&game.board, game.candidate_masks);
+    // solver.solve_trivial_candidates(&game.board, game.candidate_masks);
 
-    if (solver.solve_hidden_singles(game.board, game.candidate_masks)) |hidden_single| {
+    if (solver.solve_naked_singles(game.board, game.candidate_masks)) |naked_single| {
+        return .{ .naked_single = naked_single };
+    } else if (solver.solve_hidden_singles(game.board, game.candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
-    }
-
-    if (solver.solve_hidden_pairs(game.board, game.candidate_masks)) |hidden_pair| {
+    } else if (solver.solve_hidden_pairs(game.board, game.candidate_masks)) |hidden_pair| {
         return .{ .hidden_pair = hidden_pair };
     }
 
@@ -423,16 +424,16 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
 }
 
 fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
-    _ = board;
-
     switch (solver_event) {
+        .naked_single => |naked_single| {
+            std.debug.print("solver: naked single {} at index = {}\n", .{ naked_single.number + 1, naked_single.cell_index });
+
+            place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
+        },
         .hidden_single => |hidden_single| {
             std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
 
             candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
-
-            // FIXME do this!
-            //sudoku.place_number_remove_trivial_candidates(board, candidate_masks, cell_index, number);
         },
         .hidden_pair => |hidden_pair| {
             std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });

@@ -42,13 +42,15 @@ pub fn solve_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, c
     }
 }
 
+// Removes trivial candidates from basic sudoku rules
 pub fn solve_trivial_candidates(board: *BoardState, candidate_masks: []u16) void {
     for (board.all_regions) |region| {
-        solve_eliminate_candidate_region(board, candidate_masks, region);
+        solve_trivial_candidates_region(board, candidate_masks, region);
     }
 }
 
-fn solve_eliminate_candidate_region(board: *BoardState, candidate_masks: []u16, region: []u32) void {
+// FIXME could use fill_candidate_mask_regions() as a base
+fn solve_trivial_candidates_region(board: *BoardState, candidate_masks: []u16, region: []u32) void {
     assert(region.len == board.extent);
     var used_mask: u16 = 0;
 
@@ -69,16 +71,25 @@ fn solve_eliminate_candidate_region(board: *BoardState, candidate_masks: []u16, 
     }
 }
 
+pub const NakedSingle = struct {
+    cell_index: u32,
+    number: u4,
+};
+
 // If there's a cell with a single possibility left, put it down
-pub fn solve_naked_singles(board: *BoardState, candidate_masks: []u16) void {
+pub fn solve_naked_singles(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
     for (board.numbers, candidate_masks, 0..) |cell_number, candidate_mask, cell_index| {
         if (cell_number == UnsetNumber and @popCount(candidate_mask) == 1) {
             const number = first_bit_index_u16(candidate_mask);
 
-            // FIXME event should also add the candidates we removed here
-            sudoku.place_number_remove_trivial_candidates(board, candidate_masks, @intCast(cell_index), number);
+            return NakedSingle{
+                .cell_index = @intCast(cell_index),
+                .number = number,
+            };
         }
     }
+
+    return null;
 }
 
 pub const HiddenSingle = struct {
