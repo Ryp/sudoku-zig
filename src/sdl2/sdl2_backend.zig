@@ -252,6 +252,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         c.SDLK_h => {
                             if (is_any_shift_pressed) {
                                 sudoku.player_clear_candidates(game);
+                            } else if (is_any_ctrl_pressed) {
+                                sudoku.player_fill_candidates_all(game);
                             } else {
                                 sudoku.player_fill_candidates(game);
                             }
