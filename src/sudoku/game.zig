@@ -59,7 +59,8 @@ pub const GameState = struct {
     board: BoardState,
 
     candidate_masks: []u16, // Should be set to zero when setting number
-    selected_cell: u32_2,
+    selected_cells_full: []u32_2, // Full allocated array, we usually don't use it directly
+    selected_cells: []u32_2, // Code handles this as a list but only a single cell is supported
 
     board_history: []u5,
     candidate_masks_history: []u16,
@@ -175,6 +176,9 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         candidate_mask.* = 0;
     }
 
+    const selected_cells_full = try allocator.alloc(u32_2, board.numbers.len);
+    errdefer allocator.free(selected_cells_full);
+
     // Allocate history stack
     const board_history = try allocator.alloc(u5, board.numbers.len * MaxHistorySize);
     errdefer allocator.free(board_history);
@@ -188,9 +192,10 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     var game = GameState{
         .board = board,
         .candidate_masks = candidate_masks,
+        .selected_cells_full = selected_cells_full,
+        .selected_cells = selected_cells_full[0..0],
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
-        .selected_cell = u32_2{ board.extent, board.extent }, // Invalid value
         .solver_events = solver_events,
     };
 
@@ -203,6 +208,7 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.solver_events);
     allocator.free(game.board_history);
     allocator.free(game.candidate_masks_history);
+    allocator.free(game.selected_cells_full);
     allocator.free(game.candidate_masks);
 
     destroy_board_state(allocator, game.board);
@@ -316,20 +322,34 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
 }
 
 pub fn player_toggle_select(game: *GameState, select_pos: u32_2) void {
-    const extent = game.board.extent;
-    assert(all(select_pos < u32_2{ extent, extent }));
+    assert(all(select_pos < u32_2{ game.board.extent, game.board.extent }));
 
-    if (all(select_pos == game.selected_cell)) {
-        game.selected_cell = .{ extent, extent };
+    if (game.selected_cells.len > 0 and all(select_pos == game.selected_cells[0])) {
+        game.selected_cells = game.selected_cells_full[0..0];
     } else {
-        game.selected_cell = select_pos;
+        game.selected_cells = game.selected_cells_full[0..1];
+        game.selected_cells[0] = select_pos;
+    }
+}
+
+pub fn player_move_selection(game: *GameState, x_offset: i32, y_offset: i32) void {
+    if (game.selected_cells.len > 0) {
+        const extent = game.board.extent;
+        const current_pos = game.selected_cells[0];
+
+        assert(all(current_pos < u32_2{ extent, extent }));
+
+        game.selected_cells[0] = .{
+            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[0])) + x_offset)),
+            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[1])) + y_offset)),
+        };
     }
 }
 
 pub fn player_clear_number(game: *GameState) void {
-    const extent = game.board.extent;
-    if (all(game.selected_cell < u32_2{ extent, extent })) {
-        const cell_index = cell_index_from_coord(extent, game.selected_cell);
+    if (game.selected_cells.len > 0) {
+        const extent = game.board.extent;
+        const cell_index = cell_index_from_coord(extent, game.selected_cells[0]);
 
         game.board.numbers[cell_index] = UnsetNumber;
         game.candidate_masks[cell_index] = 0;
@@ -340,16 +360,16 @@ pub fn player_clear_number(game: *GameState) void {
 
 pub fn player_input_number(game: *GameState, number: u4) void {
     const extent = game.board.extent;
-    if (number < extent and all(game.selected_cell < u32_2{ extent, extent })) {
-        place_number_remove_trivial_candidates(&game.board, game.candidate_masks, cell_index_from_coord(extent, game.selected_cell), number);
+    if (number < extent and game.selected_cells.len > 0) {
+        place_number_remove_trivial_candidates(&game.board, game.candidate_masks, cell_index_from_coord(extent, game.selected_cells[0]), number);
         push_state_to_history(game);
     }
 }
 
 pub fn player_toggle_guess(game: *GameState, number: u4) void {
     const extent = game.board.extent;
-    if (number < extent and all(game.selected_cell < u32_2{ extent, extent })) {
-        const cell_index = cell_index_from_coord(extent, game.selected_cell);
+    if (number < extent and game.selected_cells.len > 0) {
+        const cell_index = cell_index_from_coord(extent, game.selected_cells[0]);
 
         if (game.board.numbers[cell_index] == UnsetNumber) {
             game.candidate_masks[cell_index] ^= mask_for_number(number);

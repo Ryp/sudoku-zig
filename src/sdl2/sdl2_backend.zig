@@ -258,20 +258,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             }
                         },
                         c.SDLK_LEFT => {
-                            if (game.selected_cell[0] > 0 and game.selected_cell[1] < extent)
-                                sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 1, 0 });
+                            sudoku.player_move_selection(game, -1, 0);
                         },
                         c.SDLK_RIGHT => {
-                            if (game.selected_cell[0] + 1 < extent and game.selected_cell[1] < extent)
-                                sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 1, 0 });
+                            sudoku.player_move_selection(game, 1, 0);
                         },
                         c.SDLK_UP => {
-                            if (game.selected_cell[1] > 0 and game.selected_cell[0] < extent)
-                                sudoku.player_toggle_select(game, game.selected_cell - u32_2{ 0, 1 });
+                            sudoku.player_move_selection(game, 0, -1);
                         },
                         c.SDLK_DOWN => {
-                            if (game.selected_cell[1] + 1 < extent and game.selected_cell[0] < extent)
-                                sudoku.player_toggle_select(game, game.selected_cell + u32_2{ 0, 1 });
+                            sudoku.player_move_selection(game, 0, 1);
                         },
                         c.SDLK_RETURN => {
                             if (is_any_shift_pressed) {
@@ -295,8 +291,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         var highlight_mask: u16 = 0;
-        if (all(game.selected_cell < u32_2{ extent, extent })) {
-            const cell_index = sudoku.cell_index_from_coord(extent, game.selected_cell);
+        if (game.selected_cells.len > 0) {
+            const cell_index = sudoku.cell_index_from_coord(extent, game.selected_cells[0]);
             const cell_number = game.board.numbers[cell_index];
 
             if (cell_number != UnsetNumber) {
@@ -307,14 +303,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         // Render game
         _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
         _ = c.SDL_RenderClear(ren);
-
-        const selected_col = game.selected_cell[0];
-        const selected_row = game.selected_cell[1];
-        const selected_cell_index = sudoku.cell_index_from_coord(extent, game.selected_cell);
-        const selected_box = if (selected_cell_index < extent * extent)
-            game.board.box_indices[selected_cell_index]
-        else
-            extent;
 
         for (game.board.numbers, game.candidate_masks, 0..) |cell_number, cell_candidate_mask, cell_index| {
             const box_index = game.board.box_indices[cell_index];
@@ -333,21 +321,28 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             _ = c.SDL_RenderFillRect(ren, &cell_rect);
 
             // Draw highlighted cell
-            if (all(game.selected_cell == cell_coord)) {
-                _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
-                _ = c.SDL_RenderFillRect(ren, &cell_rect);
-            } else {
-                if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
-                    _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_BLEND);
-                    _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
-                    _ = c.SDL_RenderFillRect(ren, &cell_rect);
-                    _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
-                }
+            if (game.selected_cells.len > 0) {
+                const selected_col = game.selected_cells[0][0];
+                const selected_row = game.selected_cells[0][1];
+                const selected_index = sudoku.cell_index_from_coord(extent, game.selected_cells[0]);
+                const selected_box = game.board.box_indices[selected_index];
 
-                if (cell_number != UnsetNumber) {
-                    if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
-                        _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                if (all(game.selected_cells[0] == cell_coord)) {
+                    _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
+                    _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                } else {
+                    if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
+                        _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_BLEND);
+                        _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
                         _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                        _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
+                    }
+
+                    if (cell_number != UnsetNumber) {
+                        if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
+                            _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                            _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                        }
                     }
                 }
             }
