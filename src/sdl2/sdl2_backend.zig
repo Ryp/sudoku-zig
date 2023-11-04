@@ -215,7 +215,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             should_exit = true;
                         },
                         c.SDLK_DELETE, c.SDLK_0 => {
-                            sudoku.player_clear_number(game);
+                            sudoku.player_clear_cell(game);
                         },
                         c.SDLK_1...c.SDLK_9 => |sym| {
                             input_number(game, is_any_shift_pressed, @intCast(sym - c.SDLK_1));

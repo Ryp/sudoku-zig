@@ -95,25 +95,24 @@ pub fn create_board_state(allocator: std.mem.Allocator, game_type: GameType) !Bo
         .regular => |regular| regular.box_w * regular.box_h,
         .jigsaw => |jigsaw| jigsaw.size,
     };
-    const cell_count = extent * extent;
 
     assert(extent > 1);
     assert(extent <= MaxSudokuExtent);
 
-    const board = try allocator.alloc(u5, cell_count);
+    const board = try allocator.alloc(u5, extent * extent);
     errdefer allocator.free(board);
 
     for (board) |*cell_number| {
         cell_number.* = UnsetNumber;
     }
 
-    const region_offsets = try allocator.alloc(u32, cell_count * 3);
+    const region_offsets = try allocator.alloc(u32, board.len * 3);
     errdefer allocator.free(region_offsets);
 
     const all_regions = try allocator.alloc([]u32, extent * 3);
     errdefer allocator.free(all_regions);
 
-    const box_indices = try allocator.alloc(u4, cell_count);
+    const box_indices = try allocator.alloc(u4, board.len);
     errdefer allocator.free(box_indices);
 
     switch (game_type) {
@@ -346,7 +345,7 @@ pub fn player_move_selection(game: *GameState, x_offset: i32, y_offset: i32) voi
     }
 }
 
-pub fn player_clear_number(game: *GameState) void {
+pub fn player_clear_cell(game: *GameState) void {
     if (game.selected_cells.len > 0) {
         const extent = game.board.extent;
         const cell_index = cell_index_from_coord(extent, game.selected_cells[0]);
@@ -407,7 +406,7 @@ pub fn player_solve_brute_force(game: *GameState) void {
 }
 
 fn get_board_history_slice(game: *GameState, history_index: u32) []u5 {
-    const cell_count = game.board.extent * game.board.extent;
+    const cell_count = game.board.numbers.len;
     const start = cell_count * history_index;
     const stop = start + cell_count;
 
@@ -415,7 +414,7 @@ fn get_board_history_slice(game: *GameState, history_index: u32) []u5 {
 }
 
 fn get_candidate_masks_history_slice(game: *GameState, history_index: u32) []u16 {
-    const cell_count = game.board.extent * game.board.extent;
+    const cell_count = game.board.numbers.len;
     const start = cell_count * history_index;
     const stop = start + cell_count;
 

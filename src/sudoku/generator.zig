@@ -70,10 +70,9 @@ pub fn generate_dumb_board(board: *BoardState) void {
     // Remove numbers at random places to give a challenge to the player.
     // FIXME The biggest issue here is that we don't control resulting difficulty very well,
     // and we might even generate a board that has too many holes therefore multiple solutions.
-    const cell_count = board.extent * board.extent;
-    var numbers_to_remove = (cell_count * 2) / 4;
+    var numbers_to_remove = (board.numbers.len * 2) / 4;
 
-    assert(numbers_to_remove < cell_count);
+    assert(numbers_to_remove < board.numbers.len);
 
     while (numbers_to_remove > 0) {
         const cell_index = rng.random().uintLessThan(u32, board.extent * board.extent);
