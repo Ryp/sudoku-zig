@@ -2,7 +2,6 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("game.zig");
-const event = @import("event.zig");
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
@@ -82,20 +81,39 @@ pub fn solve_naked_singles(board: *BoardState, candidate_masks: []u16) void {
     }
 }
 
-pub fn solve_hidden_singles(board: *BoardState, candidate_masks: []u16) void {
+pub const HiddenSingle = struct {
+    cell_index: u32,
+    deletion_mask: u16, // Mask of candidates that can be removed
+    number: u4,
+};
+
+pub fn solve_hidden_singles(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
     for (board.all_regions) |region| {
-        solve_hidden_singles_region(board, candidate_masks, region);
+        if (solve_hidden_singles_region(board, candidate_masks, region)) |solver_event| {
+            return solver_event;
+        }
     }
+
+    return null;
 }
 
-pub fn solve_hidden_pairs(board: *BoardState, candidate_masks: []u16) void {
+pub const HiddenPair = struct {
+    a: HiddenSingle,
+    b: HiddenSingle,
+};
+
+pub fn solve_hidden_pairs(board: BoardState, candidate_masks: []const u16) ?HiddenPair {
     for (board.all_regions) |region| {
-        solve_hidden_pairs_region(board, candidate_masks, region);
+        if (solve_hidden_pairs_region(board, candidate_masks, region)) |hidden_pair| {
+            return hidden_pair;
+        }
     }
+
+    return null;
 }
 
 // If there's a region (col/row/box) where a possibility appears only once, put it down
-fn solve_hidden_singles_region(board: *BoardState, candidate_masks: []u16, region: []u32) void {
+fn solve_hidden_singles_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenSingle {
     assert(region.len == board.extent);
 
     var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
@@ -121,39 +139,42 @@ fn solve_hidden_singles_region(board: *BoardState, candidate_masks: []u16, regio
             const number: u4 = @intCast(number_usize);
             const cell_index = last_cell_indices[number];
             const cell_number = board.numbers[cell_index];
-            //const cell_candidate_mask = candidate_masks[cell_index];
+            const deletion_mask = candidate_masks[cell_index] & ~sudoku.mask_for_number(number);
 
-            if (cell_number == UnsetNumber) {
-                // FIXME
-                //event.allocate_hidden_single_event(board).* = event.HiddenSingleEvent{
-                //    .cell_index = cell_index,
-                //    .deletion_mask = cell_candidate_mask & ~sudoku.mask_for_number(number),
-                //    .number = number,
-                //};
-
-                // FIXME event should also add the candidates we removed here
-                sudoku.place_number_remove_trivial_candidates(board, candidate_masks, cell_index, number);
+            if (cell_number == UnsetNumber and deletion_mask != 0) {
+                return HiddenSingle{
+                    .cell_index = cell_index,
+                    .deletion_mask = deletion_mask,
+                    .number = number,
+                };
             }
         }
     }
+
+    return null;
 }
 
-fn solve_hidden_pairs_region(board: *BoardState, candidate_masks: []u16, region: []u32) void {
+fn solve_hidden_pairs_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenPair {
     assert(region.len == board.extent);
 
     var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
     var counts = counts_full[0..board.extent];
 
-    var position_masks_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u16);
-    var position_masks = position_masks_full[0..board.extent];
+    // Contains first and last position
+    const min_max_initial_value = u32_2{ board.extent, 0 };
+    var region_min_max_cell_indices_full = [_]u32_2{min_max_initial_value} ** sudoku.MaxSudokuExtent;
+    var region_min_max_cell_indices = region_min_max_cell_indices_full[0..board.extent];
 
     for (region, 0..) |cell_index, region_cell_index| {
         var mask = candidate_masks[cell_index];
 
-        for (counts, position_masks) |*count, *position_mask| {
+        for (counts, region_min_max_cell_indices) |*count, *region_min_max_cell_index| {
             if ((mask & 1) != 0) {
                 count.* += 1;
-                position_mask.* |= sudoku.mask_for_number(@intCast(region_cell_index));
+                region_min_max_cell_index.* = u32_2{
+                    @min(region_min_max_cell_index[0], @as(u32, @intCast(region_cell_index))),
+                    @max(region_min_max_cell_index[1], @as(u32, @intCast(region_cell_index))),
+                };
             }
             mask >>= 1;
         }
@@ -166,18 +187,36 @@ fn solve_hidden_pairs_region(board: *BoardState, candidate_masks: []u16, region:
             for (counts[second_number_start..], second_number_start..) |second_number_count, second_number| {
                 assert(second_number < board.extent);
 
-                if (second_number_count == 2 and position_masks[first_number] == position_masks[second_number]) {
-                    const pair_mask = sudoku.mask_for_number(@intCast(first_number)) | sudoku.mask_for_number(@intCast(second_number));
+                if (second_number_count == 2 and all(region_min_max_cell_indices[first_number] == region_min_max_cell_indices[second_number])) {
+                    const mask = sudoku.mask_for_number(@intCast(first_number)) | sudoku.mask_for_number(@intCast(second_number));
+                    const region_cell_index_a = region_min_max_cell_indices[first_number][0];
+                    const region_cell_index_b = region_min_max_cell_indices[first_number][1];
+                    const cell_index_a = region[region_cell_index_a];
+                    const cell_index_b = region[region_cell_index_b];
+                    const deletion_mask_a = candidate_masks[cell_index_a] & ~mask;
+                    const deletion_mask_b = candidate_masks[cell_index_b] & ~mask;
 
-                    for (region, 0..) |cell_index, region_cell_index| {
-                        if (((position_masks[first_number] >> @intCast(region_cell_index)) & 1) != 0) {
-                            candidate_masks[cell_index] = pair_mask;
-                        }
+                    // FIXME assert(cell_number == UnsetNumber);
+                    if (deletion_mask_a != 0 or deletion_mask_b != 0) {
+                        return HiddenPair{
+                            .a = HiddenSingle{
+                                .cell_index = cell_index_a,
+                                .deletion_mask = deletion_mask_a,
+                                .number = @intCast(first_number),
+                            },
+                            .b = HiddenSingle{
+                                .cell_index = cell_index_b,
+                                .deletion_mask = deletion_mask_b,
+                                .number = @intCast(second_number),
+                            },
+                        };
                     }
                 }
             }
         }
     }
+
+    return null;
 }
 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.

@@ -4,8 +4,6 @@ const assert = std.debug.assert;
 const generator = @import("generator.zig");
 const brute_solver = @import("brute_solver.zig");
 const solver = @import("solver.zig");
-const event = @import("event.zig");
-const SolverEvent = event.SolverEvent;
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -66,9 +64,6 @@ pub const GameState = struct {
     candidate_masks_history: []u16,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
-
-    solver_events: []SolverEvent,
-    solver_event_index: u32 = 0,
 };
 
 pub fn cell_coord_from_index(extent: u32, cell_index: usize) u32_2 {
@@ -185,9 +180,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     const candidate_masks_history = try allocator.alloc(u16, board.numbers.len * MaxHistorySize);
     errdefer allocator.free(candidate_masks_history);
 
-    const solver_events = try allocator.alloc(SolverEvent, board.numbers.len * board.extent);
-    errdefer allocator.free(solver_events);
-
     var game = GameState{
         .board = board,
         .candidate_masks = candidate_masks,
@@ -195,7 +187,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .selected_cells = selected_cells_full[0..0],
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
-        .solver_events = solver_events,
     };
 
     init_history_state(&game);
@@ -204,7 +195,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
 }
 
 pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
-    allocator.free(game.solver_events);
     allocator.free(game.board_history);
     allocator.free(game.candidate_masks_history);
     allocator.free(game.selected_cells_full);
@@ -385,23 +375,71 @@ pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_mask
     solver.solve_trivial_candidates_at(board, candidate_masks, cell_index, number);
 }
 
-// FIXME We need a good way to communicate this to the user
-pub fn player_solve_human_step(game: *GameState) void {
-    solver.solve_trivial_candidates(&game.board, game.candidate_masks);
-    solver.solve_naked_singles(&game.board, game.candidate_masks);
-    solver.solve_hidden_singles(&game.board, game.candidate_masks);
-    solver.solve_hidden_pairs(&game.board, game.candidate_masks);
-    solver.solve_pointing_lines(&game.board, game.candidate_masks);
-
-    push_state_to_history(game);
-}
-
 pub fn player_solve_brute_force(game: *GameState) void {
     if (brute_solver.solve(&game.board, .{})) {
         push_state_to_history(game);
     } else {
         // We didn't manage to solve the puzzle
-        // FIXME Tell the player somehow
+        // FIXME tell the player somehow
+    }
+}
+
+const SolverEventTag = enum {
+    hidden_single,
+    hidden_pair,
+};
+
+const SolverEvent = union(SolverEventTag) {
+    hidden_single: solver.HiddenSingle,
+    hidden_pair: solver.HiddenPair,
+};
+
+pub fn player_solve_human_step(game: *GameState) void {
+    if (solve_human_step(game)) |solver_event| {
+        apply_solver_event(&game.board, game.candidate_masks, solver_event);
+
+        push_state_to_history(game);
+    } else {
+        // FIXME show the user that nothing happened?
+        std.debug.print("solver: nothing found!\n", .{});
+    }
+}
+
+fn solve_human_step(game: *GameState) ?SolverEvent {
+    solver.solve_trivial_candidates(&game.board, game.candidate_masks);
+    solver.solve_naked_singles(&game.board, game.candidate_masks);
+
+    if (solver.solve_hidden_singles(game.board, game.candidate_masks)) |hidden_single| {
+        return .{ .hidden_single = hidden_single };
+    }
+
+    if (solver.solve_hidden_pairs(game.board, game.candidate_masks)) |hidden_pair| {
+        return .{ .hidden_pair = hidden_pair };
+    }
+
+    solver.solve_pointing_lines(&game.board, game.candidate_masks);
+
+    return null;
+}
+
+fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
+    _ = board;
+
+    switch (solver_event) {
+        .hidden_single => |hidden_single| {
+            std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
+
+            candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
+
+            // FIXME do this!
+            //sudoku.place_number_remove_trivial_candidates(board, candidate_masks, cell_index, number);
+        },
+        .hidden_pair => |hidden_pair| {
+            std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });
+
+            candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
+            candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
+        },
     }
 }
 

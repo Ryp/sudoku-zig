@@ -12,7 +12,6 @@ const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
-const event = @import("../sudoku/event.zig");
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
 const SpriteScreenExtent = 80;
