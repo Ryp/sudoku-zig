@@ -131,11 +131,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         return error.SDLInitializationFailed;
     }
 
-    const ren = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
+    const renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
         c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
-    defer c.SDL_DestroyRenderer(ren);
+    defer c.SDL_DestroyRenderer(renderer);
 
     var text_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
     defer allocator.free(text_surfaces);
@@ -147,7 +147,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
     for (text_surfaces, text_textures, numbers_string) |*surface, *texture, number_string| {
         surface.* = c.TTF_RenderText_LCD(font, number_string, TextColor, BgColor);
-        texture.* = c.SDL_CreateTextureFromSurface(ren, surface.*) orelse {
+        texture.* = c.SDL_CreateTextureFromSurface(renderer, surface.*) orelse {
             c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
             return error.SDLInitializationFailed;
         };
@@ -163,7 +163,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
     for (text_small_surfaces, text_small_textures, numbers_string) |*surface, *texture, number_string| {
         surface.* = c.TTF_RenderText_LCD(font_small, number_string, TextColor, BgColor);
-        texture.* = c.SDL_CreateTextureFromSurface(ren, surface.*) orelse {
+        texture.* = c.SDL_CreateTextureFromSurface(renderer, surface.*) orelse {
             c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
             return error.SDLInitializationFailed;
         };
@@ -297,8 +297,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         // Render game
-        _ = c.SDL_SetRenderDrawColor(ren, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
-        _ = c.SDL_RenderClear(ren);
+        _ = c.SDL_SetRenderDrawColor(renderer, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
+        _ = c.SDL_RenderClear(renderer);
 
         for (game.board.numbers, game.candidate_masks, 0..) |cell_number, cell_candidate_mask, cell_index| {
             const box_index = game.board.box_indices[cell_index];
@@ -313,8 +313,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             };
 
             // Draw box background
-            _ = c.SDL_SetRenderDrawColor(ren, box_region_color.r, box_region_color.g, box_region_color.b, box_region_color.a);
-            _ = c.SDL_RenderFillRect(ren, &cell_rect);
+            _ = c.SDL_SetRenderDrawColor(renderer, box_region_color.r, box_region_color.g, box_region_color.b, box_region_color.a);
+            _ = c.SDL_RenderFillRect(renderer, &cell_rect);
 
             // Draw highlighted cell
             if (game.selected_cells.len > 0) {
@@ -324,20 +324,20 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 const selected_box = game.board.box_indices[selected_index];
 
                 if (all(game.selected_cells[0] == cell_coord)) {
-                    _ = c.SDL_SetRenderDrawColor(ren, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
-                    _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                    _ = c.SDL_SetRenderDrawColor(renderer, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
+                    _ = c.SDL_RenderFillRect(renderer, &cell_rect);
                 } else {
                     if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
-                        _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_BLEND);
-                        _ = c.SDL_SetRenderDrawColor(ren, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
-                        _ = c.SDL_RenderFillRect(ren, &cell_rect);
-                        _ = c.SDL_SetRenderDrawBlendMode(ren, c.SDL_BLENDMODE_NONE);
+                        _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
+                        _ = c.SDL_SetRenderDrawColor(renderer, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
+                        _ = c.SDL_RenderFillRect(renderer, &cell_rect);
+                        _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_NONE);
                     }
 
                     if (cell_number != UnsetNumber) {
                         if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
-                            _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
-                            _ = c.SDL_RenderFillRect(ren, &cell_rect);
+                            _ = c.SDL_SetRenderDrawColor(renderer, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                            _ = c.SDL_RenderFillRect(renderer, &cell_rect);
                         }
                     }
                 }
@@ -356,7 +356,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 glyph_out_rect.x += cell_rect.x + @divTrunc((cell_rect.w - glyph_rect.w), 2);
                 glyph_out_rect.y += cell_rect.y + @divTrunc((cell_rect.h - glyph_rect.h), 2);
 
-                _ = c.SDL_RenderCopy(ren, text_textures[cell_number], &glyph_rect, &glyph_out_rect);
+                _ = c.SDL_RenderCopy(renderer, text_textures[cell_number], &glyph_rect, &glyph_out_rect);
             }
 
             // Draw candidates
@@ -368,8 +368,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     candidate_rect.y += cell_rect.y;
 
                     if (highlight_mask & sudoku.mask_for_number(number) != 0) {
-                        _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
-                        _ = c.SDL_RenderFillRect(ren, &candidate_rect);
+                        _ = c.SDL_SetRenderDrawColor(renderer, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                        _ = c.SDL_RenderFillRect(renderer, &candidate_rect);
                     }
 
                     var glyph_rect = std.mem.zeroes(c.SDL_Rect);
@@ -381,17 +381,17 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
                     const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
 
-                    _ = c.SDL_RenderCopy(ren, text_small_textures[number], &glyph_rect, &centered_glyph_rect);
+                    _ = c.SDL_RenderCopy(renderer, text_small_textures[number], &glyph_rect, &centered_glyph_rect);
                 }
             }
         }
 
-        draw_solver_event_overlay(ren, game.board, game.last_solver_event);
+        draw_solver_event_overlay(renderer, game.board, game.last_solver_event);
 
-        draw_sudoku_grid(ren, game.board);
+        draw_sudoku_grid(renderer, game.board);
 
         // Present
-        c.SDL_RenderPresent(ren);
+        c.SDL_RenderPresent(renderer);
     }
 
     for (text_textures, text_surfaces) |texture, surface| {
@@ -405,8 +405,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     }
 }
 
-fn draw_solver_event_overlay(ren: *c.SDL_Renderer, board: BoardState, solver_event: sudoku.SolverEvent) void {
-    _ = ren;
+fn draw_solver_event_overlay(renderer: *c.SDL_Renderer, board: BoardState, solver_event: sudoku.SolverEvent) void {
+    _ = renderer;
     _ = board;
 
     switch (solver_event) {
@@ -428,8 +428,8 @@ fn draw_solver_event_overlay(ren: *c.SDL_Renderer, board: BoardState, solver_eve
     }
 }
 
-fn draw_sudoku_grid(ren: *c.SDL_Renderer, board: BoardState) void {
-    _ = c.SDL_SetRenderDrawColor(ren, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
+fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
+    _ = c.SDL_SetRenderDrawColor(renderer, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
 
     for (0..board.numbers.len) |cell_index| {
         const box_index = board.box_indices[cell_index];
@@ -466,7 +466,7 @@ fn draw_sudoku_grid(ren: *c.SDL_Renderer, board: BoardState) void {
                 .h = cell_rect.h + 5,
             };
 
-            _ = c.SDL_RenderFillRect(ren, &rect);
+            _ = c.SDL_RenderFillRect(renderer, &rect);
         }
 
         if (thick_horizontal) {
@@ -477,7 +477,7 @@ fn draw_sudoku_grid(ren: *c.SDL_Renderer, board: BoardState) void {
                 .h = 5,
             };
 
-            _ = c.SDL_RenderFillRect(ren, &rect);
+            _ = c.SDL_RenderFillRect(renderer, &rect);
         }
     }
 
@@ -497,8 +497,8 @@ fn draw_sudoku_grid(ren: *c.SDL_Renderer, board: BoardState) void {
             .h = 1,
         };
 
-        _ = c.SDL_RenderFillRect(ren, &vertical_rect);
-        _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
+        _ = c.SDL_RenderFillRect(renderer, &vertical_rect);
+        _ = c.SDL_RenderFillRect(renderer, &horizontal_rect);
     }
 }
 
