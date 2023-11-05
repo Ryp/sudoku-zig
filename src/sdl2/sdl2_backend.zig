@@ -30,22 +30,6 @@ const GridColor = BlackColor;
 const JigsawRegionSaturation = 0.4;
 const JigsawRegionValue = 1.0;
 
-fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
-    if (game_extent > 12) {
-        return .{ 4, 4 };
-    } else if (game_extent > 9) {
-        return .{ 4, 3 };
-    } else if (game_extent > 6) {
-        return .{ 3, 3 };
-    } else if (game_extent > 4) {
-        return .{ 3, 2 };
-    } else if (game_extent > 2) {
-        return .{ 2, 2 };
-    } else {
-        return .{ game_extent, 1 };
-    }
-}
-
 fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
     if (candidate_mode) {
         sudoku.player_toggle_guess(game, number);
@@ -193,6 +177,17 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     c.SDL_SetWindowTitle(window, title_string.ptr);
 
     const candidate_layout = get_candidate_layout(extent);
+    var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_Rect = undefined;
+    var candidate_local_rects = candidate_local_rects_full[0..extent];
+
+    for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
+        candidate_local_rect.* = .{
+            .x = @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]),
+            .y = @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]),
+            .w = @divTrunc(SpriteScreenExtent, @as(c_int, @intCast(candidate_layout[0]))),
+            .h = @divTrunc(SpriteScreenExtent, @as(c_int, @intCast(candidate_layout[1]))),
+        };
+    }
 
     var should_exit = false;
 
@@ -365,39 +360,35 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
 
             // Draw candidates
-            if (cell_number == UnsetNumber) {
-                for (0..extent) |number_usize| {
-                    const number: u4 = @intCast(number_usize);
-                    if (((cell_candidate_mask >> number) & 1) != 0) {
-                        var candidate_rect = cell_rect;
-                        candidate_rect.x += @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
-                        candidate_rect.y += @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
-                        candidate_rect.w = @divTrunc(cell_rect.w, @as(c_int, @intCast(candidate_layout[0])));
-                        candidate_rect.h = @divTrunc(cell_rect.h, @as(c_int, @intCast(candidate_layout[1])));
+            for (candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
+                const number: u4 = @intCast(number_usize);
+                if (((cell_candidate_mask >> number) & 1) != 0) {
+                    var candidate_rect = candidate_local_rect;
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
 
-                        if (highlight_mask & sudoku.mask_for_number(number) != 0) {
-                            _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
-                            _ = c.SDL_RenderFillRect(ren, &candidate_rect);
-                        }
-
-                        var glyph_rect = std.mem.zeroes(c.SDL_Rect);
-
-                        if (c.TTF_SizeText(font_small, NumbersString[number], &glyph_rect.w, &glyph_rect.h) != 0) {
-                            c.SDL_Log("TTF error: %s", c.TTF_GetError());
-                            return error.SDLInitializationFailed;
-                        }
-
-                        var glyph_out_rect = glyph_rect;
-                        glyph_out_rect.x += candidate_rect.x + @divTrunc((candidate_rect.w - glyph_rect.w), 2);
-                        glyph_out_rect.y += candidate_rect.y + @divTrunc((candidate_rect.h - glyph_rect.h), 2);
-
-                        _ = c.SDL_RenderCopy(ren, text_small_textures[number], &glyph_rect, &glyph_out_rect);
+                    if (highlight_mask & sudoku.mask_for_number(number) != 0) {
+                        _ = c.SDL_SetRenderDrawColor(ren, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                        _ = c.SDL_RenderFillRect(ren, &candidate_rect);
                     }
+
+                    var glyph_rect = std.mem.zeroes(c.SDL_Rect);
+
+                    if (c.TTF_SizeText(font_small, NumbersString[number], &glyph_rect.w, &glyph_rect.h) != 0) {
+                        c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                        return error.SDLInitializationFailed;
+                    }
+
+                    const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
+
+                    _ = c.SDL_RenderCopy(ren, text_small_textures[number], &glyph_rect, &centered_glyph_rect);
                 }
             }
         }
 
-        draw_sudoku_grid(game.board, ren);
+        draw_solver_event_overlay(ren, game.board, game.last_solver_event);
+
+        draw_sudoku_grid(ren, game.board);
 
         // Present
         c.SDL_RenderPresent(ren);
@@ -414,7 +405,30 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     }
 }
 
-fn draw_sudoku_grid(board: BoardState, ren: *c.SDL_Renderer) void {
+fn draw_solver_event_overlay(ren: *c.SDL_Renderer, board: BoardState, solver_event: sudoku.SolverEvent) void {
+    _ = ren;
+    _ = board;
+
+    switch (solver_event) {
+        .naked_single => |naked_single| {
+            _ = naked_single;
+        },
+        .hidden_single => |hidden_single| {
+            _ = hidden_single;
+        },
+        .hidden_pair => |hidden_pair| {
+            _ = hidden_pair;
+        },
+        .pointing_line => |pointing_line| {
+            _ = pointing_line;
+        },
+        .nothing_found => |nothing_found| {
+            _ = nothing_found;
+        },
+    }
+}
+
+fn draw_sudoku_grid(ren: *c.SDL_Renderer, board: BoardState) void {
     _ = c.SDL_SetRenderDrawColor(ren, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
 
     for (0..board.numbers.len) |cell_index| {
@@ -486,4 +500,29 @@ fn draw_sudoku_grid(board: BoardState, ren: *c.SDL_Renderer) void {
         _ = c.SDL_RenderFillRect(ren, &vertical_rect);
         _ = c.SDL_RenderFillRect(ren, &horizontal_rect);
     }
+}
+
+fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
+    if (game_extent > 12) {
+        return .{ 4, 4 };
+    } else if (game_extent > 9) {
+        return .{ 4, 3 };
+    } else if (game_extent > 6) {
+        return .{ 3, 3 };
+    } else if (game_extent > 4) {
+        return .{ 3, 2 };
+    } else if (game_extent > 2) {
+        return .{ 2, 2 };
+    } else {
+        return .{ game_extent, 1 };
+    }
+}
+
+fn center_rect_inside_rect(rect: c.SDL_Rect, reference_rect: c.SDL_Rect) c.SDL_Rect {
+    return .{
+        .x = reference_rect.x + @divTrunc((reference_rect.w - rect.w), 2),
+        .y = reference_rect.y + @divTrunc((reference_rect.h - rect.h), 2),
+        .w = rect.w,
+        .h = rect.h,
+    };
 }

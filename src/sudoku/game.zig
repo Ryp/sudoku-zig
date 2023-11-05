@@ -64,6 +64,7 @@ pub const GameState = struct {
     candidate_masks_history: []u16,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
+    last_solver_event: SolverEvent,
 };
 
 pub fn cell_coord_from_index(extent: u32, cell_index: usize) u32_2 {
@@ -187,6 +188,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .selected_cells = selected_cells_full[0..0],
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
+        .last_solver_event = .{ .nothing_found = .{ .initial = true } },
     };
 
     init_history_state(&game);
@@ -377,33 +379,50 @@ pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_mask
 
 pub fn player_solve_brute_force(game: *GameState) void {
     if (brute_solver.solve(&game.board, .{})) {
-        push_state_to_history(game);
+        player_clear_candidates(game);
+        // NOTE: Already done in the body of clear_candidates.
+        // push_state_to_history(game);
     } else {
         // We didn't manage to solve the puzzle
         // FIXME tell the player somehow
     }
 }
 
+const NothingFound = struct {
+    initial: bool = false,
+};
+
 const SolverEventTag = enum {
     naked_single,
     hidden_single,
     hidden_pair,
     pointing_line,
+    nothing_found,
 };
 
-const SolverEvent = union(SolverEventTag) {
+pub const SolverEvent = union(SolverEventTag) {
     naked_single: solver.NakedSingle,
     hidden_single: solver.HiddenSingle,
     hidden_pair: solver.HiddenPair,
     pointing_line: solver.PointingLine,
+    nothing_found: NothingFound,
 };
 
 pub fn player_solve_human_step(game: *GameState) void {
-    if (solve_human_step(game)) |solver_event| {
-        apply_solver_event(&game.board, game.candidate_masks, solver_event);
+    // FIXME nothing_found is a hack, and it's not a great flow to wait for the next solver action to apply the previous stored one.
+    switch (game.last_solver_event) {
+        .nothing_found => {},
+        else => |solver_event| {
+            apply_solver_event(&game.board, game.candidate_masks, solver_event);
 
-        push_state_to_history(game);
+            push_state_to_history(game);
+        },
+    }
+
+    if (solve_human_step(game)) |solver_event| {
+        game.last_solver_event = solver_event;
     } else {
+        game.last_solver_event = .{ .nothing_found = .{ .initial = false } };
         // FIXME show the user that nothing happened?
         std.debug.print("solver: nothing found!\n", .{});
     }
@@ -413,12 +432,16 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
     solver.solve_trivial_candidates(&game.board, game.candidate_masks);
 
     if (solver.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
+        std.debug.print("solver: naked single {} at index = {}\n", .{ naked_single.number + 1, naked_single.cell_index });
         return .{ .naked_single = naked_single };
     } else if (solver.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
+        std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
         return .{ .hidden_single = hidden_single };
     } else if (solver.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
+        std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });
         return .{ .hidden_pair = hidden_pair };
     } else if (solver.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
+        std.debug.print("solver: pointing line of {}\n", .{pointing_line.number + 1});
         return .{ .pointing_line = pointing_line };
     } else {
         return null;
@@ -428,25 +451,17 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
 fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
-            std.debug.print("solver: naked single {} at index = {}\n", .{ naked_single.number + 1, naked_single.cell_index });
-
             place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
         },
         .hidden_single => |hidden_single| {
-            std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
-
             place_number_remove_trivial_candidates(board, candidate_masks, hidden_single.cell_index, hidden_single.number);
             // candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
         },
         .hidden_pair => |hidden_pair| {
-            std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });
-
             candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
             candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
         },
         .pointing_line => |pointing_line| {
-            std.debug.print("solver: pointing line of {}\n", .{pointing_line.number + 1});
-
             const number_mask = mask_for_number(pointing_line.number);
             for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
                 // FIXME super confusing
@@ -454,6 +469,9 @@ fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: 
                     candidate_masks[cell_index] &= ~number_mask;
                 }
             }
+        },
+        .nothing_found => {
+            unreachable;
         },
     }
 }
