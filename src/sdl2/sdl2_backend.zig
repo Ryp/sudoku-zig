@@ -30,61 +30,6 @@ const GridColor = BlackColor;
 const JigsawRegionSaturation = 0.4;
 const JigsawRegionValue = 1.0;
 
-fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
-    if (candidate_mode) {
-        sudoku.player_toggle_guess(game, number);
-    } else {
-        sudoku.player_input_number(game, number);
-    }
-}
-
-// https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
-    const c_f = value * saturation;
-    const area_index = hue * 6.0;
-    const area_index_i: u8 = @intFromFloat(area_index);
-    const x_f = c_f * (1.0 - @fabs(@mod(area_index, 2.0) - 1.0));
-    const m_f = value - c_f;
-    const c_u8 = @min(255, @as(u8, @intFromFloat((c_f + m_f) * 255.0)));
-    const x_u8 = @min(255, @as(u8, @intFromFloat((x_f + m_f) * 255.0)));
-    const m_u8 = @min(255, @as(u8, @intFromFloat(m_f * 255.0)));
-
-    return switch (area_index_i) {
-        0 => c.SDL_Color{ .r = c_u8, .g = x_u8, .b = m_u8, .a = 255 },
-        1 => c.SDL_Color{ .r = x_u8, .g = c_u8, .b = m_u8, .a = 255 },
-        2 => c.SDL_Color{ .r = m_u8, .g = c_u8, .b = x_u8, .a = 255 },
-        3 => c.SDL_Color{ .r = m_u8, .g = x_u8, .b = c_u8, .a = 255 },
-        4 => c.SDL_Color{ .r = x_u8, .g = m_u8, .b = c_u8, .a = 255 },
-        5 => c.SDL_Color{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
-        else => unreachable,
-    };
-}
-
-fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SDL_Color) void {
-    switch (game_type) {
-        .regular => |regular| {
-            // Draw a checkerboard pattern
-            for (box_region_colors, 0..) |*box_region_color, box_index| {
-                const box_index_x = box_index % regular.box_h;
-                const box_index_y = box_index / regular.box_h;
-
-                if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
-                    box_region_color.* = BoxBgColor;
-                } else {
-                    box_region_color.* = BgColor;
-                }
-            }
-        },
-        .jigsaw => {
-            // Get a unique color for each region
-            for (box_region_colors, 0..) |*box_region_color, box_index| {
-                const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
-                box_region_color.* = hsv_to_sdl_color(hue, JigsawRegionSaturation, JigsawRegionValue);
-            }
-        },
-    }
-}
-
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const extent = game.board.extent;
 
@@ -287,12 +232,11 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         var highlight_mask: u16 = 0;
-        if (game.selected_cells.len > 0) {
-            const cell_index = sudoku.cell_index_from_coord(extent, game.selected_cells[0]);
-            const cell_number = game.board.numbers[cell_index];
+        for (game.selected_cells) |selected_cell_index| {
+            const cell_number = game.board.numbers[selected_cell_index];
 
             if (cell_number != UnsetNumber) {
-                highlight_mask = sudoku.mask_for_number(@intCast(cell_number));
+                highlight_mask |= sudoku.mask_for_number(@intCast(cell_number));
             }
         }
 
@@ -318,12 +262,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
             // Draw highlighted cell
             if (game.selected_cells.len > 0) {
-                const selected_col = game.selected_cells[0][0];
-                const selected_row = game.selected_cells[0][1];
-                const selected_index = sudoku.cell_index_from_coord(extent, game.selected_cells[0]);
-                const selected_box = game.board.box_indices[selected_index];
+                const selected_cell_index = game.selected_cells[0];
+                const selected_coord = sudoku.cell_coord_from_index(extent, selected_cell_index);
+                const selected_col = selected_coord[0];
+                const selected_row = selected_coord[1];
+                const selected_box = game.board.box_indices[selected_cell_index];
 
-                if (all(game.selected_cells[0] == cell_coord)) {
+                if (selected_cell_index == cell_index) {
                     _ = c.SDL_SetRenderDrawColor(renderer, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
                     _ = c.SDL_RenderFillRect(renderer, &cell_rect);
                 } else {
@@ -386,7 +331,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        draw_solver_event_overlay(renderer, game.board, game.last_solver_event);
+        draw_solver_event_overlay(renderer, candidate_local_rects, game.board, game.last_solver_event);
 
         draw_sudoku_grid(renderer, game.board);
 
@@ -405,8 +350,42 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     }
 }
 
-fn draw_solver_event_overlay(renderer: *c.SDL_Renderer, board: BoardState, solver_event: sudoku.SolverEvent) void {
+fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
+    if (candidate_mode) {
+        sudoku.player_toggle_guess(game, number);
+    } else {
+        sudoku.player_input_number(game, number);
+    }
+}
+
+fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SDL_Color) void {
+    switch (game_type) {
+        .regular => |regular| {
+            // Draw a checkerboard pattern
+            for (box_region_colors, 0..) |*box_region_color, box_index| {
+                const box_index_x = box_index % regular.box_h;
+                const box_index_y = box_index / regular.box_h;
+
+                if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
+                    box_region_color.* = BoxBgColor;
+                } else {
+                    box_region_color.* = BgColor;
+                }
+            }
+        },
+        .jigsaw => {
+            // Get a unique color for each region
+            for (box_region_colors, 0..) |*box_region_color, box_index| {
+                const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
+                box_region_color.* = hsv_to_sdl_color(hue, JigsawRegionSaturation, JigsawRegionValue);
+            }
+        },
+    }
+}
+
+fn draw_solver_event_overlay(renderer: *c.SDL_Renderer, candidate_local_rects: []c.SDL_Rect, board: BoardState, solver_event: sudoku.SolverEvent) void {
     _ = renderer;
+    _ = candidate_local_rects;
     _ = board;
 
     switch (solver_event) {
@@ -524,5 +503,27 @@ fn center_rect_inside_rect(rect: c.SDL_Rect, reference_rect: c.SDL_Rect) c.SDL_R
         .y = reference_rect.y + @divTrunc((reference_rect.h - rect.h), 2),
         .w = rect.w,
         .h = rect.h,
+    };
+}
+
+// https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
+    const c_f = value * saturation;
+    const area_index = hue * 6.0;
+    const area_index_i: u8 = @intFromFloat(area_index);
+    const x_f = c_f * (1.0 - @fabs(@mod(area_index, 2.0) - 1.0));
+    const m_f = value - c_f;
+    const c_u8 = @min(255, @as(u8, @intFromFloat((c_f + m_f) * 255.0)));
+    const x_u8 = @min(255, @as(u8, @intFromFloat((x_f + m_f) * 255.0)));
+    const m_u8 = @min(255, @as(u8, @intFromFloat(m_f * 255.0)));
+
+    return switch (area_index_i) {
+        0 => c.SDL_Color{ .r = c_u8, .g = x_u8, .b = m_u8, .a = 255 },
+        1 => c.SDL_Color{ .r = x_u8, .g = c_u8, .b = m_u8, .a = 255 },
+        2 => c.SDL_Color{ .r = m_u8, .g = c_u8, .b = x_u8, .a = 255 },
+        3 => c.SDL_Color{ .r = m_u8, .g = x_u8, .b = c_u8, .a = 255 },
+        4 => c.SDL_Color{ .r = x_u8, .g = m_u8, .b = c_u8, .a = 255 },
+        5 => c.SDL_Color{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
+        else => unreachable,
     };
 }
