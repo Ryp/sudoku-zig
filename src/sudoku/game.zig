@@ -412,13 +412,13 @@ pub fn player_solve_human_step(game: *GameState) void {
 fn solve_human_step(game: *GameState) ?SolverEvent {
     solver.solve_trivial_candidates(&game.board, game.candidate_masks);
 
-    if (solver.solve_naked_singles(game.board, game.candidate_masks)) |naked_single| {
+    if (solver.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
-    } else if (solver.solve_hidden_singles(game.board, game.candidate_masks)) |hidden_single| {
+    } else if (solver.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
-    } else if (solver.solve_hidden_pairs(game.board, game.candidate_masks)) |hidden_pair| {
+    } else if (solver.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
         return .{ .hidden_pair = hidden_pair };
-    } else if (solver.solve_pointing_lines(game.board, game.candidate_masks)) |pointing_line| {
+    } else if (solver.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
         return .{ .pointing_line = pointing_line };
     } else {
         return null;

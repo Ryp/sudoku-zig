@@ -77,7 +77,7 @@ pub const NakedSingle = struct {
 };
 
 // If there's a cell with a single possibility left, put it down
-pub fn solve_naked_singles(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
+pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
     for (board.numbers, candidate_masks, 0..) |cell_number, candidate_mask, cell_index| {
         if (cell_number == UnsetNumber and @popCount(candidate_mask) == 1) {
             const number = first_bit_index_u16(candidate_mask);
@@ -98,9 +98,9 @@ pub const HiddenSingle = struct {
     number: u4,
 };
 
-pub fn solve_hidden_singles(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
+pub fn find_hidden_single(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
     for (board.all_regions) |region| {
-        if (solve_hidden_singles_region(board, candidate_masks, region)) |solver_event| {
+        if (find_hidden_single_region(board, candidate_masks, region)) |solver_event| {
             return solver_event;
         }
     }
@@ -113,9 +113,9 @@ pub const HiddenPair = struct {
     b: HiddenSingle,
 };
 
-pub fn solve_hidden_pairs(board: BoardState, candidate_masks: []const u16) ?HiddenPair {
+pub fn find_hidden_pair(board: BoardState, candidate_masks: []const u16) ?HiddenPair {
     for (board.all_regions) |region| {
-        if (solve_hidden_pairs_region(board, candidate_masks, region)) |hidden_pair| {
+        if (find_hidden_pair_region(board, candidate_masks, region)) |hidden_pair| {
             return hidden_pair;
         }
     }
@@ -124,7 +124,7 @@ pub fn solve_hidden_pairs(board: BoardState, candidate_masks: []const u16) ?Hidd
 }
 
 // If there's a region (col/row/box) where a possibility appears only once, put it down
-fn solve_hidden_singles_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenSingle {
+fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenSingle {
     assert(region.len == board.extent);
 
     var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
@@ -165,7 +165,7 @@ fn solve_hidden_singles_region(board: BoardState, candidate_masks: []const u16, 
     return null;
 }
 
-fn solve_hidden_pairs_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenPair {
+fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenPair {
     assert(region.len == board.extent);
 
     var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
@@ -239,7 +239,7 @@ pub const PointingLine = struct {
 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
 // Also called pointing pairs or triples in 9x9 sudoku.
-pub fn solve_pointing_lines(board: BoardState, candidate_masks: []const u16) ?PointingLine {
+pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?PointingLine {
     for (0..board.extent) |box_index| {
         const box_region = board.box_regions[box_index];
 
