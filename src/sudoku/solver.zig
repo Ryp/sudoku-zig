@@ -93,9 +93,10 @@ pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?Naked
 }
 
 pub const HiddenSingle = struct {
+    number: u4,
     cell_index: u32,
     deletion_mask: u16, // Mask of candidates that can be removed
-    number: u4,
+    region: []u32,
 };
 
 pub fn find_hidden_single(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
@@ -154,9 +155,10 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
 
             if (cell_number == UnsetNumber and deletion_mask != 0) {
                 return HiddenSingle{
+                    .number = number,
                     .cell_index = cell_index,
                     .deletion_mask = deletion_mask,
-                    .number = number,
+                    .region = region,
                 };
             }
         }
@@ -211,14 +213,16 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
                     if (deletion_mask_a != 0 or deletion_mask_b != 0) {
                         return HiddenPair{
                             .a = HiddenSingle{
+                                .number = @intCast(first_number),
                                 .cell_index = cell_index_a,
                                 .deletion_mask = deletion_mask_a,
-                                .number = @intCast(first_number),
+                                .region = region,
                             },
                             .b = HiddenSingle{
+                                .number = @intCast(second_number),
                                 .cell_index = cell_index_b,
                                 .deletion_mask = deletion_mask_b,
-                                .number = @intCast(second_number),
+                                .region = region,
                             },
                         };
                     }
@@ -231,10 +235,10 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
 }
 
 pub const PointingLine = struct {
-    region_cell_index_mask: u16,
-    line_region: []u32,
-    box_index: u4,
     number: u4,
+    line_region_mask: u16,
+    line_region: []u32,
+    box_region: []u32,
 };
 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
@@ -281,10 +285,10 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
 
                     if (mask != 0) {
                         return PointingLine{
-                            .region_cell_index_mask = mask,
-                            .line_region = line_region,
-                            .box_index = @intCast(box_index),
                             .number = number,
+                            .line_region_mask = mask,
+                            .line_region = line_region,
+                            .box_region = box_region,
                         };
                     }
                 }

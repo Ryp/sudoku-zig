@@ -467,7 +467,7 @@ fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: 
             const number_mask = mask_for_number(pointing_line.number);
             for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
                 // FIXME super confusing
-                if (mask_for_number(@intCast(region_cell_index)) & pointing_line.region_cell_index_mask != 0) {
+                if (mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_mask != 0) {
                     candidate_masks[cell_index] &= ~number_mask;
                 }
             }
