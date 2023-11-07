@@ -436,7 +436,18 @@ fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SD
 fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_Rect, board: BoardState, solver_event: sudoku.SolverEvent) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
-            _ = naked_single;
+            const cell_coord = sudoku.cell_coord_from_index(board.extent, naked_single.cell_index);
+            const cell_rect = cell_rectangle(cell_coord);
+
+            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+            var candidate_rect = candidate_local_rects[naked_single.number];
+            candidate_rect.x += cell_rect.x;
+            candidate_rect.y += cell_rect.y;
+
+            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
         },
         .hidden_single => |hidden_single| {
             // Highlight region that was considered
