@@ -6,7 +6,7 @@ const c = @cImport({
     @cInclude("SDL2/SDL_ttf.h");
 });
 
-const sudoku = @import("../sudoku/game.zig");
+const sudoku = @import("sudoku/game.zig");
 const GameState = sudoku.GameState;
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;

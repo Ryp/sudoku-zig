@@ -1,8 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sdl2 = @import("sdl2/sdl2_backend.zig");
 const sudoku = @import("sudoku/game.zig");
+const sdl2 = @import("sdl2_frontend.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
