@@ -14,9 +14,10 @@ const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
 
 const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
-const SpriteScreenExtent = 80;
-const FontSize: u32 = SpriteScreenExtent - 10;
-const FontSizeSmall: u32 = SpriteScreenExtent / 4;
+const CandidateBoxExtent = 27;
+const CellExtent = 2 + 3 * CandidateBoxExtent;
+const FontSize: u32 = CellExtent - 9;
+const FontSizeSmall: u32 = CellExtent / 4;
 
 const BlackColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
 const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
@@ -52,8 +53,8 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     }
     errdefer c.SDL_Quit();
 
-    const window_width = extent * SpriteScreenExtent;
-    const window_height = extent * SpriteScreenExtent;
+    const window_width = extent * CellExtent;
+    const window_height = extent * CellExtent;
 
     const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_SHOWN) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
@@ -180,10 +181,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     var candidate_local_rects = candidate_local_rects_full[0..extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
-        const x: c_int = @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
-        const y: c_int = @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
-        const x2: c_int = @intCast((@rem(number, candidate_layout[0]) + 1) * SpriteScreenExtent / candidate_layout[0]);
-        const y2: c_int = @intCast((@divTrunc(number, candidate_layout[0]) + 1) * SpriteScreenExtent / candidate_layout[1]);
+        const x: c_int = @intCast(@rem(number, candidate_layout[0]) * CellExtent / candidate_layout[0]);
+        const y: c_int = @intCast(@divTrunc(number, candidate_layout[0]) * CellExtent / candidate_layout[1]);
+        const x2: c_int = @intCast((@rem(number, candidate_layout[0]) + 1) * CellExtent / candidate_layout[0]);
+        const y2: c_int = @intCast((@divTrunc(number, candidate_layout[0]) + 1) * CellExtent / candidate_layout[1]);
 
         candidate_local_rect.* = .{
             .x = x,
@@ -278,8 +279,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     }
                 },
                 c.SDL_MOUSEBUTTONUP => {
-                    const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, SpriteScreenExtent));
-                    const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, SpriteScreenExtent));
+                    const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, CellExtent));
+                    const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, CellExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
                         sudoku.player_toggle_select(game, .{ x, y });
                     }
@@ -603,16 +604,16 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
     // Draw thin grid
     for (0..board.extent + 1) |index| {
         const horizontal_rect = c.SDL_Rect{
-            .x = @intCast(index * SpriteScreenExtent),
+            .x = @intCast(index * CellExtent),
             .y = 0,
             .w = 1,
-            .h = @intCast(board.extent * SpriteScreenExtent),
+            .h = @intCast(board.extent * CellExtent),
         };
 
         const vertical_rect = c.SDL_Rect{
             .x = 0,
-            .y = @intCast(index * SpriteScreenExtent),
-            .w = @intCast(board.extent * SpriteScreenExtent),
+            .y = @intCast(index * CellExtent),
+            .w = @intCast(board.extent * CellExtent),
             .h = 1,
         };
 
@@ -639,10 +640,10 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
 
 fn cell_rectangle(cell_coord: u32_2) c.SDL_Rect {
     return .{
-        .x = @intCast(cell_coord[0] * SpriteScreenExtent),
-        .y = @intCast(cell_coord[1] * SpriteScreenExtent),
-        .w = SpriteScreenExtent,
-        .h = SpriteScreenExtent,
+        .x = @intCast(cell_coord[0] * CellExtent + 1),
+        .y = @intCast(cell_coord[1] * CellExtent + 1),
+        .w = CellExtent,
+        .h = CellExtent,
     };
 }
 
