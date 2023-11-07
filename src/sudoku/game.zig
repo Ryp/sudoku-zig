@@ -425,8 +425,6 @@ pub fn player_solve_human_step(game: *GameState) void {
         game.last_solver_event = solver_event;
     } else {
         game.last_solver_event = .{ .nothing_found = .{ .initial = false } };
-        // FIXME show the user that nothing happened?
-        std.debug.print("solver: nothing found!\n", .{});
     }
 }
 
@@ -434,16 +432,12 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
     solver.solve_trivial_candidates(&game.board, game.candidate_masks);
 
     if (solver.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
-        std.debug.print("solver: naked single {} at index = {}\n", .{ naked_single.number + 1, naked_single.cell_index });
         return .{ .naked_single = naked_single };
     } else if (solver.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
-        std.debug.print("solver: hidden single {} at index = {}, del mask = {}\n", .{ hidden_single.number + 1, hidden_single.cell_index, hidden_single.deletion_mask });
         return .{ .hidden_single = hidden_single };
     } else if (solver.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
-        std.debug.print("solver: hidden pair of {} and {}\n", .{ hidden_pair.a.number + 1, hidden_pair.b.number + 1 });
         return .{ .hidden_pair = hidden_pair };
     } else if (solver.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
-        std.debug.print("solver: pointing line of {}\n", .{pointing_line.number + 1});
         return .{ .pointing_line = pointing_line };
     } else {
         return null;

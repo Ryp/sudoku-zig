@@ -171,10 +171,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
     const sdl_context = try create_sdl_context(allocator, extent);
 
-    const title_string = try std.fmt.allocPrintZ(allocator, "Sudoku", .{});
+    var title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
-
-    c.SDL_SetWindowTitle(sdl_context.window, title_string.ptr);
 
     const candidate_layout = get_candidate_layout(extent);
     var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_Rect = undefined;
@@ -394,6 +392,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         draw_sudoku_grid(sdl_context.renderer, game.board);
 
+        set_window_title(sdl_context.window, game, title_string);
+
         c.SDL_RenderPresent(sdl_context.renderer);
     }
 
@@ -534,7 +534,6 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    //_ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
                     _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
@@ -559,9 +558,7 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
                 }
             }
         },
-        .nothing_found => |nothing_found| {
-            _ = nothing_found;
-        },
+        .nothing_found => {},
     }
 }
 
@@ -687,4 +684,18 @@ fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
         5 => c.SDL_Color{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
         else => unreachable,
     };
+}
+
+fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8) void {
+    const title = "Sudoku";
+
+    _ = switch (game.last_solver_event) {
+        .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: found naked {} single", .{ title, naked_single.number + 1 }),
+        .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
+        .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
+        .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
+        .nothing_found => |nothing_found| std.fmt.bufPrintZ(title_string, "{s}{s}", .{ title, if (nothing_found.initial) "" else " | hint: nothing found!" }),
+    } catch unreachable;
+
+    c.SDL_SetWindowTitle(window, title_string.ptr);
 }
