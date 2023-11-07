@@ -236,9 +236,10 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
 
 pub const PointingLine = struct {
     number: u4,
-    line_region_mask: u16,
     line_region: []u32,
+    line_region_deletion_mask: u16,
     box_region: []u32,
+    box_region_mask: u16,
 };
 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
@@ -262,7 +263,9 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
             aabb.max = u32_2{ 0, 0 };
             aabb.min = u32_2{ board.extent, board.extent };
 
-            for (box_region) |cell_index| {
+            var box_region_mask: u16 = 0;
+
+            for (box_region, 0..) |cell_index, region_cell_index| {
                 const cell_candidate_mask = candidate_masks[cell_index];
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
 
@@ -270,6 +273,7 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
                     aabb.min = @min(aabb.min, cell_coord);
                     aabb.max = @max(aabb.max, cell_coord);
                     candidate_count.* += 1;
+                    box_region_mask |= sudoku.mask_for_number(@intCast(region_cell_index));
                 }
             }
 
@@ -286,9 +290,10 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
                     if (mask != 0) {
                         return PointingLine{
                             .number = number,
-                            .line_region_mask = mask,
                             .line_region = line_region,
+                            .line_region_deletion_mask = mask,
                             .box_region = box_region,
+                            .box_region_mask = box_region_mask,
                         };
                     }
                 }

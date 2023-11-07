@@ -27,6 +27,7 @@ const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 
 const SolverRed = c.SDL_Color{ .r = 255, .g = 0, .b = 0, .a = 255 };
 const SolverGreen = c.SDL_Color{ .r = 0, .g = 255, .b = 0, .a = 255 };
 const SolverOrange = c.SDL_Color{ .r = 255, .g = 165, .b = 0, .a = 255 };
+const SolverYellow = c.SDL_Color{ .r = 255, .g = 255, .b = 0, .a = 255 };
 const TextColor = BlackColor;
 const GridColor = BlackColor;
 
@@ -504,7 +505,45 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
             }
         },
         .pointing_line => |pointing_line| {
-            _ = pointing_line;
+            // Draw line
+            for (pointing_line.line_region, 0..) |cell_index, line_region_cell_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+                const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
+
+                if (pointing_line.line_region_deletion_mask & region_index_mask != 0) {
+                    var candidate_rect = candidate_local_rects[pointing_line.number];
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    //_ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+            }
+
+            // Draw box
+            for (pointing_line.box_region, 0..) |cell_index, box_region_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverYellow.r, SolverYellow.g, SolverYellow.b, SolverYellow.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+                const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
+                if (pointing_line.box_region_mask & region_index_mask != 0) {
+                    var candidate_rect = candidate_local_rects[pointing_line.number];
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+            }
         },
         .nothing_found => |nothing_found| {
             _ = nothing_found;
