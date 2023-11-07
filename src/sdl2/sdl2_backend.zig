@@ -335,6 +335,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     }
                 }
             }
+        }
+
+        draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, game.last_solver_event);
+
+        for (game.board.numbers, 0..) |cell_number, cell_index| {
+            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
+            const cell_rect = cell_rectangle(cell_coord);
 
             // Draw placed numbers
             if (cell_number != UnsetNumber) {
@@ -349,8 +356,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 _ = c.SDL_RenderCopy(sdl_context.renderer, sdl_context.text_textures[cell_number], &glyph_rect, &centered_glyph_rect);
             }
         }
-
-        draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, game.last_solver_event);
 
         for (game.candidate_masks, 0..) |cell_candidate_mask, cell_index| {
             const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
@@ -463,7 +468,40 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
             }
         },
         .hidden_pair => |hidden_pair| {
-            _ = hidden_pair;
+            // Highlight region that was considered
+            assert(hidden_pair.a.region.ptr == hidden_pair.b.region.ptr);
+            for (hidden_pair.a.region) |cell_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+            }
+
+            inline for (.{ hidden_pair.a, hidden_pair.b }) |hidden_single| {
+                // Highlight the candidates we removed and the single that was considered
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, hidden_single.cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                // Draw candidates
+                for (0..board.extent) |number_usize| {
+                    const number: u4 = @intCast(number_usize);
+                    const number_mask = sudoku.mask_for_number(number);
+
+                    const is_deleted = hidden_single.deletion_mask & number_mask != 0;
+                    const is_single = hidden_pair.a.number == number or hidden_pair.b.number == number;
+
+                    if (is_single or is_deleted) {
+                        var candidate_rect = candidate_local_rects[number];
+                        candidate_rect.x += cell_rect.x;
+                        candidate_rect.y += cell_rect.y;
+
+                        const color = if (is_single) SolverGreen else SolverRed;
+                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, color.r, color.g, color.b, color.a);
+                        _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                    }
+                }
+            }
         },
         .pointing_line => |pointing_line| {
             _ = pointing_line;
