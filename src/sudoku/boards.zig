@@ -8,6 +8,16 @@ pub const easy_000 = SudokuString{
     .solution = "586132497437598126912764583629871354158349762374256819243915678791683245865427931",
 };
 
+pub const solver_hidden_pair = SudokuString{
+    .board = ".........9.46.7....768.41..3.97.1.8...8...3...5.3.87.2..75.261....4.32.8.........",
+    .solution = "", // FIXME
+};
+
+pub const solver_pointing_line = SudokuString{
+    .board = ".179.36......8....9.....5.7.72.1.43....4.2.7..6437.25.7.1....65....3......56.172.",
+    .solution = "", // FIXME
+};
+
 // Takes long to solve on pure backtracking solvers
 pub const special_17_clues = SudokuString{
     .board = "...8.1..........435............7.8........1...2..3....6......75..34........2..6..",
