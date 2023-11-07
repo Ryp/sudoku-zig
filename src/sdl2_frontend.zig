@@ -180,11 +180,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     var candidate_local_rects = candidate_local_rects_full[0..extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
+        const x: c_int = @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]);
+        const y: c_int = @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]);
+        const x2: c_int = @intCast((@rem(number, candidate_layout[0]) + 1) * SpriteScreenExtent / candidate_layout[0]);
+        const y2: c_int = @intCast((@divTrunc(number, candidate_layout[0]) + 1) * SpriteScreenExtent / candidate_layout[1]);
+
         candidate_local_rect.* = .{
-            .x = @intCast(@rem(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[0]),
-            .y = @intCast(@divTrunc(number, candidate_layout[0]) * SpriteScreenExtent / candidate_layout[1]),
-            .w = @divTrunc(SpriteScreenExtent, @as(c_int, @intCast(candidate_layout[0]))),
-            .h = @divTrunc(SpriteScreenExtent, @as(c_int, @intCast(candidate_layout[1]))),
+            .x = x,
+            .y = y,
+            .w = x2 - x,
+            .h = y2 - y,
         };
     }
 
