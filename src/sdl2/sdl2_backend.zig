@@ -188,9 +188,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         };
     }
 
-    var should_exit = false;
-
-    while (!should_exit) {
+    main_loop: while (true) {
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdlEvent) > 0) {
@@ -200,12 +198,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
             switch (sdlEvent.type) {
                 c.SDL_QUIT => {
-                    should_exit = true;
+                    break :main_loop;
                 },
                 c.SDL_KEYDOWN => {
                     switch (sdlEvent.key.keysym.sym) {
                         c.SDLK_ESCAPE => {
-                            should_exit = true;
+                            break :main_loop;
                         },
                         c.SDLK_DELETE, c.SDLK_0 => {
                             sudoku.player_clear_cell(game);
@@ -390,7 +388,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         draw_sudoku_grid(sdl_context.renderer, game.board);
 
-        // Present
         c.SDL_RenderPresent(sdl_context.renderer);
     }
 
