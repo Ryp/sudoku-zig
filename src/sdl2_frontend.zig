@@ -558,6 +558,46 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
                 }
             }
         },
+        .box_line_reduction => |box_line_reduction| {
+            // Draw box
+            for (box_line_reduction.box_region, 0..) |cell_index, line_region_cell_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+                const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
+
+                if (box_line_reduction.box_region_deletion_mask & region_index_mask != 0) {
+                    var candidate_rect = candidate_local_rects[box_line_reduction.number];
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+            }
+
+            // Draw line
+            for (box_line_reduction.line_region, 0..) |cell_index, box_region_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverYellow.r, SolverYellow.g, SolverYellow.b, SolverYellow.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+                const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
+                if (box_line_reduction.line_region_mask & region_index_mask != 0) {
+                    var candidate_rect = candidate_local_rects[box_line_reduction.number];
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+            }
+        },
         .nothing_found => {},
     }
 }
@@ -694,6 +734,7 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
         .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
         .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
         .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
+        .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
         .nothing_found => |nothing_found| std.fmt.bufPrintZ(title_string, "{s}{s}", .{ title, if (nothing_found.initial) "" else " | hint: nothing found!" }),
     } catch unreachable;
 

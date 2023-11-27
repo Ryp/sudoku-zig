@@ -18,6 +18,11 @@ pub const solver_pointing_line = SudokuString{
     .solution = "", // FIXME
 };
 
+pub const solver_box_line_reduction = SudokuString{
+    .board = ".16..78.3.928.....87...126..48...3..65...9.82.39...65..6.9...2..8...29369246..51.",
+    .solution = "", // FIXME
+};
+
 // Takes long to solve on pure backtracking solvers
 pub const special_17_clues = SudokuString{
     .board = "...8.1..........435............7.8........1...2..3....6......75..34........2..6..",

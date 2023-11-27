@@ -6,11 +6,26 @@ const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
+const any = sudoku.any;
 
 const AABB_u32_2 = struct {
     min: u32_2,
     max: u32_2,
 };
+
+fn count_bits_u16(mask_ro: u16) u4 {
+    var mask = mask_ro;
+    var count: u4 = 0;
+
+    for (0..16) |_| {
+        if ((mask & 1) != 0) {
+            count += 1;
+        }
+        mask = mask >> 1;
+    }
+
+    return count;
+}
 
 fn first_bit_index_u16(mask_ro: u16) u4 {
     var mask = mask_ro;
@@ -319,4 +334,75 @@ fn removed_candidate_mask_from_pointing_line(board: BoardState, candidate_masks:
     }
 
     return region_cell_index_mask;
+}
+
+pub const BoxLineReduction = struct {
+    number: u4,
+    box_region: []u32,
+    box_region_deletion_mask: u16,
+    line_region: []u32,
+    line_region_mask: u16,
+};
+
+pub fn find_box_line_reduction(board: BoardState, candidate_masks: []const u16) ?BoxLineReduction {
+    for (board.col_regions, 0..) |col_region, col_index| {
+        if (find_box_line_reduction_for_line(board, candidate_masks, col_region, u32_2{ @intCast(col_index), board.extent })) |event| {
+            return event;
+        }
+    }
+
+    for (board.row_regions, 0..) |row_region, row_index| {
+        if (find_box_line_reduction_for_line(board, candidate_masks, row_region, u32_2{ board.extent, @intCast(row_index) })) |event| {
+            return event;
+        }
+    }
+
+    return null;
+}
+
+pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []const u16, line_region: []u32, line_coord: u32_2) ?BoxLineReduction {
+    for (0..board.extent) |number_usize| {
+        const number: u4 = @intCast(number_usize);
+        const number_mask = sudoku.mask_for_number(number);
+
+        var line_region_mask: u16 = 0;
+        var box_index_mask: u16 = 0;
+
+        for (line_region, 0..) |cell_index, region_cell_index| {
+            if (candidate_masks[cell_index] & number_mask != 0) {
+                line_region_mask |= sudoku.mask_for_number(@intCast(region_cell_index)); // FIXME super confusing
+
+                const box_index = board.box_indices[cell_index];
+                box_index_mask |= sudoku.mask_for_number(@intCast(box_index));
+            }
+        }
+
+        if (count_bits_u16(box_index_mask) == 1) {
+            const box_index = first_bit_index_u16(box_index_mask);
+            const box_region = board.box_regions[box_index];
+
+            var deletion_mask: u16 = 0;
+            for (box_region, 0..) |cell_index, region_cell_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+
+                if (!any(cell_coord == line_coord)) {
+                    if (candidate_masks[cell_index] & number_mask != 0) {
+                        deletion_mask |= sudoku.mask_for_number(@intCast(region_cell_index));
+                    }
+                }
+            }
+
+            if (deletion_mask != 0) {
+                return BoxLineReduction{
+                    .number = number,
+                    .box_region = box_region,
+                    .box_region_deletion_mask = deletion_mask,
+                    .line_region = line_region,
+                    .line_region_mask = line_region_mask,
+                };
+            }
+        }
+    }
+
+    return null;
 }

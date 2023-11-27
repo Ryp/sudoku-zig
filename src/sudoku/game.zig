@@ -14,6 +14,15 @@ pub fn all(vector: anytype) bool {
     return @reduce(.And, vector);
 }
 
+// I borrowed this name from HLSL
+pub fn any(vector: anytype) bool {
+    const type_info = @typeInfo(@TypeOf(vector));
+    assert(type_info.Vector.child == bool);
+    assert(type_info.Vector.len > 1);
+
+    return @reduce(.Or, vector);
+}
+
 pub const u32_2 = @Vector(2, u32);
 
 pub const MaxSudokuExtent = 16;
@@ -242,6 +251,12 @@ fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_reg
     }
 }
 
+pub fn fill_empty_board(board: []u5) void {
+    for (board) |*cell_number| {
+        cell_number.* = UnsetNumber;
+    }
+}
+
 pub fn fill_board_from_string(board: []u5, sudoku_string: []const u8, extent: u32) void {
     assert(board.len == extent * extent);
     assert(sudoku_string.len == extent * extent);
@@ -399,6 +414,7 @@ const SolverEventTag = enum {
     hidden_single,
     hidden_pair,
     pointing_line,
+    box_line_reduction,
     nothing_found,
 };
 
@@ -407,6 +423,7 @@ pub const SolverEvent = union(SolverEventTag) {
     hidden_single: solver.HiddenSingle,
     hidden_pair: solver.HiddenPair,
     pointing_line: solver.PointingLine,
+    box_line_reduction: solver.BoxLineReduction,
     nothing_found: NothingFound,
 };
 
@@ -439,12 +456,14 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
         return .{ .hidden_pair = hidden_pair };
     } else if (solver.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
         return .{ .pointing_line = pointing_line };
+    } else if (solver.find_box_line_reduction(game.board, game.candidate_masks)) |box_line_reduction| {
+        return .{ .box_line_reduction = box_line_reduction };
     } else {
         return null;
     }
 }
 
-fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
+pub fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
             place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
@@ -462,6 +481,15 @@ fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: 
             for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
                 // FIXME super confusing
                 if (mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
+                    candidate_masks[cell_index] &= ~number_mask;
+                }
+            }
+        },
+        .box_line_reduction => |box_line_reduction| {
+            const number_mask = mask_for_number(box_line_reduction.number);
+            for (box_line_reduction.box_region, 0..) |cell_index, region_cell_index| {
+                // FIXME super confusing
+                if (mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
                     candidate_masks[cell_index] &= ~number_mask;
                 }
             }
