@@ -300,13 +300,24 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
 
                 if (aabb_extent[0] == 0 or aabb_extent[1] == 0) {
                     const line_region = if (aabb_extent[0] == 0) board.col_regions[aabb.min[0]] else board.row_regions[aabb.min[1]];
-                    const mask = removed_candidate_mask_from_pointing_line(board, candidate_masks, number, @intCast(box_index), line_region);
 
-                    if (mask != 0) {
+                    var deletion_mask: u16 = 0;
+                    for (line_region, 0..) |cell_index, region_cell_index_usize| {
+                        const region_cell_index: u4 = @intCast(region_cell_index_usize);
+                        const line_cell_box_index = board.box_indices[cell_index];
+
+                        if (line_cell_box_index != box_index) {
+                            if (candidate_masks[cell_index] & number_mask != 0) {
+                                deletion_mask |= @as(u16, 1) << region_cell_index;
+                            }
+                        }
+                    }
+
+                    if (deletion_mask != 0) {
                         return PointingLine{
                             .number = number,
                             .line_region = line_region,
-                            .line_region_deletion_mask = mask,
+                            .line_region_deletion_mask = deletion_mask,
                             .box_region = box_region,
                             .box_region_mask = box_region_mask,
                         };
@@ -317,23 +328,6 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
     }
 
     return null;
-}
-
-fn removed_candidate_mask_from_pointing_line(board: BoardState, candidate_masks: []const u16, number: u4, box_index_to_exclude: u32, line_region: []u32) u16 {
-    const number_mask = sudoku.mask_for_number(number);
-    var region_cell_index_mask: u16 = 0;
-
-    for (line_region, 0..) |cell_index, region_cell_index| {
-        const box_index = board.box_indices[cell_index];
-
-        if (box_index != box_index_to_exclude) {
-            if (candidate_masks[cell_index] & number_mask != 0) {
-                region_cell_index_mask |= sudoku.mask_for_number(@intCast(region_cell_index)); // FIXME super confusing
-            }
-        }
-    }
-
-    return region_cell_index_mask;
 }
 
 pub const BoxLineReduction = struct {
@@ -368,9 +362,11 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
         var line_region_mask: u16 = 0;
         var box_index_mask: u16 = 0;
 
-        for (line_region, 0..) |cell_index, region_cell_index| {
+        for (line_region, 0..) |cell_index, region_cell_index_usize| {
+            const region_cell_index: u4 = @intCast(region_cell_index_usize);
+
             if (candidate_masks[cell_index] & number_mask != 0) {
-                line_region_mask |= sudoku.mask_for_number(@intCast(region_cell_index)); // FIXME super confusing
+                line_region_mask |= @as(u16, 1) << region_cell_index;
 
                 const box_index = board.box_indices[cell_index];
                 box_index_mask |= sudoku.mask_for_number(@intCast(box_index));
