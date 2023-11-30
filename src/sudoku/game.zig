@@ -77,6 +77,7 @@ pub const GameState = struct {
     candidate_masks_history: []u16,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
+    validation_error: ?ValidationError,
     solver_event: ?SolverEvent,
 };
 
@@ -205,6 +206,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .flow = GameFlow.Normal,
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
+        .validation_error = null,
         .solver_event = null,
     };
 
@@ -556,6 +558,8 @@ pub fn apply_player_event(game: *GameState, action: PlayerAction) void {
             }
         },
     }
+
+    game.validation_error = check_board_for_validation_errors(game.board, game.candidate_masks);
 }
 
 fn apply_player_event_normal_flow(game: *GameState, action: PlayerAction) void {
@@ -598,6 +602,7 @@ fn apply_player_event_normal_flow(game: *GameState, action: PlayerAction) void {
         },
     }
 }
+
 const PlayerToggleSelect = struct {
     coord: u32_2,
 };
@@ -776,4 +781,53 @@ fn player_solve_board(game: *GameState) void {
         // We didn't manage to solve the puzzle
         // FIXME tell the player somehow
     }
+}
+
+pub const ValidationError = struct {
+    number: u4,
+    is_candidate: bool,
+    invalid_cell_index: u32,
+    reference_cell_index: u32,
+    region: []u32,
+};
+
+fn check_board_for_validation_errors(board: BoardState, candidate_masks: []const u16) ?ValidationError {
+    for (0..board.extent) |number_usize| {
+        const number: u4 = @intCast(number_usize);
+        const number_mask = mask_for_number(number);
+
+        for (board.all_regions) |region| {
+            var last_cell_index: u32 = undefined;
+            var found = false;
+
+            for (region) |cell_index| {
+                if (found and candidate_masks[cell_index] & number_mask != 0) {
+                    return .{
+                        .number = number,
+                        .is_candidate = true,
+                        .invalid_cell_index = cell_index,
+                        .reference_cell_index = last_cell_index,
+                        .region = region,
+                    };
+                }
+
+                if (board.numbers[cell_index] == number) {
+                    if (found) {
+                        return .{
+                            .number = number,
+                            .is_candidate = false,
+                            .invalid_cell_index = cell_index,
+                            .reference_cell_index = last_cell_index,
+                            .region = region,
+                        };
+                    }
+
+                    found = true;
+                    last_cell_index = cell_index;
+                }
+            }
+        }
+    }
+
+    return null;
 }

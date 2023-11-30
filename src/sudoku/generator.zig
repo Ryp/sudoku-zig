@@ -2,7 +2,6 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("game.zig");
-// FIXME Use another simpler struct for the board?
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 

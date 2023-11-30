@@ -330,6 +330,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, solver_event);
         }
 
+        if (game.validation_error) |validation_error| {
+            draw_validation_error(sdl_context, candidate_local_rects, game.board, validation_error);
+        }
+
         for (game.board.numbers, 0..) |cell_number, cell_index| {
             const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
             const cell_rect = cell_rectangle(cell_coord);
@@ -579,6 +583,29 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
             }
         },
         .nothing_found => {},
+    }
+}
+
+fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_Rect, board: BoardState, validation_error: sudoku.ValidationError) void {
+    for (validation_error.region) |cell_index| {
+        const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+        const cell_rect = cell_rectangle(cell_coord);
+
+        if (validation_error.reference_cell_index == cell_index or validation_error.invalid_cell_index == cell_index and !validation_error.is_candidate) {
+            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+        } else {
+            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+        }
+        _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+        if (validation_error.invalid_cell_index == cell_index and validation_error.is_candidate) {
+            var candidate_rect = candidate_local_rects[validation_error.number];
+            candidate_rect.x += cell_rect.x;
+            candidate_rect.y += cell_rect.y;
+
+            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+        }
     }
 }
 
