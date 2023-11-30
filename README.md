@@ -19,20 +19,24 @@ zig build run -- 3 3 72..96..3...2.5....8...4.2........6.1.65.38.7.4........3.8.
 
 ## Controls
 
-| Action           | Key                |
-|------------------|--------------------|
-| Quit game        | Escape             |
-| Select cell      | Left mouse button  |
-| Move selection   | Arrow keys         |
-| Place number     | <1-9,A-G>          |
-| Clear number     | <0>, Del           |
-| Toggle guess     | Shift + <1-9,A-G>  |
-| Undo             | Ctrl + Z           |
-| Redo             | Ctrl + Shift + Z   |
-| Fill guesses     | H                  |
-| Fill all guesses | Ctrl + H           |
-| Clear guesses    | Shift + H          |
-| Solve            | Enter              |
+| Action                | Key                |
+|-----------------------|--------------------|
+| Quit game             | Escape             |
+| Select cell           | Left mouse button  |
+| Move selection        | Arrow keys         |
+| Place number          | <1-9,A-G>          |
+| Toggle candidate      | Shift + <1-9,A-G>  |
+| Clear number          | <0>, Del           |
+| Undo                  | Ctrl + Z           |
+| Redo                  | Ctrl + Shift + Z   |
+| Fill candidates       | H                  |
+| Fill all candidates   | Ctrl + H           |
+| Clear candidates      | Shift + H          |
+| Solve                 | Enter              |
+| Get/apply a hint      | Shift + Enter      |
+
+> **NOTE:** Getting a hint only works if you already placed candidates on the board and assumes they are correct.
+> A preview will be shown to you with what the solver found and the game will wait for you to press the key again to apply it.
 
 ## Examples
 

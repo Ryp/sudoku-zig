@@ -62,18 +62,22 @@ pub const BoardState = struct {
     box_indices: []u4,
 };
 
+const GameFlow = enum {
+    Normal,
+    WaitingForHintValidation,
+};
+
 pub const GameState = struct {
     board: BoardState,
-
     candidate_masks: []u16, // Should be set to zero when setting number
     selected_cells_full: []u32, // Full allocated array, we usually don't use it directly
     selected_cells: []u32, // Code handles this as a list but only a single cell is supported
-
+    flow: GameFlow,
     board_history: []u5,
     candidate_masks_history: []u16,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
-    last_solver_event: SolverEvent,
+    solver_event: ?SolverEvent,
 };
 
 pub fn cell_coord_from_index(extent: u32, cell_index: usize) u32_2 {
@@ -198,9 +202,10 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .candidate_masks = candidate_masks,
         .selected_cells_full = selected_cells_full,
         .selected_cells = selected_cells_full[0..0],
+        .flow = GameFlow.Normal,
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
-        .last_solver_event = .{ .nothing_found = .{ .initial = true } },
+        .solver_event = null,
     };
 
     init_history_state(&game);
@@ -330,84 +335,14 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
     }
 }
 
-pub fn player_toggle_select(game: *GameState, toggle_coord: u32_2) void {
-    const toggle_index = cell_index_from_coord(game.board.extent, toggle_coord);
-
-    if (game.selected_cells.len > 0 and toggle_index == game.selected_cells[0]) {
-        game.selected_cells = game.selected_cells_full[0..0];
-    } else {
-        game.selected_cells = game.selected_cells_full[0..1];
-        game.selected_cells[0] = toggle_index;
-    }
-}
-
-pub fn player_move_selection(game: *GameState, x_offset: i32, y_offset: i32) void {
-    if (game.selected_cells.len > 0) {
-        const extent = game.board.extent;
-        const current_pos = cell_coord_from_index(extent, game.selected_cells[0]);
-
-        assert(all(current_pos < u32_2{ extent, extent }));
-
-        game.selected_cells[0] = cell_index_from_coord(extent, .{
-            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[0])) + x_offset)),
-            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[1])) + y_offset)),
-        });
-    }
-}
-
-pub fn player_clear_cell(game: *GameState) void {
-    if (game.selected_cells.len > 0) {
-        const cell_index = game.selected_cells[0];
-
-        game.board.numbers[cell_index] = UnsetNumber;
-        game.candidate_masks[cell_index] = 0;
-
-        push_state_to_history(game);
-    }
-}
-
-pub fn player_input_number(game: *GameState, number: u4) void {
-    const extent = game.board.extent;
-    if (number < extent and game.selected_cells.len > 0) {
-        place_number_remove_trivial_candidates(&game.board, game.candidate_masks, game.selected_cells[0], number);
-        push_state_to_history(game);
-    }
-}
-
-pub fn player_toggle_guess(game: *GameState, number: u4) void {
-    const extent = game.board.extent;
-    if (number < extent and game.selected_cells.len > 0) {
-        const cell_index = game.selected_cells[0];
-
-        if (game.board.numbers[cell_index] == UnsetNumber) {
-            game.candidate_masks[cell_index] ^= mask_for_number(number);
-        }
-
-        push_state_to_history(game);
-    }
-}
-
 pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;
     candidate_masks[cell_index] = 0;
 
-    solver.solve_trivial_candidates_at(board, candidate_masks, cell_index, number);
+    solver.remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
 }
 
-pub fn player_solve_brute_force(game: *GameState) void {
-    if (brute_solver.solve(&game.board, .{})) {
-        player_clear_candidates(game);
-        // NOTE: Already done in the body of clear_candidates.
-        // push_state_to_history(game);
-    } else {
-        // We didn't manage to solve the puzzle
-        // FIXME tell the player somehow
-    }
-}
-
-const NothingFound = struct {
-    initial: bool = false,
-};
+const NothingFound = struct {};
 
 const SolverEventTag = enum {
     naked_single,
@@ -426,24 +361,6 @@ pub const SolverEvent = union(SolverEventTag) {
     box_line_reduction: solver.BoxLineReduction,
     nothing_found: NothingFound,
 };
-
-pub fn player_solve_human_step(game: *GameState) void {
-    // FIXME nothing_found is a hack, and it's not a great flow to wait for the next solver action to apply the previous stored one.
-    switch (game.last_solver_event) {
-        .nothing_found => {},
-        else => |solver_event| {
-            apply_solver_event(&game.board, game.candidate_masks, solver_event);
-
-            push_state_to_history(game);
-        },
-    }
-
-    if (solve_human_step(game)) |solver_event| {
-        game.last_solver_event = solver_event;
-    } else {
-        game.last_solver_event = .{ .nothing_found = .{ .initial = false } };
-    }
-}
 
 fn solve_human_step(game: *GameState) ?SolverEvent {
     solver.solve_trivial_candidates(&game.board, game.candidate_masks);
@@ -494,9 +411,7 @@ pub fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_eve
                 }
             }
         },
-        .nothing_found => {
-            unreachable;
-        },
+        else => unreachable,
     }
 }
 
@@ -514,22 +429,6 @@ fn get_candidate_masks_history_slice(game: *GameState, history_index: u32) []u16
     const stop = start + cell_count;
 
     return game.candidate_masks_history[start..stop];
-}
-
-pub fn player_undo(game: *GameState) void {
-    if (game.history_index > 0) {
-        game.history_index -= 1;
-
-        load_state_from_history(game, game.history_index);
-    }
-}
-
-pub fn player_redo(game: *GameState) void {
-    if (game.history_index < game.max_history_index) {
-        game.history_index += 1;
-
-        load_state_from_history(game, game.history_index);
-    }
 }
 
 fn push_state_to_history(game: *GameState) void {
@@ -550,32 +449,6 @@ fn init_history_state(game: *GameState) void {
 fn load_state_from_history(game: *GameState, index: u32) void {
     std.mem.copy(u5, game.board.numbers, get_board_history_slice(game, index));
     std.mem.copy(u16, game.candidate_masks, get_candidate_masks_history_slice(game, index));
-}
-
-pub fn player_fill_candidates_all(game: *GameState) void {
-    const full_mask = full_candidate_mask(game.board.extent);
-
-    for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
-        if (game.board.numbers[cell_index] == UnsetNumber) {
-            cell_candidate_mask.* = full_mask;
-        }
-    }
-
-    push_state_to_history(game);
-}
-
-pub fn player_fill_candidates(game: *GameState) void {
-    fill_candidate_mask(game.board, game.candidate_masks);
-
-    push_state_to_history(game);
-}
-
-pub fn player_clear_candidates(game: *GameState) void {
-    for (game.candidate_masks) |*candidate_mask| {
-        candidate_mask.* = 0;
-    }
-
-    push_state_to_history(game);
 }
 
 fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
@@ -636,5 +509,271 @@ fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []
             row_region_candidate_masks[row] &= mask;
             box_region_candidate_masks[box] &= mask;
         }
+    }
+}
+
+const PlayerEventTag = enum {
+    toggle_select,
+    move_selection,
+    set_number,
+    toggle_candidate,
+    clear_selected_cell,
+    undo,
+    redo,
+    fill_candidates,
+    fill_all_candidates,
+    clear_all_candidates,
+    get_hint,
+    solve_board,
+};
+
+pub const PlayerAction = union(PlayerEventTag) {
+    toggle_select: PlayerToggleSelect,
+    move_selection: PlayerMoveSelection,
+    set_number: PlayerSetNumberAtSelection,
+    toggle_candidate: PlayerToggleCandidateAtSelection,
+    clear_selected_cell: PlayerClearSelectedCell,
+    undo: PlayerUndo,
+    redo: PlayerRedo,
+    fill_candidates: PlayerFillCandidates,
+    fill_all_candidates: PlayerFillAllCandidates,
+    clear_all_candidates: PlayerClearCandidates,
+    get_hint: PlayerGetHint,
+    solve_board: PlayerSolveBoard,
+};
+
+pub fn apply_player_event(game: *GameState, action: PlayerAction) void {
+    switch (game.flow) {
+        GameFlow.Normal => {
+            apply_player_event_normal_flow(game, action);
+        },
+        GameFlow.WaitingForHintValidation => {
+            switch (action) {
+                .get_hint => |_| {
+                    player_apply_hint(game);
+                },
+                else => {},
+            }
+        },
+    }
+}
+
+fn apply_player_event_normal_flow(game: *GameState, action: PlayerAction) void {
+    switch (action) {
+        .toggle_select => |toggle_select| {
+            player_toggle_select(game, toggle_select.coord);
+        },
+        .move_selection => |move_selection| {
+            player_move_selection(game, move_selection);
+        },
+        .set_number => |set_number| {
+            player_set_number(game, set_number.number);
+        },
+        .toggle_candidate => |toggle_candidate| {
+            player_toggle_candidate(game, toggle_candidate.number);
+        },
+        .clear_selected_cell => |_| {
+            player_clear_selected_cell(game);
+        },
+        .undo => |_| {
+            player_undo(game);
+        },
+        .redo => |_| {
+            player_redo(game);
+        },
+        .fill_candidates => |_| {
+            player_fill_candidates(game);
+        },
+        .fill_all_candidates => |_| {
+            player_fill_candidates_all(game);
+        },
+        .clear_all_candidates => |_| {
+            player_clear_candidates(game);
+        },
+        .get_hint => |_| {
+            player_get_hint(game);
+        },
+        .solve_board => |_| {
+            player_solve_board(game);
+        },
+    }
+}
+const PlayerToggleSelect = struct {
+    coord: u32_2,
+};
+
+fn player_toggle_select(game: *GameState, toggle_coord: u32_2) void {
+    const toggle_index = cell_index_from_coord(game.board.extent, toggle_coord);
+
+    if (game.selected_cells.len > 0 and toggle_index == game.selected_cells[0]) {
+        game.selected_cells = game.selected_cells_full[0..0];
+    } else {
+        game.selected_cells = game.selected_cells_full[0..1];
+        game.selected_cells[0] = toggle_index;
+    }
+}
+
+const PlayerMoveSelection = struct {
+    x_offset: i32,
+    y_offset: i32,
+};
+
+fn player_move_selection(game: *GameState, event: PlayerMoveSelection) void {
+    if (game.selected_cells.len > 0) {
+        const extent = game.board.extent;
+        const current_pos = cell_coord_from_index(extent, game.selected_cells[0]);
+
+        assert(all(current_pos < u32_2{ extent, extent }));
+
+        game.selected_cells[0] = cell_index_from_coord(extent, .{
+            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[0])) + event.x_offset)),
+            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[1])) + event.y_offset)),
+        });
+    }
+}
+
+const PlayerSetNumberAtSelection = struct {
+    number: u4,
+};
+
+fn player_set_number(game: *GameState, number: u4) void {
+    const extent = game.board.extent;
+    if (number < extent and game.selected_cells.len > 0) {
+        place_number_remove_trivial_candidates(&game.board, game.candidate_masks, game.selected_cells[0], number);
+        push_state_to_history(game);
+    }
+}
+
+const PlayerToggleCandidateAtSelection = struct {
+    number: u4,
+};
+
+fn player_toggle_candidate(game: *GameState, number: u4) void {
+    const extent = game.board.extent;
+    if (number < extent and game.selected_cells.len > 0) {
+        const cell_index = game.selected_cells[0];
+
+        if (game.board.numbers[cell_index] == UnsetNumber) {
+            game.candidate_masks[cell_index] ^= mask_for_number(number);
+        }
+
+        push_state_to_history(game);
+    }
+}
+
+const PlayerClearSelectedCell = struct {
+    // Nothing yet
+};
+
+fn player_clear_selected_cell(game: *GameState) void {
+    if (game.selected_cells.len > 0) {
+        const cell_index = game.selected_cells[0];
+
+        game.board.numbers[cell_index] = UnsetNumber;
+        game.candidate_masks[cell_index] = 0;
+
+        push_state_to_history(game);
+    }
+}
+
+const PlayerUndo = struct {
+    // Nothing yet
+};
+
+fn player_undo(game: *GameState) void {
+    if (game.history_index > 0) {
+        game.history_index -= 1;
+
+        load_state_from_history(game, game.history_index);
+    }
+}
+
+const PlayerRedo = struct {
+    // Nothing yet
+};
+
+fn player_redo(game: *GameState) void {
+    if (game.history_index < game.max_history_index) {
+        game.history_index += 1;
+
+        load_state_from_history(game, game.history_index);
+    }
+}
+
+const PlayerFillCandidates = struct {
+    // Nothing yet
+};
+
+fn player_fill_candidates(game: *GameState) void {
+    fill_candidate_mask(game.board, game.candidate_masks);
+
+    push_state_to_history(game);
+}
+
+const PlayerFillAllCandidates = struct {
+    // Nothing yet
+};
+
+fn player_fill_candidates_all(game: *GameState) void {
+    const full_mask = full_candidate_mask(game.board.extent);
+
+    for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
+        if (game.board.numbers[cell_index] == UnsetNumber) {
+            cell_candidate_mask.* = full_mask;
+        }
+    }
+
+    push_state_to_history(game);
+}
+
+const PlayerClearCandidates = struct {
+    // Nothing yet
+};
+
+fn player_clear_candidates(game: *GameState) void {
+    for (game.candidate_masks) |*candidate_mask| {
+        candidate_mask.* = 0;
+    }
+
+    push_state_to_history(game);
+}
+
+const PlayerGetHint = struct {
+    // Nothing yet
+};
+
+fn player_get_hint(game: *GameState) void {
+    if (solve_human_step(game)) |solver_event| {
+        game.solver_event = solver_event;
+        game.flow = GameFlow.WaitingForHintValidation;
+    } else {
+        game.solver_event = .{ .nothing_found = .{} }; // FIXME clear this at one point
+    }
+}
+
+fn player_apply_hint(game: *GameState) void {
+    assert(game.solver_event != null);
+
+    apply_solver_event(&game.board, game.candidate_masks, game.solver_event.?);
+
+    game.solver_event = null;
+
+    push_state_to_history(game);
+
+    game.flow = GameFlow.Normal;
+}
+
+const PlayerSolveBoard = struct {
+    // Nothing yet
+};
+
+fn player_solve_board(game: *GameState) void {
+    if (brute_solver.solve(&game.board, .{})) {
+        player_clear_candidates(game);
+        // NOTE: Already done in the body of clear_candidates.
+        // push_state_to_history(game);
+    } else {
+        // We didn't manage to solve the puzzle
+        // FIXME tell the player somehow
     }
 }

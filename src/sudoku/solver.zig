@@ -40,7 +40,7 @@ fn first_bit_index_u16(mask_ro: u16) u4 {
     return 0;
 }
 
-pub fn solve_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
+pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
     const box_index = board.box_indices[cell_index];
 

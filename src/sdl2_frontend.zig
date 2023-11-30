@@ -161,6 +161,20 @@ fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) vo
     c.SDL_Quit();
 }
 
+fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
+    return switch (key_code) {
+        c.SDLK_1...c.SDLK_9 => @intCast(key_code - c.SDLK_1),
+        c.SDLK_a => 9,
+        c.SDLK_b => 10,
+        c.SDLK_c => 11,
+        c.SDLK_d => 12,
+        c.SDLK_e => 13,
+        c.SDLK_f => 14,
+        c.SDLK_g => 15,
+        else => unreachable,
+    };
+}
+
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const extent = game.board.extent;
 
@@ -204,83 +218,55 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 c.SDL_QUIT => {
                     break :main_loop;
                 },
-                c.SDL_KEYDOWN => {
-                    switch (sdlEvent.key.keysym.sym) {
-                        c.SDLK_ESCAPE => {
-                            break :main_loop;
-                        },
-                        c.SDLK_DELETE, c.SDLK_0 => {
-                            sudoku.player_clear_cell(game);
-                        },
-                        c.SDLK_1...c.SDLK_9 => |sym| {
-                            input_number(game, is_any_shift_pressed, @intCast(sym - c.SDLK_1));
-                        },
-                        c.SDLK_a => {
-                            input_number(game, is_any_shift_pressed, 9);
-                        },
-                        c.SDLK_b => {
-                            input_number(game, is_any_shift_pressed, 10);
-                        },
-                        c.SDLK_c => {
-                            input_number(game, is_any_shift_pressed, 11);
-                        },
-                        c.SDLK_d => {
-                            input_number(game, is_any_shift_pressed, 12);
-                        },
-                        c.SDLK_e => {
-                            input_number(game, is_any_shift_pressed, 13);
-                        },
-                        c.SDLK_f => {
-                            input_number(game, is_any_shift_pressed, 14);
-                        },
-                        c.SDLK_g => {
-                            input_number(game, is_any_shift_pressed, 15);
-                        },
-                        c.SDLK_z => {
-                            if (is_any_ctrl_pressed) {
-                                if (is_any_shift_pressed) {
-                                    sudoku.player_redo(game);
-                                } else {
-                                    sudoku.player_undo(game);
-                                }
-                            }
-                        },
-                        c.SDLK_h => {
-                            if (is_any_shift_pressed) {
-                                sudoku.player_clear_candidates(game);
-                            } else if (is_any_ctrl_pressed) {
-                                sudoku.player_fill_candidates_all(game);
-                            } else {
-                                sudoku.player_fill_candidates(game);
-                            }
-                        },
-                        c.SDLK_LEFT => {
-                            sudoku.player_move_selection(game, -1, 0);
-                        },
-                        c.SDLK_RIGHT => {
-                            sudoku.player_move_selection(game, 1, 0);
-                        },
-                        c.SDLK_UP => {
-                            sudoku.player_move_selection(game, 0, -1);
-                        },
-                        c.SDLK_DOWN => {
-                            sudoku.player_move_selection(game, 0, 1);
-                        },
-                        c.SDLK_RETURN => {
-                            if (is_any_shift_pressed) {
-                                sudoku.player_solve_human_step(game); // FIXME undocumented because it's not user-friendly yet
-                            } else {
-                                sudoku.player_solve_brute_force(game);
-                            }
-                        },
-                        else => {},
-                    }
-                },
                 c.SDL_MOUSEBUTTONUP => {
                     const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, CellExtent));
                     const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, CellExtent));
                     if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        sudoku.player_toggle_select(game, .{ x, y });
+                        sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
+                    }
+                },
+                c.SDL_KEYDOWN => {
+                    const key_sym = sdlEvent.key.keysym.sym;
+                    switch (key_sym) {
+                        c.SDLK_ESCAPE => {
+                            break :main_loop;
+                        },
+                        else => {
+                            const player_event =
+                                switch (key_sym) {
+                                c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
+                                c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
+                                c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
+                                c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
+                                c.SDLK_1...c.SDLK_9, c.SDLK_a, c.SDLK_b, c.SDLK_c, c.SDLK_d, c.SDLK_e, c.SDLK_f, c.SDLK_g => if (is_any_shift_pressed)
+                                    sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
+                                else
+                                    sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
+                                c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
+                                c.SDLK_z => if (is_any_ctrl_pressed)
+                                    if (is_any_shift_pressed)
+                                        sudoku.PlayerAction{ .redo = .{} }
+                                    else
+                                        sudoku.PlayerAction{ .undo = .{} }
+                                else
+                                    null,
+                                c.SDLK_h => if (is_any_shift_pressed)
+                                    sudoku.PlayerAction{ .clear_all_candidates = .{} }
+                                else if (is_any_ctrl_pressed)
+                                    sudoku.PlayerAction{ .fill_all_candidates = .{} }
+                                else
+                                    sudoku.PlayerAction{ .fill_candidates = .{} },
+                                c.SDLK_RETURN => if (is_any_shift_pressed)
+                                    sudoku.PlayerAction{ .get_hint = .{} }
+                                else
+                                    sudoku.PlayerAction{ .solve_board = .{} },
+                                else => null,
+                            };
+
+                            if (player_event) |event| {
+                                sudoku.apply_player_event(game, event);
+                            }
+                        },
                     }
                 },
                 else => {},
@@ -340,7 +326,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, game.last_solver_event);
+        if (game.solver_event) |solver_event| {
+            draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, solver_event);
+        }
 
         for (game.board.numbers, 0..) |cell_number, cell_index| {
             const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
@@ -398,14 +386,6 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     }
 
     destroy_sdl_context(allocator, sdl_context);
-}
-
-fn input_number(game: *GameState, candidate_mode: bool, number: u4) void {
-    if (candidate_mode) {
-        sudoku.player_toggle_guess(game, number);
-    } else {
-        sudoku.player_input_number(game, number);
-    }
 }
 
 fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SDL_Color) void {
@@ -729,14 +709,18 @@ fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
 fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8) void {
     const title = "Sudoku";
 
-    _ = switch (game.last_solver_event) {
-        .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: found naked {} single", .{ title, naked_single.number + 1 }),
-        .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
-        .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
-        .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
-        .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
-        .nothing_found => |nothing_found| std.fmt.bufPrintZ(title_string, "{s}{s}", .{ title, if (nothing_found.initial) "" else " | hint: nothing found!" }),
-    } catch unreachable;
+    if (game.solver_event) |solver_event| {
+        _ = switch (solver_event) {
+            .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: found naked {} single", .{ title, naked_single.number + 1 }),
+            .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
+            .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
+            .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
+            .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
+            .nothing_found => |_| std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{title}),
+        } catch unreachable;
+    } else {
+        _ = std.fmt.bufPrintZ(title_string, "{s}", .{title}) catch unreachable;
+    }
 
     c.SDL_SetWindowTitle(window, title_string.ptr);
 }
