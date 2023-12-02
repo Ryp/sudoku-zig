@@ -29,6 +29,12 @@ pub const special_17_clues = SudokuString{
     .solution = "237841569186795243594326718315674892469582137728139456642918375853467921971253684",
 };
 
+// Slow on dancing links
+pub const special_dancing_links = SudokuString{
+    .board = "........1.....2..3.45.............1...6.....237..6.......1..4.....2.35...8.......",
+    .solution = "", // FIXME
+};
+
 // NOTE: See https://stackoverflow.com/questions/24682039/whats-the-worst-case-valid-sudoku-puzzle-for-simple-backtracking-brute-force-al
 pub const naive_backtracking_killer = "..............3.85..1.2.......5.7.....4...1...9.......5......73..2.1........4...9";
 pub const naive_backtracking_killer_2 = "9..8...........5............2..1...3.1.....6....4...7.7.86.........3.1..4.....2..";

@@ -5,30 +5,26 @@ const sudoku = @import("game.zig");
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 
+pub fn solve(board: *BoardState, recursive: bool) bool {
+    var free_cell_list_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
+    var free_cell_list = populate_free_list(board, &free_cell_list_full);
+
+    sort_free_cell_list(board, free_cell_list);
+
+    if (recursive) {
+        return solve_backtracking_recursive(board, free_cell_list, 0);
+    } else {
+        return solve_backtracking_iterative(board, free_cell_list);
+    }
+}
+
 const CellInfo = struct {
     index: u8,
     col: u4,
     row: u4,
 };
 
-const Options = struct {
-    recursive: bool = false,
-};
-
-pub fn solve(board: *BoardState, options: Options) bool {
-    var free_cell_list_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
-    var free_cell_list = populate_free_list(board, &free_cell_list_full);
-
-    sort_free_cell_list(board, free_cell_list);
-
-    if (options.recursive) {
-        return solve_recursive(board, free_cell_list, 0);
-    } else {
-        return solve_iterative(board, free_cell_list);
-    }
-}
-
-fn solve_recursive(board: *BoardState, free_cell_list: []CellInfo, list_index: u32) bool {
+fn solve_backtracking_recursive(board: *BoardState, free_cell_list: []CellInfo, list_index: u32) bool {
     if (list_index >= free_cell_list.len) {
         return true;
     }
@@ -48,7 +44,7 @@ fn solve_recursive(board: *BoardState, free_cell_list: []CellInfo, list_index: u
         if (is_valid) {
             cell_number.* = @intCast(number);
 
-            if (solve_recursive(board, free_cell_list, list_index + 1)) {
+            if (solve_backtracking_recursive(board, free_cell_list, list_index + 1)) {
                 return true;
             }
         }
@@ -58,7 +54,7 @@ fn solve_recursive(board: *BoardState, free_cell_list: []CellInfo, list_index: u
     return false;
 }
 
-fn solve_iterative(board: *BoardState, free_cell_list: []CellInfo) bool {
+fn solve_backtracking_iterative(board: *BoardState, free_cell_list: []CellInfo) bool {
     var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
     var current_guess = current_guess_full[0..free_cell_list.len];
 

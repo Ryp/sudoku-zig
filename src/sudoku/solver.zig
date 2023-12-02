@@ -6,12 +6,31 @@ const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
-const any = sudoku.any;
 
-const AABB_u32_2 = struct {
-    min: u32_2,
-    max: u32_2,
+const dancing_links = @import("solver_dancing_links.zig");
+const backtracking = @import("solver_backtracking.zig");
+
+const Algorithm = enum {
+    DancingLinks,
+    SortedBacktracking,
 };
+
+const Options = struct {
+    algorithm: Algorithm = Algorithm.DancingLinks,
+    recursive: bool = true,
+};
+
+pub fn solve(board: *BoardState, options: Options) bool {
+    switch (options.algorithm) {
+        Algorithm.DancingLinks => {
+            assert(options.recursive);
+            return dancing_links.solve(board);
+        },
+        Algorithm.SortedBacktracking => {
+            return backtracking.solve(board, options.recursive);
+        },
+    }
+}
 
 fn count_bits_u16(mask_ro: u16) u4 {
     var mask = mask_ro;
@@ -249,6 +268,11 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
     return null;
 }
 
+const AABB_u32_2 = struct {
+    min: u32_2,
+    max: u32_2,
+};
+
 pub const PointingLine = struct {
     number: u4,
     line_region: []u32,
@@ -381,7 +405,7 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
             for (box_region, 0..) |cell_index, region_cell_index| {
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
 
-                if (!any(cell_coord == line_coord)) {
+                if (all(cell_coord != line_coord)) {
                     if (candidate_masks[cell_index] & number_mask != 0) {
                         deletion_mask |= sudoku.mask_for_number(@intCast(region_cell_index));
                     }

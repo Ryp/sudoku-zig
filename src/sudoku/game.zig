@@ -2,7 +2,6 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const generator = @import("generator.zig");
-const brute_solver = @import("brute_solver.zig");
 const solver = @import("solver.zig");
 
 // I borrowed this name from HLSL
@@ -12,15 +11,6 @@ pub fn all(vector: anytype) bool {
     assert(type_info.Vector.len > 1);
 
     return @reduce(.And, vector);
-}
-
-// I borrowed this name from HLSL
-pub fn any(vector: anytype) bool {
-    const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.Vector.child == bool);
-    assert(type_info.Vector.len > 1);
-
-    return @reduce(.Or, vector);
 }
 
 pub const u32_2 = @Vector(2, u32);
@@ -773,7 +763,7 @@ const PlayerSolveBoard = struct {
 };
 
 fn player_solve_board(game: *GameState) void {
-    if (brute_solver.solve(&game.board, .{})) {
+    if (solver.solve(&game.board, .{})) {
         player_clear_candidates(game);
         // NOTE: Already done in the body of clear_candidates.
         // push_state_to_history(game);
