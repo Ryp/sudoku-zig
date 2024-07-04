@@ -78,22 +78,22 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     }
     errdefer c.TTF_Quit();
 
-    var font = c.TTF_OpenFont("./res/FreeSans.ttf", FontSize) orelse {
+    const font = c.TTF_OpenFont("./res/FreeSans.ttf", FontSize) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
     errdefer c.TTF_CloseFont(font);
 
-    var font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", FontSizeSmall) orelse {
+    const font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", FontSizeSmall) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
     errdefer c.TTF_CloseFont(font_small);
 
-    var text_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
+    const text_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
     errdefer allocator.free(text_surfaces);
 
-    var text_textures = try allocator.alloc(*c.SDL_Texture, extent);
+    const text_textures = try allocator.alloc(*c.SDL_Texture, extent);
     errdefer allocator.free(text_textures);
 
     for (text_surfaces, text_textures, NumbersString[0..extent]) |*surface, *texture, number_string| {
@@ -106,10 +106,10 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
 
-    var text_small_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
+    const text_small_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
     errdefer allocator.free(text_small_surfaces);
 
-    var text_small_textures = try allocator.alloc(*c.SDL_Texture, extent);
+    const text_small_textures = try allocator.alloc(*c.SDL_Texture, extent);
     errdefer allocator.free(text_small_textures);
 
     for (text_small_surfaces, text_small_textures, NumbersString[0..extent]) |*surface, *texture, number_string| {
@@ -178,18 +178,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const extent = game.board.extent;
 
     var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
-    var box_region_colors = box_region_colors_full[0..extent];
+    const box_region_colors = box_region_colors_full[0..extent];
 
     fill_box_regions_colors(game.board.game_type, box_region_colors);
 
     const sdl_context = try create_sdl_context(allocator, extent);
 
-    var title_string = try allocator.alloc(u8, 1024);
+    const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
 
     const candidate_layout = get_candidate_layout(extent);
     var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_Rect = undefined;
-    var candidate_local_rects = candidate_local_rects_full[0..extent];
+    const candidate_local_rects = candidate_local_rects_full[0..extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
         const x: c_int = @intCast(@rem(number, candidate_layout[0]) * CellExtent / candidate_layout[0]);
@@ -715,7 +715,7 @@ fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
     const c_f = value * saturation;
     const area_index = hue * 6.0;
     const area_index_i: u8 = @intFromFloat(area_index);
-    const x_f = c_f * (1.0 - @fabs(@mod(area_index, 2.0) - 1.0));
+    const x_f = c_f * (1.0 - @abs(@mod(area_index, 2.0) - 1.0));
     const m_f = value - c_f;
     const c_u8 = @min(255, @as(u8, @intFromFloat((c_f + m_f) * 255.0)));
     const x_u8 = @min(255, @as(u8, @intFromFloat((x_f + m_f) * 255.0)));

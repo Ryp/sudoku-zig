@@ -163,10 +163,10 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
     assert(region.len == board.extent);
 
     var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
-    var counts = counts_full[0..board.extent];
+    const counts = counts_full[0..board.extent];
 
     var last_cell_indices_full: [sudoku.MaxSudokuExtent]u32 = undefined;
-    var last_cell_indices = last_cell_indices_full[0..board.extent];
+    const last_cell_indices = last_cell_indices_full[0..board.extent];
 
     for (region) |cell_index| {
         var mask = candidate_masks[cell_index];
@@ -210,7 +210,7 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
     // Contains first and last position
     const min_max_initial_value = u32_2{ board.extent, 0 };
     var region_min_max_cell_indices_full = [_]u32_2{min_max_initial_value} ** sudoku.MaxSudokuExtent;
-    var region_min_max_cell_indices = region_min_max_cell_indices_full[0..board.extent];
+    const region_min_max_cell_indices = region_min_max_cell_indices_full[0..board.extent];
 
     for (region, 0..) |cell_index, region_cell_index| {
         var mask = candidate_masks[cell_index];
@@ -288,10 +288,10 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
         const box_region = board.box_regions[box_index];
 
         var box_aabbs_full: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
-        var box_aabbs = box_aabbs_full[0..board.extent];
+        const box_aabbs = box_aabbs_full[0..board.extent];
 
         var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
-        var candidate_counts = candidate_counts_full[0..board.extent];
+        const candidate_counts = candidate_counts_full[0..board.extent];
 
         // Compute AABB of candidates for each number
         // FIXME cache remaining candidates per box and only iterate on this?

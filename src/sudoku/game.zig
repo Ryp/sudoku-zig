@@ -140,7 +140,7 @@ pub fn create_board_state(allocator: std.mem.Allocator, game_type: GameType) !Bo
 
     fill_regions(extent, col_regions, row_regions, box_regions, box_indices);
 
-    var board_state = BoardState{
+    const board_state = BoardState{
         .numbers = board,
         .extent = extent,
         .game_type = game_type,
@@ -216,8 +216,8 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
 
 fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_regions: [][]u32, box_indices: []const u4) void {
     for (0..extent) |region_index_usize| {
-        var col_region = col_regions[region_index_usize];
-        var row_region = row_regions[region_index_usize];
+        const col_region = col_regions[region_index_usize];
+        const row_region = row_regions[region_index_usize];
 
         assert(col_region.len == extent);
         assert(row_region.len == extent);
@@ -428,28 +428,28 @@ fn push_state_to_history(game: *GameState) void {
         game.history_index += 1;
         game.max_history_index = game.history_index;
 
-        std.mem.copy(u5, get_board_history_slice(game, game.history_index), game.board.numbers);
-        std.mem.copy(u16, get_candidate_masks_history_slice(game, game.history_index), game.candidate_masks);
+        std.mem.copyForwards(u5, get_board_history_slice(game, game.history_index), game.board.numbers);
+        std.mem.copyForwards(u16, get_candidate_masks_history_slice(game, game.history_index), game.candidate_masks);
     }
 }
 
 fn init_history_state(game: *GameState) void {
-    std.mem.copy(u5, get_board_history_slice(game, 0), game.board.numbers);
-    std.mem.copy(u16, get_candidate_masks_history_slice(game, 0), game.candidate_masks);
+    std.mem.copyForwards(u5, get_board_history_slice(game, 0), game.board.numbers);
+    std.mem.copyForwards(u16, get_candidate_masks_history_slice(game, 0), game.candidate_masks);
 }
 
 fn load_state_from_history(game: *GameState, index: u32) void {
-    std.mem.copy(u5, game.board.numbers, get_board_history_slice(game, index));
-    std.mem.copy(u16, game.candidate_masks, get_candidate_masks_history_slice(game, index));
+    std.mem.copyForwards(u5, game.board.numbers, get_board_history_slice(game, index));
+    std.mem.copyForwards(u16, game.candidate_masks, get_candidate_masks_history_slice(game, index));
 }
 
 fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
     var col_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
     var row_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
     var box_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
-    var col_region_candidate_masks = col_region_candidate_masks_full[0..board.extent];
-    var row_region_candidate_masks = row_region_candidate_masks_full[0..board.extent];
-    var box_region_candidate_masks = box_region_candidate_masks_full[0..board.extent];
+    const col_region_candidate_masks = col_region_candidate_masks_full[0..board.extent];
+    const row_region_candidate_masks = row_region_candidate_masks_full[0..board.extent];
+    const box_region_candidate_masks = box_region_candidate_masks_full[0..board.extent];
 
     fill_candidate_mask_regions(board, col_region_candidate_masks, row_region_candidate_masks, box_region_candidate_masks);
 

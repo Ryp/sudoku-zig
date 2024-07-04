@@ -1,13 +1,16 @@
-const Builder = @import("std").build.Builder;
+const std = @import("std");
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
         .name = "sudoku",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
         .optimize = optimize,
     });
 
@@ -29,7 +32,8 @@ pub fn build(b: *Builder) void {
     // Test
     const test_a = b.addTest(.{
         .name = "test",
-        .root_source_file = .{ .path = "src/sudoku/test.zig" },
+        .root_source_file = b.path("src/sudoku/test.zig"),
+        .target = target,
         .optimize = optimize,
     });
 
@@ -44,7 +48,8 @@ pub fn build(b: *Builder) void {
     // Bench
     const bench_exe = b.addExecutable(.{
         .name = "bench",
-        .root_source_file = .{ .path = "src/sudoku/bench.zig" },
+        .root_source_file = b.path("src/sudoku/bench.zig"),
+        .target = target,
         .optimize = optimize,
     });
 

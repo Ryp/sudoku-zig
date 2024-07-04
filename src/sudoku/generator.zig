@@ -51,7 +51,8 @@ pub fn generate_dumb_board(board: *BoardState) void {
     // Using the method from the docs to get a reasonably random seed
     var buf: [8]u8 = undefined;
     std.crypto.random.bytes(buf[0..]);
-    const seed = std.mem.readIntSliceLittle(u64, buf[0..8]);
+
+    const seed = std.mem.readInt(u64, buf[0..8], .little);
 
     var rng = std.rand.Xoroshiro128.init(seed);
     const rounds = 1000; // FIXME
@@ -76,7 +77,7 @@ pub fn generate_dumb_board(board: *BoardState) void {
     while (numbers_to_remove > 0) {
         const cell_index = rng.random().uintLessThan(u32, board.extent * board.extent);
 
-        var cell_number = &board.numbers[cell_index];
+        const cell_number = &board.numbers[cell_index];
 
         if (cell_number.* != UnsetNumber) {
             cell_number.* = UnsetNumber;
