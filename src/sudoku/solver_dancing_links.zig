@@ -39,9 +39,6 @@ pub fn solve(board: *BoardState) bool {
     const links_v = allocator.alloc(DoublyLink, link_count) catch unreachable; // FIXME
     defer allocator.free(links_v);
 
-    const link_payloads = allocator.alloc(u32, link_count) catch unreachable; // FIXME
-    defer allocator.free(link_payloads);
-
     const root_link_offset = 0;
     const header_link_offset = root_link_offset + 1;
     const header_link_count = constraint_count;
@@ -65,7 +62,6 @@ pub fn solve(board: *BoardState) bool {
         .links_v = links_v,
         .choice_link_offset = choice_link_offset,
         .choices_constraint_link_indices = choices_constraint_link_indices,
-        .link_payloads = link_payloads,
     });
 }
 
@@ -75,7 +71,6 @@ const DancingLinkContext = struct {
     links_v: []DoublyLink,
     choice_link_offset: u32,
     choices_constraint_link_indices: []ChoiceConstraintsIndices,
-    link_payloads: []u32,
 };
 
 fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
