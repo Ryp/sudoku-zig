@@ -29,12 +29,7 @@ pub const JigsawSudoku = struct {
     box_indices_string: []const u8,
 };
 
-pub const GameTypeTag = enum {
-    regular,
-    jigsaw,
-};
-
-pub const GameType = union(GameTypeTag) {
+pub const GameType = union(enum) {
     regular: RegularSudoku,
     jigsaw: JigsawSudoku,
 };
