@@ -16,5 +16,5 @@ pub fn main() !void {
 
     sudoku.fill_board_from_string(board.numbers, boards.special_dancing_links.board, board.extent);
 
-    assert(solver.solve(&board, .{}));
+    assert(solver.solve(&board, .{ .dancing_links = undefined }));
 }

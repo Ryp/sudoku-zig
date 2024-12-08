@@ -763,7 +763,7 @@ const PlayerSolveBoard = struct {
 };
 
 fn player_solve_board(game: *GameState) void {
-    if (solver.solve(&game.board, .{})) {
+    if (solver.solve(&game.board, .{ .dancing_links = undefined })) {
         player_clear_candidates(game);
         // NOTE: Already done in the body of clear_candidates.
         // push_state_to_history(game);

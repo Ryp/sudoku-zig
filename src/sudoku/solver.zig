@@ -10,24 +10,20 @@ const all = sudoku.all;
 const dancing_links = @import("solver_dancing_links.zig");
 const backtracking = @import("solver_backtracking.zig");
 
-const Algorithm = enum {
-    DancingLinks,
-    SortedBacktracking,
+pub const Algorithm = union(enum) {
+    dancing_links,
+    sorted_backtracking: struct {
+        recursive: bool = true,
+    },
 };
 
-const Options = struct {
-    algorithm: Algorithm = Algorithm.DancingLinks,
-    recursive: bool = true,
-};
-
-pub fn solve(board: *BoardState, options: Options) bool {
-    switch (options.algorithm) {
-        Algorithm.DancingLinks => {
-            assert(options.recursive);
+pub fn solve(board: *BoardState, algorithm: Algorithm) bool {
+    switch (algorithm) {
+        .dancing_links => {
             return dancing_links.solve(board);
         },
-        Algorithm.SortedBacktracking => {
-            return backtracking.solve(board, options.recursive);
+        .sorted_backtracking => |sorted_backtracking| {
+            return backtracking.solve(board, sorted_backtracking.recursive);
         },
     }
 }
