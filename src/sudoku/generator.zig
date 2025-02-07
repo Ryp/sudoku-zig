@@ -5,7 +5,7 @@ const sudoku = @import("game.zig");
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 
-fn swap_random_col(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.rand.Xoroshiro128) void {
+fn swap_random_col(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
     const box_x = rng.random().uintLessThan(u32, regular_type.box_h);
     const col_offset = box_x * regular_type.box_w;
@@ -16,7 +16,7 @@ fn swap_random_col(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: 
     swap_region(board, board.col_regions[col_a], board.col_regions[col_b]);
 }
 
-fn swap_random_row(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.rand.Xoroshiro128) void {
+fn swap_random_row(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
     const box_y = rng.random().uintLessThan(u32, regular_type.box_w);
     const row_offset = box_y * regular_type.box_h;
@@ -54,7 +54,7 @@ pub fn generate_dumb_board(board: *BoardState) void {
 
     const seed = std.mem.readInt(u64, buf[0..8], .little);
 
-    var rng = std.rand.Xoroshiro128.init(seed);
+    var rng = std.Random.Xoroshiro128.init(seed);
     const rounds = 1000; // FIXME
 
     // Apply isomorphisms to that board to make it look more interesting

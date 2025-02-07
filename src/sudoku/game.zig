@@ -7,8 +7,8 @@ const solver = @import("solver.zig");
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.Vector.child == bool);
-    assert(type_info.Vector.len > 1);
+    assert(type_info.vector.child == bool);
+    assert(type_info.vector.len > 1);
 
     return @reduce(.And, vector);
 }
@@ -331,16 +331,7 @@ pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_mask
 
 const NothingFound = struct {};
 
-const SolverEventTag = enum {
-    naked_single,
-    hidden_single,
-    hidden_pair,
-    pointing_line,
-    box_line_reduction,
-    nothing_found,
-};
-
-pub const SolverEvent = union(SolverEventTag) {
+pub const SolverEvent = union(enum) {
     naked_single: solver.NakedSingle,
     hidden_single: solver.HiddenSingle,
     hidden_pair: solver.HiddenPair,
@@ -499,22 +490,7 @@ fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []
     }
 }
 
-const PlayerEventTag = enum {
-    toggle_select,
-    move_selection,
-    set_number,
-    toggle_candidate,
-    clear_selected_cell,
-    undo,
-    redo,
-    fill_candidates,
-    fill_all_candidates,
-    clear_all_candidates,
-    get_hint,
-    solve_board,
-};
-
-pub const PlayerAction = union(PlayerEventTag) {
+pub const PlayerAction = union(enum) {
     toggle_select: PlayerToggleSelect,
     move_selection: PlayerMoveSelection,
     set_number: PlayerSetNumberAtSelection,

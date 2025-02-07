@@ -5,13 +5,13 @@ pub fn build(b: *std.Build) void {
 
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize_mode = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
         .name = "sudoku",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = optimize_mode,
     });
 
     b.installArtifact(exe);
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
         .name = "test",
         .root_source_file = b.path("src/sudoku/test.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = optimize_mode,
     });
 
     b.installArtifact(test_a);
@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
         .name = "bench",
         .root_source_file = b.path("src/sudoku/bench.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = optimize_mode,
     });
 
     b.installArtifact(bench_exe);
