@@ -166,6 +166,15 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         fill_board_from_string(board.numbers, sudoku_string, board.extent);
     }
 
+    {
+        const string = try allocator.alloc(u8, board.numbers.len);
+        defer allocator.free(string);
+
+        fill_string_from_board(string, board.numbers, board.extent);
+
+        std.debug.print("Board: {s}\n", .{string});
+    }
+
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     errdefer allocator.free(candidate_masks);
 
