@@ -5,25 +5,14 @@ const sudoku = @import("game.zig");
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 
-pub const Options = struct {
-    check_if_unique: bool = false,
-};
+const dancing_links_solver = @import("solver_dancing_links.zig");
 
 const DoublyLink = struct {
     prev: u32,
     next: u32,
 };
 
-// See also:
-// https://www.ocf.berkeley.edu/~jchu/publicportal/sudoku/sudoku.paper.html
-// https://kychin.netlify.app/sudoku-blog/dlx/
-// https://garethrees.org/2007/06/10/zendoku-generation/ (use wayback archive)
-//
-// FIXME rewrite
-// choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
-// IDEA: Keep headers sorted?
-// IDEA: SoA for links?
-pub fn solve(board: *BoardState, options: Options) bool {
+pub fn generate(board: *BoardState, seed: u64) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
@@ -53,33 +42,73 @@ pub fn solve(board: *BoardState, options: Options) bool {
     const choices_constraint_link_indices = allocator.alloc(ChoiceConstraintsIndices, choices_count) catch unreachable; // FIXME
     defer allocator.free(choices_constraint_link_indices);
 
+    const solution = allocator.alloc(SolutionClue, board.extent * board.extent) catch unreachable; // FIXME
+    defer allocator.free(solution);
+
     // This changes between runs only if the size of the sudoku or the box layout changes
     fill_choices_constraint_link_indices(choices_constraint_link_indices, board.*, header_link_offset);
 
     link_matrix(choices_constraint_link_indices, links_h, links_v, choice_link_offset);
 
-    cover_columns_for_given_clues(board.*, choices_constraint_link_indices, links_h, links_v);
+    var rng = std.Random.Xoshiro256.init(seed);
 
-    if (options.check_if_unique) {
-        const solution_count = solve_dancing_links_recursive_count_solutions(DancingLinkContext{
-            .board = board,
-            .links_h = links_h,
-            .links_v = links_v,
-            .choice_link_offset = choice_link_offset,
-            .choices_constraint_link_indices = choices_constraint_link_indices,
-        });
+    const clue_count = board.extent;
+    const unknown_count = board.extent * board.extent - clue_count;
+    cover_columns_for_given_clues(board, &rng.random(), choices_constraint_link_indices, links_h, links_v);
 
-        return solution_count == 1;
-    } else {
-        return solve_dancing_links_recursive(DancingLinkContext{
-            .board = board,
-            .links_h = links_h,
-            .links_v = links_v,
-            .choice_link_offset = choice_link_offset,
-            .choices_constraint_link_indices = choices_constraint_link_indices,
-        });
+    // for (0..10) |_| {
+    //     const h_link_index = rng.random().uintLessThan(u32, choice_link_offset - 1) + 1;
+    //     remove_link_from_list(links_h, h_link_index);
+
+    //     insert_link_to_end(links_h, 0, h_link_index);
+    // }
+
+    const found_solution = solve_dancing_links_recursive(DancingLinkContext{
+        .board = board,
+        .links_h = links_h,
+        .links_v = links_v,
+        .choice_link_offset = choice_link_offset,
+        .choices_constraint_link_indices = choices_constraint_link_indices,
+        .solution = solution,
+        .random = &rng.random(),
+    }, 0);
+
+    std.debug.assert(found_solution);
+
+    for (solution[0..unknown_count]) |clue| {
+        board.numbers[clue.cell_index] = clue.number;
+    }
+
+    var is_unique = true;
+    var try_harder_count: u32 = 500;
+
+    while (is_unique) {
+        const random_index = rng.random().uintLessThan(u32, board.extent * board.extent);
+        const number_at_random_index = board.numbers[random_index];
+
+        board.numbers[random_index] = UnsetNumber;
+
+        is_unique = dancing_links_solver.solve(board, .{ .check_if_unique = true });
+
+        if (!is_unique) {
+            // Whoops, we've gone one step too far - restore the number
+            board.numbers[random_index] = number_at_random_index;
+
+            if (try_harder_count > 0) {
+                try_harder_count -= 1;
+                is_unique = true;
+                continue;
+            } else {
+                break;
+            }
+        }
     }
 }
+
+const SolutionClue = struct {
+    cell_index: u32,
+    number: u4,
+};
 
 const DancingLinkContext = struct {
     board: *BoardState,
@@ -87,13 +116,25 @@ const DancingLinkContext = struct {
     links_v: []DoublyLink,
     choice_link_offset: u32,
     choices_constraint_link_indices: []ChoiceConstraintsIndices,
+    solution: []SolutionClue,
+    random: *const std.Random,
 };
 
-fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
+fn solve_dancing_links_recursive(ctx: DancingLinkContext, depth: u32) bool {
     if (ctx.links_h[0].next == 0) {
         return true;
     } else {
         const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
+
+        // const jumps = ctx.rng.random().uintLessThan(usize, ctx.links_h.len);
+
+        // for (0..jumps) |_| {
+        //     chosen_column_index = ctx.links_h[chosen_column_index].next;
+        // }
+
+        // if (chosen_column_index == 0) {
+        //     chosen_column_index = ctx.links_h[0].prev;
+        // }
 
         // cover_column(ctx.links_h, ctx.links_v, chosen_column_index);
 
@@ -109,11 +150,14 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
             cover_column(ctx.links_h, ctx.links_v, header_links.col_index);
             cover_column(ctx.links_h, ctx.links_v, header_links.box_index);
 
-            if (solve_dancing_links_recursive(ctx)) {
+            if (solve_dancing_links_recursive(ctx, depth + 1)) {
                 const cell_index = row_index / ctx.board.extent;
                 const number = row_index % ctx.board.extent;
 
-                ctx.board.numbers[cell_index] = @intCast(number);
+                ctx.solution[depth] = SolutionClue{
+                    .cell_index = cell_index,
+                    .number = @intCast(number),
+                };
 
                 return true;
             }
@@ -128,40 +172,6 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
         // uncover_column(ctx.links_h, ctx.links_v, chosen_column_index);
 
         return false;
-    }
-}
-
-fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
-    if (ctx.links_h[0].next == 0) {
-        return 1;
-    } else {
-        var solution_count: u32 = 0;
-
-        const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
-
-        // Iterate over choices (rows)
-        var vertical_index = ctx.links_v[chosen_column_index].next;
-
-        while (vertical_index != chosen_column_index) : (vertical_index = ctx.links_v[vertical_index].next) {
-            const row_index = (vertical_index - ctx.choice_link_offset) / 4;
-            const header_links = ctx.choices_constraint_link_indices[row_index];
-
-            // Iterate over constraints (columns)
-            cover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.box_index);
-
-            solution_count += solve_dancing_links_recursive_count_solutions(ctx);
-
-            // Iterate over constraints (columns)
-            uncover_column(ctx.links_h, ctx.links_v, header_links.box_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
-        }
-
-        return solution_count;
     }
 }
 
@@ -236,19 +246,32 @@ fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsIndices
     }
 }
 
-fn cover_columns_for_given_clues(board: BoardState, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
-    // We now have the initial fully connected matrix
-    // Let's remove the rows we already have a clue for
-    for (board.numbers, 0..) |number, cell_index| {
-        if (number != UnsetNumber) {
-            const choice_index = get_choice_index(@intCast(cell_index), number, board.extent);
-            const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
+fn cover_columns_for_given_clues(board: *BoardState, random: *const std.Random, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
+    var taken_numbers: [16]bool = undefined; // FIXME
+    for (&taken_numbers) |*i| {
+        i.* = false;
+    }
 
-            cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.row_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.col_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.box_index);
+    for (0..board.extent) |cell_index| {
+        var number: u4 = undefined;
+        var is_taken = true;
+
+        while (is_taken) {
+            number = random.uintLessThan(u4, @intCast(board.extent));
+            is_taken = taken_numbers[number];
         }
+
+        taken_numbers[number] = true;
+
+        board.numbers[cell_index] = number;
+
+        const choice_index = get_choice_index(@intCast(cell_index), number, board.extent);
+        const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
+
+        cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);
+        cover_column(links_h, links_v, choice_constraint_link_indices.row_index);
+        cover_column(links_h, links_v, choice_constraint_link_indices.col_index);
+        cover_column(links_h, links_v, choice_constraint_link_indices.box_index);
     }
 }
 

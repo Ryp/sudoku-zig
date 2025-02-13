@@ -161,7 +161,12 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     var board = try create_board_state(allocator, game_type);
 
     if (sudoku_string.len == 0) {
-        generator.generate_dumb_board(&board);
+        var random_buffer: [8]u8 = undefined;
+        std.crypto.random.bytes(&random_buffer);
+
+        const seed = std.mem.readInt(u64, &random_buffer, .little);
+
+        generator.generate(&board, .{ .dancing_links = undefined }, seed);
     } else {
         fill_board_from_string(board.numbers, sudoku_string, board.extent);
     }

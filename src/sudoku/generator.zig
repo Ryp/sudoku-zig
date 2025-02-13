@@ -5,35 +5,25 @@ const sudoku = @import("game.zig");
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 
-fn swap_random_col(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
-    // FIXME Use box count var
-    const box_x = rng.random().uintLessThan(u32, regular_type.box_h);
-    const col_offset = box_x * regular_type.box_w;
-    const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_w);
-    const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_w - 1) + col_a + 1) % regular_type.box_w;
+const dancing_links = @import("generator_dancing_links.zig");
 
-    assert(col_a != col_b);
-    swap_region(board, board.col_regions[col_a], board.col_regions[col_b]);
-}
+pub const Algorithm = union(enum) {
+    dancing_links,
+    dumb,
+};
 
-fn swap_random_row(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
-    // FIXME Use box count var
-    const box_y = rng.random().uintLessThan(u32, regular_type.box_w);
-    const row_offset = box_y * regular_type.box_h;
-    const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_h);
-    const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_h - 1) + row_a + 1) % regular_type.box_h;
-
-    assert(row_a != row_b);
-    swap_region(board, board.row_regions[row_a], board.row_regions[row_b]);
-}
-
-fn swap_region(board: *BoardState, region_a: []u32, region_b: []u32) void {
-    for (region_a, region_b) |cell_index_a, cell_index_b| {
-        std.mem.swap(u5, &board.numbers[cell_index_a], &board.numbers[cell_index_b]);
+pub fn generate(board: *BoardState, algorithm: Algorithm, seed: u64) void {
+    switch (algorithm) {
+        .dancing_links => {
+            dancing_links.generate(board, seed);
+        },
+        .dumb => {
+            generate_dumb_board(board, seed);
+        },
     }
 }
 
-pub fn generate_dumb_board(board: *BoardState) void {
+fn generate_dumb_board(board: *BoardState, seed: u64) void {
     const regular_type = board.game_type.regular;
 
     // Generate a full board by using an ordered sequence
@@ -47,12 +37,6 @@ pub fn generate_dumb_board(board: *BoardState) void {
             board.numbers[cell_index] = number;
         }
     }
-
-    // Using the method from the docs to get a reasonably random seed
-    var buf: [8]u8 = undefined;
-    std.crypto.random.bytes(buf[0..]);
-
-    const seed = std.mem.readInt(u64, buf[0..8], .little);
 
     var rng = std.Random.Xoroshiro128.init(seed);
     const rounds = 1000; // FIXME
@@ -83,5 +67,33 @@ pub fn generate_dumb_board(board: *BoardState) void {
             cell_number.* = UnsetNumber;
             numbers_to_remove -= 1;
         }
+    }
+}
+
+fn swap_random_col(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+    // FIXME Use box count var
+    const box_x = rng.random().uintLessThan(u32, regular_type.box_h);
+    const col_offset = box_x * regular_type.box_w;
+    const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_w);
+    const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_w - 1) + col_a + 1) % regular_type.box_w;
+
+    assert(col_a != col_b);
+    swap_region(board, board.col_regions[col_a], board.col_regions[col_b]);
+}
+
+fn swap_random_row(board: *BoardState, regular_type: sudoku.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+    // FIXME Use box count var
+    const box_y = rng.random().uintLessThan(u32, regular_type.box_w);
+    const row_offset = box_y * regular_type.box_h;
+    const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_h);
+    const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_h - 1) + row_a + 1) % regular_type.box_h;
+
+    assert(row_a != row_b);
+    swap_region(board, board.row_regions[row_a], board.row_regions[row_b]);
+}
+
+fn swap_region(board: *BoardState, region_a: []u32, region_b: []u32) void {
+    for (region_a, region_b) |cell_index_a, cell_index_b| {
+        std.mem.swap(u5, &board.numbers[cell_index_a], &board.numbers[cell_index_b]);
     }
 }
