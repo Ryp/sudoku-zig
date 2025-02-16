@@ -1,9 +1,9 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sudoku = @import("game.zig");
-const solver = @import("solver.zig");
-const boards = @import("boards.zig");
+const sudoku = @import("sudoku/game.zig");
+const solver = @import("sudoku/solver.zig");
+const boards = @import("sudoku/boards.zig");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;

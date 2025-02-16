@@ -69,7 +69,7 @@ pub fn build(b: *std.Build) void {
     // Bench
     const bench_exe = b.addExecutable(.{
         .name = "bench",
-        .root_source_file = b.path("src/sudoku/bench.zig"),
+        .root_source_file = b.path("src/bench.zig"),
         .target = target,
         .optimize = optimize_mode,
     });
