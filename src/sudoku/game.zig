@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
+const boards = @import("boards.zig");
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -293,7 +294,7 @@ pub fn fill_string_from_board(sudoku_string: []u8, board: []const u5, extent: u3
         if (cell_number == UnsetNumber) {
             char.* = '.';
         } else {
-            char.* = '1' + @as(u8, @intCast(cell_number));
+            char.* = boards.NumbersString[cell_number][0];
         }
     }
 }

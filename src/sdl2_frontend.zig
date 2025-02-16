@@ -12,7 +12,9 @@ const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 
-const NumbersString = [_][*:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G" };
+const boards = @import("sudoku/boards.zig");
+const NumbersString = boards.NumbersString;
+
 const CandidateBoxExtent = 27;
 const CellExtent = 2 + 3 * CandidateBoxExtent;
 const FontSize: u32 = CellExtent - 9;
