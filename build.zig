@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2_ttf");
 
+    exe.root_module.addAnonymousImport("font_regular", .{ .root_source_file = b.path("res/FreeSans.ttf") });
+    exe.root_module.addAnonymousImport("font_bold", .{ .root_source_file = b.path("res/FreeSansBold.ttf") });
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {

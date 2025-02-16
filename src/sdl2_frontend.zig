@@ -80,13 +80,25 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     }
     errdefer c.TTF_Quit();
 
-    const font = c.TTF_OpenFont("./res/FreeSans.ttf", FontSize) orelse {
+    const font_regular = @embedFile("font_regular");
+    const font_regular_mem = c.SDL_RWFromConstMem(font_regular, @intCast(font_regular.len)) orelse {
+        c.SDL_Log("SDL error: %s", c.SDL_GetError());
+        return error.SDLInitializationFailed;
+    };
+
+    const font = c.TTF_OpenFontRW(font_regular_mem, 0, FontSize) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
     errdefer c.TTF_CloseFont(font);
 
-    const font_small = c.TTF_OpenFont("./res/FreeSansBold.ttf", FontSizeSmall) orelse {
+    const font_bold = @embedFile("font_bold");
+    const font_bold_mem = c.SDL_RWFromConstMem(font_bold, @intCast(font_bold.len)) orelse {
+        c.SDL_Log("SDL error: %s", c.SDL_GetError());
+        return error.SDLInitializationFailed;
+    };
+
+    const font_small = c.TTF_OpenFontRW(font_bold_mem, 0, FontSizeSmall) orelse {
         c.SDL_Log("TTF error: %s", c.TTF_GetError());
         return error.SDLInitializationFailed;
     };
