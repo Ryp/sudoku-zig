@@ -4,6 +4,7 @@ const expectEqual = std.testing.expectEqual;
 
 const sudoku = @import("game.zig");
 const solver = @import("solver.zig");
+const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
 
 test "Box-line removal" {
@@ -33,7 +34,7 @@ test "Box-line removal" {
     }
 
     // Make sure that there's no hit for the initial board
-    if (solver.find_box_line_reduction(board, candidate_masks)) |_| {
+    if (solver_logical.find_box_line_reduction(board, candidate_masks)) |_| {
         try expect(false);
     }
 
@@ -47,14 +48,14 @@ test "Box-line removal" {
     }
 
     // Make sure we get a hit
-    if (solver.find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
+    if (solver_logical.find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
         try expectEqual(number, box_line_reduction.number);
 
         // Apply the solver event
         sudoku.apply_solver_event(&board, candidate_masks, .{ .box_line_reduction = box_line_reduction });
 
         // Make sure we don't hit again after applying the solver event
-        if (solver.find_box_line_reduction(board, candidate_masks)) |_| {
+        if (solver_logical.find_box_line_reduction(board, candidate_masks)) |_| {
             try expect(false);
         }
     } else {
@@ -73,7 +74,7 @@ test "Box-line removal" {
         candidate_masks[cell_index] &= ~mask;
     }
 
-    if (solver.find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
+    if (solver_logical.find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
         try expectEqual(number, box_line_reduction.number);
     } else {
         try expect(false);

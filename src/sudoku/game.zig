@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const generator = @import("generator.zig");
 const solver = @import("solver.zig");
+const solver_logical = @import("solver_logical.zig");
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -340,32 +341,32 @@ pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_mask
     board.numbers[cell_index] = number;
     candidate_masks[cell_index] = 0;
 
-    solver.remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
+    solver_logical.remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
 }
 
 const NothingFound = struct {};
 
 pub const SolverEvent = union(enum) {
-    naked_single: solver.NakedSingle,
-    hidden_single: solver.HiddenSingle,
-    hidden_pair: solver.HiddenPair,
-    pointing_line: solver.PointingLine,
-    box_line_reduction: solver.BoxLineReduction,
+    naked_single: solver_logical.NakedSingle,
+    hidden_single: solver_logical.HiddenSingle,
+    hidden_pair: solver_logical.HiddenPair,
+    pointing_line: solver_logical.PointingLine,
+    box_line_reduction: solver_logical.BoxLineReduction,
     nothing_found: NothingFound,
 };
 
 fn solve_human_step(game: *GameState) ?SolverEvent {
-    solver.solve_trivial_candidates(&game.board, game.candidate_masks);
+    solver_logical.solve_trivial_candidates(&game.board, game.candidate_masks);
 
-    if (solver.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
+    if (solver_logical.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
-    } else if (solver.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
+    } else if (solver_logical.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
-    } else if (solver.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
+    } else if (solver_logical.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
         return .{ .hidden_pair = hidden_pair };
-    } else if (solver.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
+    } else if (solver_logical.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
         return .{ .pointing_line = pointing_line };
-    } else if (solver.find_box_line_reduction(game.board, game.candidate_masks)) |box_line_reduction| {
+    } else if (solver_logical.find_box_line_reduction(game.board, game.candidate_masks)) |box_line_reduction| {
         return .{ .box_line_reduction = box_line_reduction };
     } else {
         return null;
