@@ -98,6 +98,139 @@ pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?Naked
     return null;
 }
 
+pub const NakedPair = struct {
+    number_a: u4,
+    number_b: u4,
+    deletion_mask_a: u16,
+    deletion_mask_b: u16,
+    cell_index_u: u32,
+    cell_index_v: u32,
+    region: []u32,
+};
+
+pub fn apply_naked_pair(candidate_masks: []u16, naked_pair: NakedPair) void {
+    for (naked_pair.region, 0..) |cell_index, region_cell_index| {
+        candidate_masks[cell_index] &= ~(((naked_pair.deletion_mask_a >> @as(u4, @intCast(region_cell_index))) & 0b1) << naked_pair.number_a);
+        candidate_masks[cell_index] &= ~(((naked_pair.deletion_mask_b >> @as(u4, @intCast(region_cell_index))) & 0b1) << naked_pair.number_b);
+    }
+}
+
+pub fn find_naked_pair(board: BoardState, candidate_masks: []const u16) ?NakedPair {
+    for (board.all_regions) |region| {
+        if (find_naked_pair_region(candidate_masks, region)) |naked_pair| {
+            return naked_pair;
+        }
+    }
+
+    return null;
+}
+
+// This function works once per region, meaning that if candidates to remove are found in overlapping regions,
+// like in a line as well as in a box, then we're only counting one of them.
+pub fn find_naked_pair_region(candidate_masks: []const u16, region: []u32) ?NakedPair {
+    for (region, 0..) |cell_index_a, region_cell_index_a| {
+        const candidate_mask_a = candidate_masks[cell_index_a];
+        const candidate_count_a = @popCount(candidate_mask_a);
+
+        if (candidate_count_a == 2) {
+            for (region[region_cell_index_a + 1 ..]) |cell_index_b| {
+                const candidate_mask_b = candidate_masks[cell_index_b];
+
+                if (candidate_mask_a == candidate_mask_b) {
+                    const number_a = first_bit_index_u16(candidate_mask_a);
+                    const number_b = first_bit_index_u16(candidate_mask_a - sudoku.mask_for_number(@intCast(number_a)));
+
+                    // Regional mask
+                    var deletion_mask_a: u16 = 0;
+                    var deletion_mask_b: u16 = 0;
+
+                    for (region, 0..) |cell_index, region_cell_index| {
+                        // Avoid checking the pair itself
+                        if (cell_index == cell_index_a or cell_index == cell_index_b) {
+                            continue;
+                        }
+
+                        deletion_mask_a |= ((candidate_masks[cell_index] >> number_a) & 0b1) << @as(u4, @intCast(region_cell_index));
+                        deletion_mask_b |= ((candidate_masks[cell_index] >> number_b) & 0b1) << @as(u4, @intCast(region_cell_index));
+                    }
+
+                    if (deletion_mask_a != 0 or deletion_mask_b != 0) {
+                        return NakedPair{
+                            .number_a = number_a,
+                            .number_b = number_b,
+                            .deletion_mask_a = deletion_mask_a,
+                            .deletion_mask_b = deletion_mask_b,
+                            .cell_index_u = cell_index_a,
+                            .cell_index_v = cell_index_b,
+                            .region = region,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+test "Naked pair" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const allocator = gpa.allocator();
+
+    // Create game board
+    const board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
+        .box_w = 3,
+        .box_h = 3,
+    } });
+    defer sudoku.destroy_board_state(allocator, board);
+
+    // Start with an empty board
+    sudoku.fill_empty_board(board.numbers);
+
+    const candidate_masks = try allocator.alloc(u16, board.numbers.len);
+    defer allocator.free(candidate_masks);
+
+    // Fill candidate masks fully
+    for (candidate_masks) |*cell_candidate_mask| {
+        cell_candidate_mask.* = 0;
+    }
+
+    // Make sure that there's no hit for the initial board
+    try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+
+    const number_a: u4 = 0;
+    const number_b: u4 = 8;
+    const pair_mask = sudoku.mask_for_number(number_a) | sudoku.mask_for_number(number_b);
+
+    // Setup a naked pair
+    candidate_masks[0] = pair_mask;
+    candidate_masks[1] = pair_mask;
+
+    // There shouldn't be any hit if there's no candidates to remove
+    try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+
+    candidate_masks[2] = sudoku.mask_for_number(number_a);
+    candidate_masks[3] = sudoku.mask_for_number(number_b);
+
+    // Make sure we get a hit
+    if (find_naked_pair(board, candidate_masks)) |naked_pair| {
+        try std.testing.expectEqual(number_a, naked_pair.number_a);
+        try std.testing.expectEqual(number_b, naked_pair.number_b);
+        try std.testing.expectEqual(0b0100, naked_pair.deletion_mask_a);
+        try std.testing.expectEqual(0b1000, naked_pair.deletion_mask_b);
+
+        // Apply the solver event
+        apply_naked_pair(candidate_masks, naked_pair);
+
+        // Make sure we don't hit again after applying the solver event
+        try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+    } else {
+        try std.testing.expect(false);
+    }
+}
+
 pub const HiddenSingle = struct {
     number: u4,
     cell_index: u32,

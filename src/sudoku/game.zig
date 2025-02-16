@@ -339,6 +339,7 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
 
 pub const SolverEvent = union(enum) {
     naked_single: solver_logical.NakedSingle,
+    naked_pair: solver_logical.NakedPair,
     hidden_single: solver_logical.HiddenSingle,
     hidden_pair: solver_logical.HiddenPair,
     pointing_line: solver_logical.PointingLine,
@@ -351,6 +352,8 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
 
     if (solver_logical.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
+    } else if (solver_logical.find_naked_pair(game.board, game.candidate_masks)) |naked_pair| {
+        return .{ .naked_pair = naked_pair };
     } else if (solver_logical.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
     } else if (solver_logical.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
@@ -368,6 +371,9 @@ pub fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_eve
     switch (solver_event) {
         .naked_single => |naked_single| {
             solver_logical.apply_naked_single(board, candidate_masks, naked_single);
+        },
+        .naked_pair => |naked_pair| {
+            solver_logical.apply_naked_pair(candidate_masks, naked_pair);
         },
         .hidden_single => |hidden_single| {
             solver_logical.apply_hidden_single(board, candidate_masks, hidden_single);

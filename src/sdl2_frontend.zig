@@ -432,6 +432,51 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
             _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
         },
+        .naked_pair => |naked_pair| {
+            for (naked_pair.region, 0..) |cell_index, region_cell_index| {
+                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_rect = cell_rectangle(cell_coord);
+
+                // Highlight region that was considered
+                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+
+                // Draw naked pair
+                if (cell_index == naked_pair.cell_index_u or cell_index == naked_pair.cell_index_v) {
+                    inline for (.{ naked_pair.number_a, naked_pair.number_b }) |number| {
+                        var candidate_rect = candidate_local_rects[number];
+
+                        candidate_rect.x += cell_rect.x;
+                        candidate_rect.y += cell_rect.y;
+                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                        _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                    }
+                }
+
+                const region_mask = @as(u16, 1) << @as(u4, @intCast(region_cell_index));
+
+                // Draw candidates to remove
+                if (region_mask & naked_pair.deletion_mask_b != 0) {
+                    var candidate_rect = candidate_local_rects[naked_pair.number_b];
+
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+
+                if (region_mask & naked_pair.deletion_mask_a != 0) {
+                    var candidate_rect = candidate_local_rects[naked_pair.number_a];
+
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                }
+            }
+        },
         .hidden_single => |hidden_single| {
             // Highlight region that was considered
             for (hidden_single.region) |cell_index| {
@@ -737,7 +782,8 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
 
     if (game.solver_event) |solver_event| {
         _ = switch (solver_event) {
-            .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: found naked {} single", .{ title, naked_single.number + 1 }),
+            .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} single", .{ title, naked_single.number + 1 }),
+            .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} and {} pair", .{ title, naked_pair.number_a + 1, naked_pair.number_b + 1 }),
             .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
             .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
             .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
