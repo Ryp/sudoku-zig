@@ -337,22 +337,13 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
     }
 }
 
-pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
-    board.numbers[cell_index] = number;
-    candidate_masks[cell_index] = 0;
-
-    solver_logical.remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
-}
-
-const NothingFound = struct {};
-
 pub const SolverEvent = union(enum) {
     naked_single: solver_logical.NakedSingle,
     hidden_single: solver_logical.HiddenSingle,
     hidden_pair: solver_logical.HiddenPair,
     pointing_line: solver_logical.PointingLine,
     box_line_reduction: solver_logical.BoxLineReduction,
-    nothing_found: NothingFound,
+    nothing_found,
 };
 
 fn solve_human_step(game: *GameState) ?SolverEvent {
@@ -376,35 +367,21 @@ fn solve_human_step(game: *GameState) ?SolverEvent {
 pub fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
-            place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
+            solver_logical.apply_naked_single(board, candidate_masks, naked_single);
         },
         .hidden_single => |hidden_single| {
-            place_number_remove_trivial_candidates(board, candidate_masks, hidden_single.cell_index, hidden_single.number);
-            // candidate_masks[hidden_single.cell_index] &= ~hidden_single.deletion_mask;
+            solver_logical.apply_hidden_single(board, candidate_masks, hidden_single);
         },
         .hidden_pair => |hidden_pair| {
-            candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
-            candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
+            solver_logical.apply_hidden_pair(candidate_masks, hidden_pair);
         },
         .pointing_line => |pointing_line| {
-            const number_mask = mask_for_number(pointing_line.number);
-            for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
-                // FIXME super confusing
-                if (mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
-                    candidate_masks[cell_index] &= ~number_mask;
-                }
-            }
+            solver_logical.apply_pointing_line(candidate_masks, pointing_line);
         },
         .box_line_reduction => |box_line_reduction| {
-            const number_mask = mask_for_number(box_line_reduction.number);
-            for (box_line_reduction.box_region, 0..) |cell_index, region_cell_index| {
-                // FIXME super confusing
-                if (mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
-                    candidate_masks[cell_index] &= ~number_mask;
-                }
-            }
+            solver_logical.apply_box_line_reduction(candidate_masks, box_line_reduction);
         },
-        else => unreachable,
+        .nothing_found => unreachable,
     }
 }
 
@@ -620,7 +597,7 @@ const PlayerSetNumberAtSelection = struct {
 fn player_set_number(game: *GameState, number: u4) void {
     const extent = game.board.extent;
     if (number < extent and game.selected_cells.len > 0) {
-        place_number_remove_trivial_candidates(&game.board, game.candidate_masks, game.selected_cells[0], number);
+        solver_logical.place_number_remove_trivial_candidates(&game.board, game.candidate_masks, game.selected_cells[0], number);
         push_state_to_history(game);
     }
 }
@@ -728,7 +705,7 @@ fn player_get_hint(game: *GameState) void {
         game.solver_event = solver_event;
         game.flow = GameFlow.WaitingForHintValidation;
     } else {
-        game.solver_event = .{ .nothing_found = .{} }; // FIXME clear this at one point
+        game.solver_event = .{ .nothing_found = undefined }; // FIXME clear this at one point
     }
 }
 

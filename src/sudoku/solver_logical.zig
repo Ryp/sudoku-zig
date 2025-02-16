@@ -20,6 +20,13 @@ fn first_bit_index_u16(mask_ro: u16) u4 {
     return 0;
 }
 
+pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
+    board.numbers[cell_index] = number;
+    candidate_masks[cell_index] = 0;
+
+    remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
+}
+
 pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
     const box_index = board.box_indices[cell_index];
@@ -71,6 +78,10 @@ pub const NakedSingle = struct {
     number: u4,
 };
 
+pub fn apply_naked_single(board: *BoardState, candidate_masks: []u16, naked_single: NakedSingle) void {
+    place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
+}
+
 // If there's a cell with a single possibility left, put it down
 pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
     for (board.numbers, candidate_masks, 0..) |cell_number, candidate_mask, cell_index| {
@@ -94,6 +105,10 @@ pub const HiddenSingle = struct {
     region: []u32,
 };
 
+pub fn apply_hidden_single(board: *BoardState, candidate_masks: []u16, hidden_single: HiddenSingle) void {
+    place_number_remove_trivial_candidates(board, candidate_masks, hidden_single.cell_index, hidden_single.number);
+}
+
 pub fn find_hidden_single(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
     for (board.all_regions) |region| {
         if (find_hidden_single_region(board, candidate_masks, region)) |solver_event| {
@@ -108,6 +123,11 @@ pub const HiddenPair = struct {
     a: HiddenSingle,
     b: HiddenSingle,
 };
+
+pub fn apply_hidden_pair(candidate_masks: []u16, hidden_pair: HiddenPair) void {
+    candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
+    candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
+}
 
 pub fn find_hidden_pair(board: BoardState, candidate_masks: []const u16) ?HiddenPair {
     for (board.all_regions) |region| {
@@ -242,6 +262,16 @@ pub const PointingLine = struct {
     box_region_mask: u16,
 };
 
+pub fn apply_pointing_line(candidate_masks: []u16, pointing_line: PointingLine) void {
+    const number_mask = sudoku.mask_for_number(pointing_line.number);
+    for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
+        // FIXME super confusing
+        if (sudoku.mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
+            candidate_masks[cell_index] &= ~number_mask;
+        }
+    }
+}
+
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
 // Also called pointing pairs or triples in 9x9 sudoku.
 pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?PointingLine {
@@ -322,6 +352,16 @@ pub const BoxLineReduction = struct {
     line_region: []u32,
     line_region_mask: u16,
 };
+
+pub fn apply_box_line_reduction(candidate_masks: []u16, box_line_reduction: BoxLineReduction) void {
+    const number_mask = sudoku.mask_for_number(box_line_reduction.number);
+    for (box_line_reduction.box_region, 0..) |cell_index, region_cell_index| {
+        // FIXME super confusing
+        if (sudoku.mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
+            candidate_masks[cell_index] &= ~number_mask;
+        }
+    }
+}
 
 pub fn find_box_line_reduction(board: BoardState, candidate_masks: []const u16) ?BoxLineReduction {
     for (board.col_regions, 0..) |col_region, col_index| {
