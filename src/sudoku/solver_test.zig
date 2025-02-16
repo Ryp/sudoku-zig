@@ -98,7 +98,7 @@ test "Solver critical path" {
 
     try expectEqual(board.extent, 9);
 
-    const solved = solver.solve(&board, .{ .dancing_links = undefined });
+    const solved = solver.solve(&board, .{ .dancing_links = .{} });
     try expect(solved);
 
     // Compare with solution

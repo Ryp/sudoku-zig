@@ -382,11 +382,6 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
     return null;
 }
 
-const AABB_u32_2 = struct {
-    min: u32_2,
-    max: u32_2,
-};
-
 pub const PointingLine = struct {
     number: u4,
     line_region: []u32,
@@ -408,10 +403,15 @@ pub fn apply_pointing_line(candidate_masks: []u16, pointing_line: PointingLine) 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
 // Also called pointing pairs or triples in 9x9 sudoku.
 pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?PointingLine {
+    const AABB_u32 = struct {
+        min: u32_2,
+        max: u32_2,
+    };
+
     for (0..board.extent) |box_index| {
         const box_region = board.box_regions[box_index];
 
-        var box_aabbs_full: [sudoku.MaxSudokuExtent]AABB_u32_2 = undefined;
+        var box_aabbs_full: [sudoku.MaxSudokuExtent]AABB_u32 = undefined;
         const box_aabbs = box_aabbs_full[0..board.extent];
 
         var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
