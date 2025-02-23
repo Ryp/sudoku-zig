@@ -16,6 +16,7 @@ pub fn all(vector: anytype) bool {
 }
 
 pub const u32_2 = @Vector(2, u32);
+const i32_2 = @Vector(2, i32);
 
 pub const MaxSudokuExtent = 16;
 pub const UnsetNumber: u5 = 0x1F;
@@ -585,15 +586,22 @@ const PlayerMoveSelection = struct {
 
 fn player_move_selection(game: *GameState, event: PlayerMoveSelection) void {
     if (game.selected_cells.len > 0) {
-        const extent = game.board.extent;
-        const current_pos = cell_coord_from_index(extent, game.selected_cells[0]);
+        var current_pos: i32_2 = @intCast(cell_coord_from_index(game.board.extent, game.selected_cells[0]));
 
-        assert(all(current_pos < u32_2{ extent, extent }));
+        const extent: i32 = @intCast(game.board.extent);
+        assert(all(current_pos < i32_2{ extent, extent }));
 
-        game.selected_cells[0] = cell_index_from_coord(extent, .{
-            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[0])) + event.x_offset)),
-            @min(extent - 1, @max(0, @as(i32, @intCast(current_pos[1])) + event.y_offset)),
-        });
+        current_pos += .{ event.x_offset, event.y_offset };
+
+        inline for (.{ &current_pos[0], &current_pos[1] }) |coord| {
+            if (coord.* < 0) {
+                coord.* += extent;
+            } else if (coord.* >= extent) {
+                coord.* -= extent;
+            }
+        }
+
+        game.selected_cells[0] = cell_index_from_coord(game.board.extent, @intCast(current_pos));
     }
 }
 
