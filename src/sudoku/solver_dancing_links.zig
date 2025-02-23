@@ -95,19 +95,15 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
     } else {
         const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
 
-        // cover_column(ctx.links_h, ctx.links_v, chosen_column_index);
-
         // Iterate over choices (rows)
         var vertical_index = ctx.links_v[chosen_column_index].next;
         while (vertical_index != chosen_column_index) : (vertical_index = ctx.links_v[vertical_index].next) {
             const row_index = (vertical_index - ctx.choice_link_offset) / 4;
-            const header_links = ctx.choices_constraint_link_indices[row_index];
+            const header = ctx.choices_constraint_link_indices[row_index];
 
-            // Iterate over constraints (columns)
-            cover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.box_index);
+            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+                cover_column(ctx.links_h, ctx.links_v, constraint_index);
+            }
 
             if (solve_dancing_links_recursive(ctx)) {
                 const cell_index = row_index / ctx.board.extent;
@@ -118,14 +114,10 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
                 return true;
             }
 
-            // Iterate over constraints (columns)
-            uncover_column(ctx.links_h, ctx.links_v, header_links.box_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
+            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+                uncover_column(ctx.links_h, ctx.links_v, constraint_index);
+            }
         }
-
-        // uncover_column(ctx.links_h, ctx.links_v, chosen_column_index);
 
         return false;
     }
@@ -144,21 +136,17 @@ fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
 
         while (vertical_index != chosen_column_index) : (vertical_index = ctx.links_v[vertical_index].next) {
             const row_index = (vertical_index - ctx.choice_link_offset) / 4;
-            const header_links = ctx.choices_constraint_link_indices[row_index];
+            const header = ctx.choices_constraint_link_indices[row_index];
 
-            // Iterate over constraints (columns)
-            cover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            cover_column(ctx.links_h, ctx.links_v, header_links.box_index);
+            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+                cover_column(ctx.links_h, ctx.links_v, constraint_index);
+            }
 
             solution_count += solve_dancing_links_recursive_count_solutions(ctx);
 
-            // Iterate over constraints (columns)
-            uncover_column(ctx.links_h, ctx.links_v, header_links.box_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.col_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.row_index);
-            uncover_column(ctx.links_h, ctx.links_v, header_links.exs_index);
+            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+                uncover_column(ctx.links_h, ctx.links_v, constraint_index);
+            }
         }
 
         return solution_count;
