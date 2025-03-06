@@ -247,34 +247,34 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         else => {
                             const player_event =
                                 switch (key_sym) {
-                                c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
-                                c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
-                                c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
-                                c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
-                                c.SDLK_1...c.SDLK_9, c.SDLK_a, c.SDLK_b, c.SDLK_c, c.SDLK_d, c.SDLK_e, c.SDLK_f, c.SDLK_g => if (is_any_shift_pressed)
-                                    sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
-                                else
-                                    sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-                                c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
-                                c.SDLK_z => if (is_any_ctrl_pressed)
-                                    if (is_any_shift_pressed)
-                                        sudoku.PlayerAction{ .redo = .{} }
+                                    c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
+                                    c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
+                                    c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
+                                    c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
+                                    c.SDLK_1...c.SDLK_9, c.SDLK_a, c.SDLK_b, c.SDLK_c, c.SDLK_d, c.SDLK_e, c.SDLK_f, c.SDLK_g => if (is_any_shift_pressed)
+                                        sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                     else
-                                        sudoku.PlayerAction{ .undo = .{} }
-                                else
-                                    null,
-                                c.SDLK_h => if (is_any_shift_pressed)
-                                    sudoku.PlayerAction{ .clear_all_candidates = .{} }
-                                else if (is_any_ctrl_pressed)
-                                    sudoku.PlayerAction{ .fill_all_candidates = .{} }
-                                else
-                                    sudoku.PlayerAction{ .fill_candidates = .{} },
-                                c.SDLK_RETURN => if (is_any_shift_pressed)
-                                    sudoku.PlayerAction{ .get_hint = .{} }
-                                else
-                                    sudoku.PlayerAction{ .solve_board = .{} },
-                                else => null,
-                            };
+                                        sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
+                                    c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
+                                    c.SDLK_z => if (is_any_ctrl_pressed)
+                                        if (is_any_shift_pressed)
+                                            sudoku.PlayerAction{ .redo = .{} }
+                                        else
+                                            sudoku.PlayerAction{ .undo = .{} }
+                                    else
+                                        null,
+                                    c.SDLK_h => if (is_any_shift_pressed)
+                                        sudoku.PlayerAction{ .clear_all_candidates = .{} }
+                                    else if (is_any_ctrl_pressed)
+                                        sudoku.PlayerAction{ .fill_all_candidates = .{} }
+                                    else
+                                        sudoku.PlayerAction{ .fill_candidates = .{} },
+                                    c.SDLK_RETURN => if (is_any_shift_pressed)
+                                        sudoku.PlayerAction{ .get_hint = .{} }
+                                    else
+                                        sudoku.PlayerAction{ .solve_board = .{} },
+                                    else => null,
+                                };
 
                             if (player_event) |event| {
                                 sudoku.apply_player_event(game, event);
