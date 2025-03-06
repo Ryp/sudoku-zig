@@ -1,5 +1,7 @@
 name: Build
 on: [push, pull_request]
+env:
+  zig_version: 0.14.0
 
 jobs:
   build:
@@ -11,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: ${{ env.zig_version }}
       # Ubuntu-specific bit
       - run: sudo apt-get update -qq
       - run: sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev
@@ -27,4 +31,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: ${{ env.zig_version }}
       - run: zig fmt --check src/*.zig
