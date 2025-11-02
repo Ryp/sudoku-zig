@@ -8,14 +8,16 @@ const UnsetNumber = sudoku.UnsetNumber;
 const dancing_links = @import("generator_dancing_links.zig");
 
 pub const Algorithm = union(enum) {
-    dancing_links,
+    dancing_links: struct {
+        difficulty: u32,
+    },
     dumb,
 };
 
 pub fn generate(board: *BoardState, algorithm: Algorithm, seed: u64) void {
     switch (algorithm) {
-        .dancing_links => {
-            dancing_links.generate(board, seed);
+        .dancing_links => |options| {
+            dancing_links.generate(board, seed, options.difficulty);
         },
         .dumb => {
             generate_dumb_board(board, seed);

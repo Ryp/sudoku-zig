@@ -169,7 +169,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
 
         const seed = std.mem.readInt(u64, &random_buffer, .little);
 
-        generator.generate(&board, .{ .dancing_links = undefined }, seed);
+        generator.generate(&board, .{ .dancing_links = .{ .difficulty = 200 } }, seed);
     } else {
         fill_board_from_string(board.numbers, sudoku_string, board.extent);
     }

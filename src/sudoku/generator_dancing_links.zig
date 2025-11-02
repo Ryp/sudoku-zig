@@ -12,7 +12,7 @@ const DoublyLink = struct {
     next: u32,
 };
 
-pub fn generate(board: *BoardState, seed: u64) void {
+pub fn generate(board: *BoardState, seed: u64, difficulty: u32) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
@@ -80,7 +80,7 @@ pub fn generate(board: *BoardState, seed: u64) void {
     }
 
     var is_unique = true;
-    var try_harder_count: u32 = 500;
+    var try_harder_count = difficulty;
 
     while (is_unique) {
         const random_index = rng.random().uintLessThan(u32, board.extent * board.extent);
