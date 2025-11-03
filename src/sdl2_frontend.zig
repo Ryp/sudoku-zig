@@ -2,8 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const c = @cImport({
-    @cInclude("SDL2/SDL.h");
-    @cInclude("SDL2/SDL_ttf.h");
+    @cInclude("SDL3/SDL.h");
 });
 
 const sudoku = @import("sudoku/game.zig");
@@ -48,7 +47,9 @@ const SdlContext = struct {
 };
 
 fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
-    if (c.SDL_Init(c.SDL_INIT_EVERYTHING) != 0) {
+    _ = allocator;
+
+    if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
@@ -57,18 +58,27 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     const window_width = extent * CellExtent;
     const window_height = extent * CellExtent;
 
-    const window = c.SDL_CreateWindow("Sudoku", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_SHOWN) orelse {
+    const window = c.SDL_CreateWindow("Sudoku", @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
     errdefer c.SDL_DestroyWindow(window);
 
-    if (c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1") == c.SDL_FALSE) {
+    const content_scale = c.SDL_GetDisplayContentScale(c.SDL_GetPrimaryDisplay());
+    std.debug.print("SDL_GetDisplayContentScale: {}\n", .{content_scale});
+
+    const scale = c.SDL_GetWindowDisplayScale(window);
+    std.debug.print("SDL_GetWindowDisplayScale: {}\n", .{scale});
+
+    const density = c.SDL_GetWindowPixelDensity(window);
+    std.debug.print("SDL_GetWindowPixelDensity: {}\n", .{density});
+
+    if (!c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1")) {
         c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
 
-    const renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
+    const renderer = c.SDL_CreateRenderer(window, null) orelse {
         c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
@@ -149,10 +159,7 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
 }
 
 fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) void {
-    for (sdl_context.text_textures, sdl_context.text_surfaces) |texture, surface| {
-        c.SDL_DestroyTexture(texture);
-        c.SDL_FreeSurface(surface);
-    }
+    _ = allocator;
 
     allocator.free(sdl_context.text_textures);
     allocator.free(sdl_context.text_surfaces);
@@ -177,13 +184,13 @@ fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) vo
 fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
     return switch (key_code) {
         c.SDLK_1...c.SDLK_9 => @intCast(key_code - c.SDLK_1),
-        c.SDLK_a => 9,
-        c.SDLK_b => 10,
-        c.SDLK_c => 11,
-        c.SDLK_d => 12,
-        c.SDLK_e => 13,
-        c.SDLK_f => 14,
-        c.SDLK_g => 15,
+        c.SDLK_A => 9,
+        c.SDLK_B => 10,
+        c.SDLK_C => 11,
+        c.SDLK_D => 12,
+        c.SDLK_E => 13,
+        c.SDLK_F => 14,
+        c.SDLK_G => 15,
         else => unreachable,
     };
 }
@@ -202,7 +209,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     defer allocator.free(title_string);
 
     const candidate_layout = get_candidate_layout(extent);
-    var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_Rect = undefined;
+    var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_FRect = undefined;
     const candidate_local_rects = candidate_local_rects_full[0..extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
@@ -222,13 +229,13 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     main_loop: while (true) {
         // Poll events
         var sdlEvent: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&sdlEvent) > 0) {
+        while (c.SDL_PollEvent(&sdlEvent)) {
             const mods = c.SDL_GetModState();
-            const is_any_ctrl_pressed = (mods & c.KMOD_CTRL) != 0;
-            const is_any_shift_pressed = (mods & c.KMOD_SHIFT) != 0;
+            const is_any_ctrl_pressed = (mods & c.SDL_KMOD_CTRL) != 0;
+            const is_any_shift_pressed = (mods & c.SDL_KMOD_SHIFT) != 0;
 
             switch (sdlEvent.type) {
-                c.SDL_QUIT => {
+                c.SDL_EVENT_QUIT => {
                     break :main_loop;
                 },
                 c.SDL_MOUSEBUTTONUP => {
@@ -238,8 +245,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
                     }
                 },
-                c.SDL_KEYDOWN => {
-                    const key_sym = sdlEvent.key.keysym.sym;
+                c.SDL_EVENT_KEY_DOWN => {
+                    const key_sym = sdlEvent.key.key;
                     switch (key_sym) {
                         c.SDLK_ESCAPE => {
                             break :main_loop;
@@ -251,19 +258,19 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                                     c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
                                     c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
                                     c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
-                                    c.SDLK_1...c.SDLK_9, c.SDLK_a, c.SDLK_b, c.SDLK_c, c.SDLK_d, c.SDLK_e, c.SDLK_f, c.SDLK_g => if (is_any_shift_pressed)
+                                    c.SDLK_1...c.SDLK_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
                                         sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                     else
                                         sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
                                     c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
-                                    c.SDLK_z => if (is_any_ctrl_pressed)
+                                    c.SDLK_Z => if (is_any_ctrl_pressed)
                                         if (is_any_shift_pressed)
                                             sudoku.PlayerAction{ .redo = .{} }
                                         else
                                             sudoku.PlayerAction{ .undo = .{} }
                                     else
                                         null,
-                                    c.SDLK_h => if (is_any_shift_pressed)
+                                    c.SDLK_H => if (is_any_shift_pressed)
                                         sudoku.PlayerAction{ .clear_all_candidates = .{} }
                                     else if (is_any_ctrl_pressed)
                                         sudoku.PlayerAction{ .fill_all_candidates = .{} }
@@ -399,7 +406,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         set_window_title(sdl_context.window, game, title_string);
 
-        c.SDL_RenderPresent(sdl_context.renderer);
+        _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
 
     destroy_sdl_context(allocator, sdl_context);
@@ -430,7 +437,7 @@ fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SD
     }
 }
 
-fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_Rect, board: BoardState, solver_event: sudoku.SolverEvent) void {
+fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, solver_event: sudoku.SolverEvent) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
             const cell_coord = sudoku.cell_coord_from_index(board.extent, naked_single.cell_index);
@@ -644,7 +651,7 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
     }
 }
 
-fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_Rect, board: BoardState, validation_error: sudoku.ValidationError) void {
+fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, validation_error: sudoku.ValidationError) void {
     for (validation_error.region) |cell_index| {
         const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
         const cell_rect = cell_rectangle(cell_coord);
@@ -808,5 +815,5 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
         _ = std.fmt.bufPrintZ(title_string, "{s}", .{title}) catch unreachable;
     }
 
-    c.SDL_SetWindowTitle(window, title_string.ptr);
+    _ = c.SDL_SetWindowTitle(window, title_string.ptr);
 }

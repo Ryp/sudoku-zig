@@ -18,10 +18,6 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    exe.linkLibC();
-    exe.linkSystemLibrary("SDL2");
-    exe.linkSystemLibrary("SDL2_ttf");
-
     exe.root_module.addAnonymousImport("font_regular", .{ .root_source_file = b.path("res/FreeSans.ttf") });
     exe.root_module.addAnonymousImport("font_bold", .{ .root_source_file = b.path("res/FreeSansBold.ttf") });
 
@@ -42,6 +38,14 @@ pub fn build(b: *std.Build) void {
         exe.linkLibC();
         exe.linkLibCpp();
     }
+
+    const sdl_dep = b.dependency("sdl", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const sdl_lib = sdl_dep.artifact("SDL3");
+
+    exe.root_module.linkLibrary(sdl_lib);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
