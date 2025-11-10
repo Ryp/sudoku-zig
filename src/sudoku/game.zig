@@ -295,7 +295,7 @@ pub fn fill_string_from_board(sudoku_string: []u8, board: []const u5, extent: u3
         if (cell_number == UnsetNumber) {
             char.* = '.';
         } else {
-            char.* = boards.NumbersString[cell_number][0];
+            char.* = boards.NumbersString[cell_number];
         }
     }
 }

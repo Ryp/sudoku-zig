@@ -47,6 +47,10 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.linkLibrary(sdl_lib);
 
+    const true_type_dep = b.dependency("TrueType", .{}).module("TrueType");
+
+    exe.root_module.addImport("TrueType.zig", true_type_dep);
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {

@@ -5,6 +5,8 @@ const c = @cImport({
     @cInclude("SDL3/SDL.h");
 });
 
+const TrueType = @import("TrueType.zig");
+
 const sudoku = @import("sudoku/game.zig");
 const GameState = sudoku.GameState;
 const BoardState = sudoku.BoardState;
@@ -38,17 +40,11 @@ const JigsawRegionValue = 1.0;
 const SdlContext = struct {
     window: *c.SDL_Window,
     renderer: *c.SDL_Renderer,
-    font: *c.TTF_Font,
-    font_small: *c.TTF_Font,
-    text_textures: []*c.SDL_Texture,
-    text_surfaces: []*c.SDL_Surface,
-    text_small_textures: []*c.SDL_Texture,
-    text_small_surfaces: []*c.SDL_Surface,
+    // text_textures: []*c.SDL_Texture,
+    // text_small_textures: []*c.SDL_Texture,
 };
 
 fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
-    _ = allocator;
-
     if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
@@ -84,97 +80,54 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     };
     errdefer c.SDL_DestroyRenderer(renderer);
 
-    if (c.TTF_Init() != 0) {
-        c.SDL_Log("Unable to initialize TTF: %s", c.TTF_GetError());
-        return error.SDLInitializationFailed;
-    }
-    errdefer c.TTF_Quit();
-
-    const font_regular = @embedFile("font_regular");
-    const font_regular_mem = c.SDL_RWFromConstMem(font_regular, @intCast(font_regular.len)) orelse {
-        c.SDL_Log("SDL error: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-
-    const font = c.TTF_OpenFontRW(font_regular_mem, 0, FontSize) orelse {
-        c.SDL_Log("TTF error: %s", c.TTF_GetError());
-        return error.SDLInitializationFailed;
-    };
-    errdefer c.TTF_CloseFont(font);
-
-    const font_bold = @embedFile("font_bold");
-    const font_bold_mem = c.SDL_RWFromConstMem(font_bold, @intCast(font_bold.len)) orelse {
-        c.SDL_Log("SDL error: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-
-    const font_small = c.TTF_OpenFontRW(font_bold_mem, 0, FontSizeSmall) orelse {
-        c.SDL_Log("TTF error: %s", c.TTF_GetError());
-        return error.SDLInitializationFailed;
-    };
-    errdefer c.TTF_CloseFont(font_small);
-
-    const text_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
-    errdefer allocator.free(text_surfaces);
-
     const text_textures = try allocator.alloc(*c.SDL_Texture, extent);
     errdefer allocator.free(text_textures);
 
-    for (text_surfaces, text_textures, NumbersString[0..extent]) |*surface, *texture, number_string| {
-        surface.* = c.TTF_RenderText_LCD(font, number_string, TextColor, BgColor);
-        texture.* = c.SDL_CreateTextureFromSurface(renderer, surface.*) orelse {
-            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        };
+    for (text_textures, NumbersString[0..extent]) |*texture, number_char| {
+        // surface.* = c.TTF_RenderText_LCD(font, number_char, TextColor, BgColor);
+        const format = c.SDL_PIXELFORMAT_RGBA32;
+        texture.* = c.SDL_CreateTexture(renderer, format, c.SDL_TEXTUREACCESS_STATIC, 20, 20);
+        errdefer c.SDL_DestroyTexture(texture.*);
 
         _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
     }
-
-    const text_small_surfaces = try allocator.alloc(*c.SDL_Surface, extent);
-    errdefer allocator.free(text_small_surfaces);
+    errdefer {
+        for (text_textures) |texture| {
+            c.SDL_DestroyTexture(texture);
+        }
+    }
 
     const text_small_textures = try allocator.alloc(*c.SDL_Texture, extent);
     errdefer allocator.free(text_small_textures);
 
-    for (text_small_surfaces, text_small_textures, NumbersString[0..extent]) |*surface, *texture, number_string| {
-        surface.* = c.TTF_RenderText_LCD(font_small, number_string, TextColor, BgColor);
-        texture.* = c.SDL_CreateTextureFromSurface(renderer, surface.*) orelse {
-            c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        };
+    // for (text_small_textures, NumbersString[0..extent]) |*texture, number_char| {
+    //     // surface.* = c.TTF_RenderText_LCD(font_small, number_char, TextColor, BgColor);
+    //     texture.* = c.SDL_CreateTextureFromSurface(renderer, surface.*) orelse {
+    //         c.SDL_Log("Unable to create texture from surface: %s", c.SDL_GetError());
+    //         return error.SDLInitializationFailed;
+    //     };
 
-        _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
-    }
+    //     _ = c.SDL_SetTextureBlendMode(texture.*, c.SDL_BLENDMODE_MUL);
+    // }
 
     return .{
         .window = window,
         .renderer = renderer,
-        .font = font,
-        .font_small = font_small,
         .text_textures = text_textures,
-        .text_surfaces = text_surfaces,
         .text_small_textures = text_small_textures,
-        .text_small_surfaces = text_small_surfaces,
     };
 }
 
 fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) void {
-    _ = allocator;
-
+    for (sdl_context.text_textures, sdl_context.text_surfaces) |texture, surface| {
+        c.SDL_DestroyTexture(texture);
+    }
     allocator.free(sdl_context.text_textures);
-    allocator.free(sdl_context.text_surfaces);
 
     for (sdl_context.text_small_textures, sdl_context.text_small_surfaces) |texture, surface| {
         c.SDL_DestroyTexture(texture);
-        c.SDL_FreeSurface(surface);
     }
-
     allocator.free(sdl_context.text_small_textures);
-    allocator.free(sdl_context.text_small_surfaces);
-
-    c.TTF_CloseFont(sdl_context.font_small);
-    c.TTF_CloseFont(sdl_context.font);
-    c.TTF_Quit();
 
     c.SDL_DestroyRenderer(sdl_context.renderer);
     c.SDL_DestroyWindow(sdl_context.window);
@@ -196,6 +149,32 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 }
 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
+    const ttf = try TrueType.load(@embedFile("GoNotoCurrent-Regular.ttf"));
+    const example_string = "こんにちは!";
+
+    const ttf_scale = ttf.scaleForPixelHeight(20);
+
+    var buffer: std.ArrayListUnmanaged(u8) = .empty;
+    defer buffer.deinit(allocator);
+
+    var it = std.unicode.Utf8View.initComptime(example_string).iterator();
+    while (it.nextCodepoint()) |codepoint| {
+        if (ttf.codepointGlyphIndex(codepoint)) |glyph| {
+            std.log.debug("0x{d}: {d}", .{ codepoint, glyph });
+            buffer.clearRetainingCapacity();
+            const dims = try ttf.glyphBitmap(allocator, &buffer, glyph, ttf_scale, ttf_scale);
+            const pixels = buffer.items;
+            for (0..dims.height) |j| {
+                for (0..dims.width) |i| {
+                    std.debug.print("{c}", .{" .:ioVM@"[pixels[j * dims.width + i] >> 5]});
+                }
+                std.debug.print("\n", .{});
+            }
+        } else {
+            std.log.debug("0x{d}: none", .{codepoint});
+        }
+    }
+
     const extent = game.board.extent;
 
     var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
@@ -219,10 +198,10 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         const y2: c_int = @intCast((@divTrunc(number, candidate_layout[0]) + 1) * CellExtent / candidate_layout[1]);
 
         candidate_local_rect.* = .{
-            .x = x,
-            .y = y,
-            .w = x2 - x,
-            .h = y2 - y,
+            .x = @floatFromInt(x),
+            .y = @floatFromInt(y),
+            .w = @floatFromInt(x2 - x),
+            .h = @floatFromInt(y2 - y),
         };
     }
 
@@ -238,12 +217,18 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 c.SDL_EVENT_QUIT => {
                     break :main_loop;
                 },
-                c.SDL_MOUSEBUTTONUP => {
-                    const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, CellExtent));
-                    const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, CellExtent));
-                    if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
-                        sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
-                    }
+                c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
+                    const scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
+                    //c.SDL_SetWindowSize(sdl_context.window, (int)(640.0f * scale), (int)(480.0f * scale));
+                    std.debug.print("SDL_GetWindowDisplayScale returned: {}\n", .{scale});
+                },
+                c.SDL_EVENT_MOUSE_BUTTON_UP => {
+                    // FIXME
+                    // const x: u32 = @intCast(@divTrunc(sdlEvent.button.x, CellExtent));
+                    // const y: u32 = @intCast(@divTrunc(sdlEvent.button.y, CellExtent));
+                    // if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
+                    //     sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
+                    // }
                 },
                 c.SDL_EVENT_KEY_DOWN => {
                     const key_sym = sdlEvent.key.key;
@@ -354,23 +339,23 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             draw_validation_error(sdl_context, candidate_local_rects, game.board, validation_error);
         }
 
-        for (game.board.numbers, 0..) |cell_number, cell_index| {
-            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+        // for (game.board.numbers, 0..) |cell_number, cell_index| {
+        //     const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
+        //     const cell_rect = cell_rectangle(cell_coord);
 
-            // Draw placed numbers
-            if (cell_number != UnsetNumber) {
-                var glyph_rect = std.mem.zeroes(c.SDL_Rect);
+        //     // Draw placed numbers
+        //     if (cell_number != UnsetNumber) {
+        //         var glyph_rect = std.mem.zeroes(c.SDL_FRect);
 
-                if (c.TTF_SizeText(sdl_context.font, NumbersString[cell_number], &glyph_rect.w, &glyph_rect.h) != 0) {
-                    c.SDL_Log("TTF error: %s", c.TTF_GetError());
-                    return error.SDLInitializationFailed;
-                }
+        //         if (c.TTF_SizeText(sdl_context.font, NumbersString[cell_number], &glyph_rect.w, &glyph_rect.h) != 0) {
+        //             c.SDL_Log("TTF error: %s", c.TTF_GetError());
+        //             return error.SDLInitializationFailed;
+        //         }
 
-                const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
-                _ = c.SDL_RenderCopy(sdl_context.renderer, sdl_context.text_textures[cell_number], &glyph_rect, &centered_glyph_rect);
-            }
-        }
+        //         const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
+        //         _ = c.SDL_RenderCopy(sdl_context.renderer, sdl_context.text_textures[cell_number], &glyph_rect, &centered_glyph_rect);
+        //     }
+        // }
 
         for (game.candidate_masks, 0..) |cell_candidate_mask, cell_index| {
             const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
@@ -389,15 +374,15 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
 
-                    var glyph_rect = std.mem.zeroes(c.SDL_Rect);
+                    // var glyph_rect = std.mem.zeroes(c.SDL_FRect);
 
-                    if (c.TTF_SizeText(sdl_context.font_small, NumbersString[number], &glyph_rect.w, &glyph_rect.h) != 0) {
-                        c.SDL_Log("TTF error: %s", c.TTF_GetError());
-                        return error.SDLInitializationFailed;
-                    }
+                    // if (c.TTF_SizeText(sdl_context.font_small, NumbersString[number], &glyph_rect.w, &glyph_rect.h) != 0) {
+                    //     c.SDL_Log("TTF error: %s", c.TTF_GetError());
+                    //     return error.SDLInitializationFailed;
+                    // }
 
-                    const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
-                    _ = c.SDL_RenderCopy(sdl_context.renderer, sdl_context.text_small_textures[number], &glyph_rect, &centered_glyph_rect);
+                    // const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
+                    // _ = c.SDL_RenderCopy(sdl_context.renderer, sdl_context.text_small_textures[number], &glyph_rect, &centered_glyph_rect);
                 }
             }
         }
@@ -699,22 +684,22 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
         }
 
         if (thick_vertical) {
-            const rect = c.SDL_Rect{
-                .x = cell_rect.w * @as(c_int, @intCast(cell_coord[0] + 1)) - 2,
-                .y = cell_rect.h * @as(c_int, @intCast(cell_coord[1])) - 2,
-                .w = 5,
-                .h = cell_rect.h + 5,
+            const rect = c.SDL_FRect{
+                .x = cell_rect.w * @as(f32, @floatFromInt(cell_coord[0] + 1)) - 2.0,
+                .y = cell_rect.h * @as(f32, @floatFromInt(cell_coord[1])) - 2.0,
+                .w = 5.0,
+                .h = cell_rect.h + 5.0,
             };
 
             _ = c.SDL_RenderFillRect(renderer, &rect);
         }
 
         if (thick_horizontal) {
-            const rect = c.SDL_Rect{
-                .x = cell_rect.w * @as(c_int, @intCast(cell_coord[0])) - 2,
-                .y = cell_rect.h * @as(c_int, @intCast(cell_coord[1] + 1)) - 2,
-                .w = cell_rect.w + 5,
-                .h = 5,
+            const rect = c.SDL_FRect{
+                .x = cell_rect.w * @as(f32, @floatFromInt(cell_coord[0])) - 2.0,
+                .y = cell_rect.h * @as(f32, @floatFromInt(cell_coord[1] + 1)) - 2.0,
+                .w = cell_rect.w + 5.0,
+                .h = 5.0,
             };
 
             _ = c.SDL_RenderFillRect(renderer, &rect);
@@ -723,18 +708,18 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
 
     // Draw thin grid
     for (0..board.extent + 1) |index| {
-        const horizontal_rect = c.SDL_Rect{
-            .x = @intCast(index * CellExtent),
-            .y = 0,
-            .w = 1,
-            .h = @intCast(board.extent * CellExtent),
+        const horizontal_rect = c.SDL_FRect{
+            .x = @floatFromInt(index * CellExtent),
+            .y = 0.0,
+            .w = 1.0,
+            .h = @floatFromInt(board.extent * CellExtent),
         };
 
-        const vertical_rect = c.SDL_Rect{
-            .x = 0,
-            .y = @intCast(index * CellExtent),
-            .w = @intCast(board.extent * CellExtent),
-            .h = 1,
+        const vertical_rect = c.SDL_FRect{
+            .x = 0.0,
+            .y = @floatFromInt(index * CellExtent),
+            .w = @floatFromInt(board.extent * CellExtent),
+            .h = 1.0,
         };
 
         _ = c.SDL_RenderFillRect(renderer, &vertical_rect);
@@ -758,16 +743,16 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     }
 }
 
-fn cell_rectangle(cell_coord: u32_2) c.SDL_Rect {
+fn cell_rectangle(cell_coord: u32_2) c.SDL_FRect {
     return .{
-        .x = @intCast(cell_coord[0] * CellExtent + 1),
-        .y = @intCast(cell_coord[1] * CellExtent + 1),
+        .x = @floatFromInt(cell_coord[0] * CellExtent + 1),
+        .y = @floatFromInt(cell_coord[1] * CellExtent + 1),
         .w = CellExtent,
         .h = CellExtent,
     };
 }
 
-fn center_rect_inside_rect(rect: c.SDL_Rect, reference_rect: c.SDL_Rect) c.SDL_Rect {
+fn center_rect_inside_rect(rect: c.SDL_FRect, reference_rect: c.SDL_FRect) c.SDL_FRect {
     return .{
         .x = reference_rect.x + @divTrunc((reference_rect.w - rect.w), 2),
         .y = reference_rect.y + @divTrunc((reference_rect.h - rect.h), 2),
