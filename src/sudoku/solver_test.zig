@@ -52,7 +52,7 @@ test "Box-line removal" {
         try expectEqual(number, box_line_reduction.number);
 
         // Apply the solver event
-        sudoku.apply_solver_event(&board, candidate_masks, .{ .box_line_reduction = box_line_reduction });
+        solver_logical.apply_technique(&board, candidate_masks, .{ .box_line_reduction = box_line_reduction });
 
         // Make sure we don't hit again after applying the solver event
         if (solver_logical.find_box_line_reduction(board, candidate_masks)) |_| {

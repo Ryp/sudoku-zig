@@ -8,6 +8,7 @@ const c = @cImport({
 const TrueType = @import("TrueType.zig");
 
 const sudoku = @import("sudoku/game.zig");
+const solver_logical = @import("sudoku/solver_logical.zig");
 const GameState = sudoku.GameState;
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
@@ -271,41 +272,51 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         c.SDLK_ESCAPE => {
                             break :main_loop;
                         },
-                        else => {
-                            const player_event =
-                                switch (key_sym) {
-                                    c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
-                                    c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
-                                    c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
-                                    c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
-                                    c.SDLK_1...c.SDLK_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
-                                        sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
-                                    else
-                                        sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-                                    c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
-                                    c.SDLK_Z => if (is_any_ctrl_pressed)
-                                        if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .redo = .{} }
+                        else => switch (game.flow) {
+                            .Normal => {
+                                const player_event =
+                                    switch (key_sym) {
+                                        c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
+                                        c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
+                                        c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
+                                        c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
+                                        c.SDLK_1...c.SDLK_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
+                                            sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                         else
-                                            sudoku.PlayerAction{ .undo = .{} }
-                                    else
-                                        null,
-                                    c.SDLK_H => if (is_any_shift_pressed)
-                                        sudoku.PlayerAction{ .clear_all_candidates = .{} }
-                                    else if (is_any_ctrl_pressed)
-                                        sudoku.PlayerAction{ .fill_all_candidates = .{} }
-                                    else
-                                        sudoku.PlayerAction{ .fill_candidates = .{} },
-                                    c.SDLK_RETURN => if (is_any_shift_pressed)
-                                        sudoku.PlayerAction{ .get_hint = .{} }
-                                    else
-                                        sudoku.PlayerAction{ .solve_board = .{} },
-                                    else => null,
-                                };
+                                            sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
+                                        c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
+                                        c.SDLK_Z => if (is_any_ctrl_pressed)
+                                            if (is_any_shift_pressed)
+                                                sudoku.PlayerAction{ .redo = .{} }
+                                            else
+                                                sudoku.PlayerAction{ .undo = .{} }
+                                        else
+                                            null,
+                                        c.SDLK_H => if (is_any_shift_pressed)
+                                            sudoku.PlayerAction{ .clear_all_candidates = .{} }
+                                        else if (is_any_ctrl_pressed)
+                                            sudoku.PlayerAction{ .fill_all_candidates = .{} }
+                                        else
+                                            sudoku.PlayerAction{ .fill_candidates = .{} },
+                                        c.SDLK_RETURN => if (is_any_shift_pressed)
+                                            sudoku.PlayerAction{ .get_hint = .{} }
+                                        else
+                                            sudoku.PlayerAction{ .solve_board = .{} },
+                                        else => null,
+                                    };
 
-                            if (player_event) |event| {
-                                sudoku.apply_player_event(game, event);
-                            }
+                                if (player_event) |event| {
+                                    sudoku.apply_player_event(game, event);
+                                }
+                            },
+                            .WaitingForHintValidation => {
+                                switch (key_sym) {
+                                    c.SDLK_RETURN => {
+                                        sudoku.apply_player_event(game, sudoku.PlayerAction{ .get_hint = .{} });
+                                    },
+                                    else => {},
+                                }
+                            },
                         },
                     }
                 },
@@ -367,7 +378,12 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         if (game.solver_event) |solver_event| {
-            draw_solver_event_overlay(sdl_context, candidate_local_rects, game.board, solver_event);
+            switch (solver_event) {
+                .found_technique => |technique| {
+                    draw_solver_technique_overlay(sdl_context, candidate_local_rects, game.board, technique);
+                },
+                .found_nothing => {}, // Do nothing
+            }
         }
 
         if (game.validation_error) |validation_error| {
@@ -447,8 +463,8 @@ fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SD
     }
 }
 
-fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, solver_event: sudoku.SolverEvent) void {
-    switch (solver_event) {
+fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, technique: solver_logical.Technique) void {
+    switch (technique) {
         .naked_single => |naked_single| {
             const cell_coord = sudoku.cell_coord_from_index(board.extent, naked_single.cell_index);
             const cell_rect = cell_rectangle(cell_coord);
@@ -657,7 +673,6 @@ fn draw_solver_event_overlay(sdl_context: SdlContext, candidate_local_rects: []c
                 }
             }
         },
-        .nothing_found => {},
     }
 }
 
@@ -813,13 +828,15 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
 
     if (game.solver_event) |solver_event| {
         _ = switch (solver_event) {
-            .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} single", .{ title, naked_single.number + 1 }),
-            .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} and {} pair", .{ title, naked_pair.number_a + 1, naked_pair.number_b + 1 }),
-            .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
-            .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
-            .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
-            .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
-            .nothing_found => |_| std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{title}),
+            .found_technique => |technique| switch (technique) {
+                .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} single", .{ title, naked_single.number + 1 }),
+                .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} and {} pair", .{ title, naked_pair.number_a + 1, naked_pair.number_b + 1 }),
+                .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
+                .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
+                .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
+                .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
+            },
+            .found_nothing => std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{title}),
         } catch unreachable;
     } else {
         _ = std.fmt.bufPrintZ(title_string, "{s}", .{title}) catch unreachable;

@@ -560,3 +560,53 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
 
     return null;
 }
+
+pub const Technique = union(enum(u4)) {
+    naked_single: NakedSingle,
+    naked_pair: NakedPair,
+    hidden_single: HiddenSingle,
+    hidden_pair: HiddenPair,
+    pointing_line: PointingLine,
+    box_line_reduction: BoxLineReduction,
+};
+
+pub fn find_easiest_known_technique(board: BoardState, candidate_masks: []const u16) ?Technique {
+    if (find_naked_single(board, candidate_masks)) |naked_single| {
+        return .{ .naked_single = naked_single };
+    } else if (find_hidden_single(board, candidate_masks)) |hidden_single| {
+        return .{ .hidden_single = hidden_single };
+    } else if (find_naked_pair(board, candidate_masks)) |naked_pair| {
+        return .{ .naked_pair = naked_pair };
+    } else if (find_hidden_pair(board, candidate_masks)) |hidden_pair| {
+        return .{ .hidden_pair = hidden_pair };
+    } else if (find_pointing_line(board, candidate_masks)) |pointing_line| {
+        return .{ .pointing_line = pointing_line };
+    } else if (find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
+        return .{ .box_line_reduction = box_line_reduction };
+    } else {
+        return null;
+    }
+}
+
+pub fn apply_technique(board: *BoardState, candidate_masks: []u16, solver_event: Technique) void {
+    switch (solver_event) {
+        .naked_single => |naked_single| {
+            apply_naked_single(board, candidate_masks, naked_single);
+        },
+        .naked_pair => |naked_pair| {
+            apply_naked_pair(candidate_masks, naked_pair);
+        },
+        .hidden_single => |hidden_single| {
+            apply_hidden_single(board, candidate_masks, hidden_single);
+        },
+        .hidden_pair => |hidden_pair| {
+            apply_hidden_pair(candidate_masks, hidden_pair);
+        },
+        .pointing_line => |pointing_line| {
+            apply_pointing_line(candidate_masks, pointing_line);
+        },
+        .box_line_reduction => |box_line_reduction| {
+            apply_box_line_reduction(candidate_masks, box_line_reduction);
+        },
+    }
+}

@@ -25,6 +25,11 @@ pub const solver_box_line_reduction = SudokuString{
     .solution = "", // FIXME
 };
 
+pub const solver_skyscraper = SudokuString{
+    .board = "...7...5.1.4...6......4.2.8..3..5.964........7..2.6......5......7.9..58..8..2.74.",
+    .solution = "", // FIXME
+};
+
 // Takes long to solve on pure backtracking solvers
 pub const special_17_clues = SudokuString{
     .board = "...8.1..........435............7.8........1...2..3....6......75..34........2..6..",

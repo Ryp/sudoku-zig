@@ -205,14 +205,14 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
         .candidate_masks = candidate_masks,
         .selected_cells_full = selected_cells_full,
         .selected_cells = selected_cells_full[0..0],
-        .flow = GameFlow.Normal,
+        .flow = .Normal,
         .board_history = board_history,
         .candidate_masks_history = candidate_masks_history,
         .validation_error = null,
         .solver_event = null,
     };
 
-    init_history_state(&game);
+    save_state_to_history(&game, 0);
 
     return game;
 }
@@ -340,58 +340,9 @@ fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []cons
 }
 
 pub const SolverEvent = union(enum) {
-    naked_single: solver_logical.NakedSingle,
-    naked_pair: solver_logical.NakedPair,
-    hidden_single: solver_logical.HiddenSingle,
-    hidden_pair: solver_logical.HiddenPair,
-    pointing_line: solver_logical.PointingLine,
-    box_line_reduction: solver_logical.BoxLineReduction,
-    nothing_found,
+    found_technique: solver_logical.Technique,
+    found_nothing,
 };
-
-fn solve_human_step(game: *GameState) ?SolverEvent {
-    solver_logical.solve_trivial_candidates(&game.board, game.candidate_masks);
-
-    if (solver_logical.find_naked_single(game.board, game.candidate_masks)) |naked_single| {
-        return .{ .naked_single = naked_single };
-    } else if (solver_logical.find_naked_pair(game.board, game.candidate_masks)) |naked_pair| {
-        return .{ .naked_pair = naked_pair };
-    } else if (solver_logical.find_hidden_single(game.board, game.candidate_masks)) |hidden_single| {
-        return .{ .hidden_single = hidden_single };
-    } else if (solver_logical.find_hidden_pair(game.board, game.candidate_masks)) |hidden_pair| {
-        return .{ .hidden_pair = hidden_pair };
-    } else if (solver_logical.find_pointing_line(game.board, game.candidate_masks)) |pointing_line| {
-        return .{ .pointing_line = pointing_line };
-    } else if (solver_logical.find_box_line_reduction(game.board, game.candidate_masks)) |box_line_reduction| {
-        return .{ .box_line_reduction = box_line_reduction };
-    } else {
-        return null;
-    }
-}
-
-pub fn apply_solver_event(board: *BoardState, candidate_masks: []u16, solver_event: SolverEvent) void {
-    switch (solver_event) {
-        .naked_single => |naked_single| {
-            solver_logical.apply_naked_single(board, candidate_masks, naked_single);
-        },
-        .naked_pair => |naked_pair| {
-            solver_logical.apply_naked_pair(candidate_masks, naked_pair);
-        },
-        .hidden_single => |hidden_single| {
-            solver_logical.apply_hidden_single(board, candidate_masks, hidden_single);
-        },
-        .hidden_pair => |hidden_pair| {
-            solver_logical.apply_hidden_pair(candidate_masks, hidden_pair);
-        },
-        .pointing_line => |pointing_line| {
-            solver_logical.apply_pointing_line(candidate_masks, pointing_line);
-        },
-        .box_line_reduction => |box_line_reduction| {
-            solver_logical.apply_box_line_reduction(candidate_masks, box_line_reduction);
-        },
-        .nothing_found => unreachable,
-    }
-}
 
 fn get_board_history_slice(game: *GameState, history_index: u32) []u5 {
     const cell_count = game.board.numbers.len;
@@ -414,19 +365,18 @@ fn push_state_to_history(game: *GameState) void {
         game.history_index += 1;
         game.max_history_index = game.history_index;
 
-        std.mem.copyForwards(u5, get_board_history_slice(game, game.history_index), game.board.numbers);
-        std.mem.copyForwards(u16, get_candidate_masks_history_slice(game, game.history_index), game.candidate_masks);
+        save_state_to_history(game, game.history_index);
     }
 }
 
-fn init_history_state(game: *GameState) void {
-    std.mem.copyForwards(u5, get_board_history_slice(game, 0), game.board.numbers);
-    std.mem.copyForwards(u16, get_candidate_masks_history_slice(game, 0), game.candidate_masks);
+fn save_state_to_history(game: *GameState, index: u32) void {
+    @memcpy(get_board_history_slice(game, index), game.board.numbers);
+    @memcpy(get_candidate_masks_history_slice(game, index), game.candidate_masks);
 }
 
 fn load_state_from_history(game: *GameState, index: u32) void {
-    std.mem.copyForwards(u5, game.board.numbers, get_board_history_slice(game, index));
-    std.mem.copyForwards(u16, game.candidate_masks, get_candidate_masks_history_slice(game, index));
+    @memcpy(game.board.numbers, get_board_history_slice(game, index));
+    @memcpy(game.candidate_masks, get_candidate_masks_history_slice(game, index));
 }
 
 fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
@@ -507,10 +457,10 @@ pub const PlayerAction = union(enum) {
 
 pub fn apply_player_event(game: *GameState, action: PlayerAction) void {
     switch (game.flow) {
-        GameFlow.Normal => {
+        .Normal => {
             apply_player_event_normal_flow(game, action);
         },
-        GameFlow.WaitingForHintValidation => {
+        .WaitingForHintValidation => {
             switch (action) {
                 .get_hint => |_| {
                     player_apply_hint(game);
@@ -716,24 +666,35 @@ const PlayerGetHint = struct {
 };
 
 fn player_get_hint(game: *GameState) void {
-    if (solve_human_step(game)) |solver_event| {
-        game.solver_event = solver_event;
-        game.flow = GameFlow.WaitingForHintValidation;
+    solver_logical.solve_trivial_candidates(&game.board, game.candidate_masks);
+
+    if (solver_logical.find_easiest_known_technique(game.board, game.candidate_masks)) |solver_technique| {
+        game.flow = .WaitingForHintValidation;
+        game.solver_event = .{ .found_technique = solver_technique };
     } else {
-        game.solver_event = .{ .nothing_found = undefined }; // FIXME clear this at one point
+        game.solver_event = .{ .found_nothing = undefined }; // FIXME clear this at one point
     }
 }
 
 fn player_apply_hint(game: *GameState) void {
-    assert(game.solver_event != null);
+    if (game.solver_event) |solver_event| {
+        switch (solver_event) {
+            .found_technique => |technique| {
+                solver_logical.apply_technique(&game.board, game.candidate_masks, technique);
 
-    apply_solver_event(&game.board, game.candidate_masks, game.solver_event.?);
+                game.solver_event = null;
 
-    game.solver_event = null;
+                push_state_to_history(game);
 
-    push_state_to_history(game);
-
-    game.flow = GameFlow.Normal;
+                game.flow = .Normal;
+            },
+            .found_nothing => {
+                @panic("Solver event found nothing!");
+            },
+        }
+    } else {
+        @panic("Solver event not found!");
+    }
 }
 
 const PlayerSolveBoard = struct {
