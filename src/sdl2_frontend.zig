@@ -829,12 +829,12 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
     if (game.solver_event) |solver_event| {
         _ = switch (solver_event) {
             .found_technique => |technique| switch (technique) {
-                .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} single", .{ title, naked_single.number + 1 }),
-                .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {} and {} pair", .{ title, naked_pair.number_a + 1, naked_pair.number_b + 1 }),
-                .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} single", .{ title, hidden_single.number + 1 }),
-                .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {} and {} pair", .{ title, hidden_pair.a.number + 1, hidden_pair.b.number + 1 }),
-                .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {}", .{ title, pointing_line.number + 1 }),
-                .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {}", .{ title, box_line_reduction.number + 1 }),
+                .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} single", .{ title, NumbersString[naked_single.number] }),
+                .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} and {c} pair", .{ title, NumbersString[naked_pair.number_a], NumbersString[naked_pair.number_b] }),
+                .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} single", .{ title, NumbersString[hidden_single.number] }),
+                .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} and {c} pair", .{ title, NumbersString[hidden_pair.a.number], NumbersString[hidden_pair.b.number] }),
+                .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {c}", .{ title, NumbersString[pointing_line.number] }),
+                .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {c}", .{ title, NumbersString[box_line_reduction.number] }),
             },
             .found_nothing => std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{title}),
         } catch unreachable;
