@@ -5,6 +5,7 @@ const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
+const grader = @import("grader.zig");
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -182,6 +183,8 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
 
         std.debug.print("Board: {s}\n", .{string});
     }
+
+    try grader.grade_and_print_summary(allocator, board);
 
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     errdefer allocator.free(candidate_masks);
@@ -379,7 +382,7 @@ fn load_state_from_history(game: *GameState, index: u32) void {
     @memcpy(game.candidate_masks, get_candidate_masks_history_slice(game, index));
 }
 
-fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
+pub fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
     var col_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
     var row_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
     var box_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
@@ -720,7 +723,7 @@ pub const ValidationError = struct {
     region: []u32,
 };
 
-fn check_board_for_validation_errors(board: BoardState, candidate_masks: []const u16) ?ValidationError {
+pub fn check_board_for_validation_errors(board: BoardState, candidate_masks: []const u16) ?ValidationError {
     for (0..board.extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
         const number_mask = mask_for_number(number);
