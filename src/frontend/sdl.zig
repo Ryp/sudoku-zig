@@ -7,33 +7,36 @@ const c = @cImport({
 
 const TrueType = @import("TrueType.zig");
 
-const sudoku = @import("sudoku/game.zig");
-const solver_logical = @import("sudoku/solver_logical.zig");
+const sudoku = @import("../sudoku/game.zig");
+const solver_logical = @import("../sudoku/solver_logical.zig");
 const GameState = sudoku.GameState;
 const BoardState = sudoku.BoardState;
 const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 
-const boards = @import("sudoku/boards.zig");
+const boards = @import("../sudoku/boards.zig");
 const NumbersString = boards.NumbersString;
+
+const ui_palette = @import("color_palette.zig");
+const ColorRGBA8 = ui_palette.ColorRGBA8;
 
 const CandidateBoxExtent = 27;
 const CellExtent = 2 + 3 * CandidateBoxExtent;
 
-const BlackColor = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 255 };
-const BgColor = c.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
-const BoxBgColor = c.SDL_Color{ .r = 220, .g = 220, .b = 220, .a = 255 };
-const HighlightColor = c.SDL_Color{ .r = 250, .g = 243, .b = 57, .a = 255 };
-const HighlightRegionColor = c.SDL_Color{ .r = 160, .g = 208, .b = 232, .a = 80 };
-const SameNumberHighlightColor = c.SDL_Color{ .r = 250, .g = 57, .b = 243, .a = 255 };
-const SolverRed = c.SDL_Color{ .r = 255, .g = 0, .b = 0, .a = 255 };
-const SolverGreen = c.SDL_Color{ .r = 0, .g = 255, .b = 0, .a = 255 };
-const SolverOrange = c.SDL_Color{ .r = 255, .g = 165, .b = 0, .a = 255 };
-const SolverYellow = c.SDL_Color{ .r = 255, .g = 255, .b = 0, .a = 255 };
+const BlackColor = ui_palette.Lucky_Point;
+const BgColor = ui_palette.Swan_White;
+const BoxBgColor = ui_palette.Crocodile_Tooth;
+const HighlightColor = ui_palette.Spiced_Butternut;
+const HighlightRegionColor = ColorRGBA8{ .r = 160, .g = 208, .b = 232, .a = 80 };
+const SameNumberHighlightColor = ui_palette.C64_Purple;
+const SolverRed = ui_palette.Fluorescent_Red;
+const SolverGreen = ui_palette.Celestial_Green;
+const SolverOrange = ui_palette.Mandarin_Sorbet;
+const SolverYellow = ui_palette.Spiced_Butternut;
 const TextColor = BlackColor;
 const GridColor = BlackColor;
 
-const JigsawRegionSaturation = 0.4;
+const JigsawRegionSaturation = 0.32;
 const JigsawRegionValue = 1.0;
 
 const SdlContext = struct {
@@ -89,12 +92,13 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
 
     var palette_colors_full: [256]c.SDL_Color = undefined;
     for (&palette_colors_full, 0..) |*color, color_index| {
-        if (color_index == 0) {
-            color.* = c.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
-        } else {
-            const intensity: u8 = @as(u8, @intCast(255 - color_index));
-            color.* = c.SDL_Color{ .r = intensity, .g = intensity, .b = intensity, .a = 255 };
-        }
+        const alpha: u8 = @as(u8, @intCast(color_index));
+        color.* = c.SDL_Color{
+            .r = @intCast((@as(u32, @intCast(TextColor.r)) * alpha) / 255),
+            .g = @intCast((@as(u32, @intCast(TextColor.g)) * alpha) / 255),
+            .b = @intCast((@as(u32, @intCast(TextColor.b)) * alpha) / 255),
+            .a = alpha,
+        };
     }
     _ = c.SDL_SetPaletteColors(text_palette, &palette_colors_full, 0, 256);
 
@@ -214,7 +218,7 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const extent = game.board.extent;
 
-    var box_region_colors_full: [sudoku.MaxSudokuExtent]c.SDL_Color = undefined;
+    var box_region_colors_full: [sudoku.MaxSudokuExtent]ColorRGBA8 = undefined;
     const box_region_colors = box_region_colors_full[0..extent];
 
     fill_box_regions_colors(game.board.game_type, box_region_colors);
@@ -334,7 +338,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         // Render game
-        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, BgColor.r, BgColor.g, BgColor.b, BgColor.a);
+        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, BgColor);
         _ = c.SDL_RenderClear(sdl_context.renderer);
 
         for (game.board.numbers, 0..) |cell_number, cell_index| {
@@ -345,7 +349,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw box background
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, box_region_color.r, box_region_color.g, box_region_color.b, box_region_color.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, box_region_color);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
             // Draw highlighted cell
@@ -357,19 +361,19 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 const selected_box = game.board.box_indices[selected_cell_index];
 
                 if (selected_cell_index == cell_index) {
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, HighlightColor.r, HighlightColor.g, HighlightColor.b, HighlightColor.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, HighlightColor);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
                 } else {
                     if (cell_coord[0] == selected_col or cell_coord[1] == selected_row or box_index == selected_box) {
+                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, HighlightRegionColor);
                         _ = c.SDL_SetRenderDrawBlendMode(sdl_context.renderer, c.SDL_BLENDMODE_BLEND);
-                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, HighlightRegionColor.r, HighlightRegionColor.g, HighlightRegionColor.b, HighlightRegionColor.a);
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
                         _ = c.SDL_SetRenderDrawBlendMode(sdl_context.renderer, c.SDL_BLENDMODE_NONE);
                     }
 
                     if (cell_number != UnsetNumber) {
                         if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
-                            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
                             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
                         }
                     }
@@ -416,7 +420,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     candidate_rect.y += cell_rect.y;
 
                     if (highlight_mask & sudoku.mask_for_number(number) != 0) {
-                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SameNumberHighlightColor.r, SameNumberHighlightColor.g, SameNumberHighlightColor.b, SameNumberHighlightColor.a);
+                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
 
@@ -438,7 +442,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     destroy_sdl_context(allocator, sdl_context);
 }
 
-fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SDL_Color) void {
+fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []ColorRGBA8) void {
     switch (game_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern
@@ -457,7 +461,7 @@ fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []c.SD
             // Get a unique color for each region
             for (box_region_colors, 0..) |*box_region_color, box_index| {
                 const hue = @as(f32, @floatFromInt(box_index)) / @as(f32, @floatFromInt(box_region_colors.len));
-                box_region_color.* = hsv_to_sdl_color(hue, JigsawRegionSaturation, JigsawRegionValue);
+                box_region_color.* = hsv_to_rgba8(hue, JigsawRegionSaturation, JigsawRegionValue);
             }
         },
     }
@@ -469,14 +473,14 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             const cell_coord = sudoku.cell_coord_from_index(board.extent, naked_single.cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
             var candidate_rect = candidate_local_rects[naked_single.number];
             candidate_rect.x += cell_rect.x;
             candidate_rect.y += cell_rect.y;
 
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverGreen);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
         },
         .naked_pair => |naked_pair| {
@@ -485,7 +489,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_rect = cell_rectangle(cell_coord);
 
                 // Highlight region that was considered
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
                 // Draw naked pair
@@ -495,7 +499,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
                         candidate_rect.x += cell_rect.x;
                         candidate_rect.y += cell_rect.y;
-                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverGreen);
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
                 }
@@ -509,7 +513,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
 
@@ -519,7 +523,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -530,7 +534,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
             }
 
@@ -551,8 +555,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    const color = if (is_single) SolverGreen else SolverRed;
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, color.r, color.g, color.b, color.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, if (is_single) SolverGreen else SolverRed);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -564,7 +567,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
             }
 
@@ -586,8 +589,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                         candidate_rect.x += cell_rect.x;
                         candidate_rect.y += cell_rect.y;
 
-                        const color = if (is_single) SolverGreen else SolverRed;
-                        _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, color.r, color.g, color.b, color.a);
+                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, if (is_single) SolverGreen else SolverRed);
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
                 }
@@ -599,7 +601,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
                 const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
@@ -609,7 +611,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -619,7 +621,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverYellow.r, SolverYellow.g, SolverYellow.b, SolverYellow.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
                 const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
@@ -628,7 +630,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverGreen);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -639,7 +641,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
                 const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
@@ -649,7 +651,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -659,7 +661,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
-                _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverYellow.r, SolverYellow.g, SolverYellow.b, SolverYellow.a);
+                _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
                 const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
@@ -668,7 +670,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverGreen.r, SolverGreen.g, SolverGreen.b, SolverGreen.a);
+                    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverGreen);
                     _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                 }
             }
@@ -682,9 +684,9 @@ fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL
         const cell_rect = cell_rectangle(cell_coord);
 
         if (validation_error.reference_cell_index == cell_index or validation_error.invalid_cell_index == cell_index and !validation_error.is_candidate) {
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
         } else {
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverOrange.r, SolverOrange.g, SolverOrange.b, SolverOrange.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
         }
         _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
@@ -693,14 +695,14 @@ fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL
             candidate_rect.x += cell_rect.x;
             candidate_rect.y += cell_rect.y;
 
-            _ = c.SDL_SetRenderDrawColor(sdl_context.renderer, SolverRed.r, SolverRed.g, SolverRed.b, SolverRed.a);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
         }
     }
 }
 
 fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
-    _ = c.SDL_SetRenderDrawColor(renderer, GridColor.r, GridColor.g, GridColor.b, GridColor.a);
+    _ = SDL_SetRenderDrawColor2(renderer, GridColor);
 
     for (0..board.numbers.len) |cell_index| {
         const box_index = board.box_indices[cell_index];
@@ -802,7 +804,7 @@ fn center_rect_inside_rect(rect: c.SDL_FRect, reference_rect: c.SDL_FRect) c.SDL
 }
 
 // https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
+fn hsv_to_rgba8(hue: f32, saturation: f32, value: f32) ColorRGBA8 {
     const c_f = value * saturation;
     const area_index = hue * 6.0;
     const area_index_i: u8 = @intFromFloat(area_index);
@@ -813,12 +815,12 @@ fn hsv_to_sdl_color(hue: f32, saturation: f32, value: f32) c.SDL_Color {
     const m_u8 = @min(255, @as(u8, @intFromFloat(m_f * 255.0)));
 
     return switch (area_index_i) {
-        0 => c.SDL_Color{ .r = c_u8, .g = x_u8, .b = m_u8, .a = 255 },
-        1 => c.SDL_Color{ .r = x_u8, .g = c_u8, .b = m_u8, .a = 255 },
-        2 => c.SDL_Color{ .r = m_u8, .g = c_u8, .b = x_u8, .a = 255 },
-        3 => c.SDL_Color{ .r = m_u8, .g = x_u8, .b = c_u8, .a = 255 },
-        4 => c.SDL_Color{ .r = x_u8, .g = m_u8, .b = c_u8, .a = 255 },
-        5 => c.SDL_Color{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
+        0 => ColorRGBA8{ .r = c_u8, .g = x_u8, .b = m_u8, .a = 255 },
+        1 => ColorRGBA8{ .r = x_u8, .g = c_u8, .b = m_u8, .a = 255 },
+        2 => ColorRGBA8{ .r = m_u8, .g = c_u8, .b = x_u8, .a = 255 },
+        3 => ColorRGBA8{ .r = m_u8, .g = x_u8, .b = c_u8, .a = 255 },
+        4 => ColorRGBA8{ .r = x_u8, .g = m_u8, .b = c_u8, .a = 255 },
+        5 => ColorRGBA8{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
         else => unreachable,
     };
 }
@@ -843,4 +845,8 @@ fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8)
     }
 
     _ = c.SDL_SetWindowTitle(window, title_string.ptr);
+}
+
+fn SDL_SetRenderDrawColor2(renderer: *c.SDL_Renderer, color: ColorRGBA8) bool {
+    return c.SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 }

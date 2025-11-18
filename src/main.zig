@@ -2,7 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("sudoku/game.zig");
-const sdl2 = @import("sdl2_frontend.zig");
+const sdl = @import("frontend/sdl.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -39,5 +39,5 @@ pub fn main() !void {
     var game = try sudoku.create_game_state(gpa_allocator, game_type, sudoku_string);
     defer sudoku.destroy_game_state(gpa_allocator, &game);
 
-    try sdl2.execute_main_loop(gpa_allocator, &game);
+    try sdl.execute_main_loop(gpa_allocator, &game);
 }
