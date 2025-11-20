@@ -5,7 +5,6 @@ const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
-const grader = @import("grader.zig");
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -183,8 +182,6 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
 
         std.debug.print("Board: {s}\n", .{string});
     }
-
-    try grader.grade_and_print_summary(allocator, board);
 
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     errdefer allocator.free(candidate_masks);

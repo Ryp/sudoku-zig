@@ -2,6 +2,8 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("sudoku/game.zig");
+const grader = @import("sudoku/grader.zig");
+
 const sdl = @import("frontend/sdl.zig");
 
 pub fn main() !void {
@@ -38,6 +40,8 @@ pub fn main() !void {
     // Create game state
     var game = try sudoku.create_game_state(gpa_allocator, game_type, sudoku_string);
     defer sudoku.destroy_game_state(gpa_allocator, &game);
+
+    try grader.grade_and_print_summary(gpa_allocator, game.board);
 
     try sdl.execute_main_loop(gpa_allocator, &game);
 }
