@@ -1,7 +1,10 @@
 const std = @import("std");
 
+const common = @import("common.zig");
+const u32_2 = common.u32_2;
+
 pub const RegularSudoku = struct {
-    box_extent: struct { u32, u32 },
+    box_extent: u32_2,
 };
 
 pub const JigsawSudoku = struct {
@@ -81,7 +84,7 @@ pub fn board_state(extent: comptime_int) type {
                 return regions;
             }
 
-            fn regular_box_indices(box_extent: struct { u32, u32 }) [ExtentSqr]NumberType {
+            fn regular_box_indices(box_extent: u32_2) [ExtentSqr]NumberType {
                 var box_indices: [ExtentSqr]NumberType = undefined;
 
                 for (&box_indices, 0..) |*box_index, cell_index| {
@@ -143,7 +146,7 @@ pub fn board_state(extent: comptime_int) type {
             };
         }
 
-        pub fn cell_coord_from_index(cell_index: usize) struct { u32, u32 } {
+        pub fn cell_coord_from_index(cell_index: usize) u32_2 {
             std.debug.assert(cell_index < ExtentSqr);
 
             const x: u32 = @intCast(cell_index % Extent);
@@ -154,7 +157,7 @@ pub fn board_state(extent: comptime_int) type {
             return .{ x, y };
         }
 
-        pub fn cell_index_from_coord(position: struct { u32, u32 }) u32 {
+        pub fn cell_index_from_coord(position: u32_2) u32 {
             std.debug.assert(position[0] < Extent);
             std.debug.assert(position[1] < Extent);
 
@@ -168,12 +171,12 @@ pub fn board_state(extent: comptime_int) type {
     };
 }
 
-test "Generic board basic" {
+test "Basic" {
     const board = board_state(16).init(.{ .regular = .{ .box_extent = .{ 4, 4 } } });
     _ = board;
 }
 
-test "Generic board ergonomics" {
+test "Ergonomics" {
     var random_buffer: [8]u8 = undefined;
     std.crypto.random.bytes(&random_buffer);
 
