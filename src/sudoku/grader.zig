@@ -2,10 +2,12 @@ const std = @import("std");
 
 const game = @import("game.zig");
 const solver_logical = @import("solver_logical.zig");
+const board_legacy = @import("board_legacy.zig");
+const BoardState = board_legacy.BoardState;
 
-pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: game.BoardState) !void {
+pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardState) !void {
     // Create a dummy board we can modify
-    var board = try game.BoardState.create(allocator, const_board.game_type);
+    var board = try BoardState.create(allocator, const_board.game_type);
     defer board.destroy(allocator);
 
     @memcpy(board.numbers, const_board.numbers);

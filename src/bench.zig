@@ -4,11 +4,13 @@ const assert = std.debug.assert;
 const sudoku = @import("sudoku/game.zig");
 const solver = @import("sudoku/solver.zig");
 const boards = @import("sudoku/boards.zig");
+const board_legacy = @import("sudoku/board_legacy.zig");
+const BoardState = board_legacy.BoardState;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
+    var board = try BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });

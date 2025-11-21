@@ -3,6 +3,10 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 const sudoku = @import("game.zig");
+
+const board_legacy = @import("board_legacy.zig");
+const BoardState = board_legacy.BoardState;
+
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
@@ -13,7 +17,7 @@ test "Box-line removal" {
 
     const allocator = gpa.allocator();
 
-    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
+    var board = try BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
@@ -39,7 +43,7 @@ test "Box-line removal" {
     // Remove candidates until we can apply the box-line solver
     for (3..9) |row_index| {
         const mask = board.mask_for_number(number);
-        const cell_index = board.cell_index_from_coord(sudoku.u32_2{ 0, @intCast(row_index) });
+        const cell_index = board.cell_index_from_coord(.{ 0, @intCast(row_index) });
         candidate_masks[cell_index] &= ~mask;
     }
 
@@ -66,7 +70,7 @@ test "Box-line removal" {
     // Remove candidates until we can apply the box-line solver
     for (3..9) |col_index| {
         const mask = board.mask_for_number(number);
-        const cell_index = board.cell_index_from_coord(sudoku.u32_2{ @intCast(col_index), 0 });
+        const cell_index = board.cell_index_from_coord(.{ @intCast(col_index), 0 });
         candidate_masks[cell_index] &= ~mask;
     }
 
@@ -84,7 +88,7 @@ test "Solver critical path" {
     const allocator = gpa.allocator();
 
     // Create game board
-    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
+    var board = try BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });

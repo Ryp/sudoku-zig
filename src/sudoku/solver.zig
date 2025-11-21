@@ -1,5 +1,4 @@
-const sudoku = @import("game.zig");
-const BoardState = sudoku.BoardState;
+const board_state = @import("board_legacy.zig");
 
 const dancing_links = @import("solver_dancing_links.zig");
 const backtracking = @import("solver_backtracking.zig");
@@ -11,7 +10,7 @@ pub const Algorithm = union(enum) {
     },
 };
 
-pub fn solve(board: *BoardState, algorithm: Algorithm) bool {
+pub fn solve(board: *board_state.BoardState, algorithm: Algorithm) bool {
     switch (algorithm) {
         .dancing_links => |options| {
             return dancing_links.solve(board, options);

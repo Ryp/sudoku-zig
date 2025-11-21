@@ -4,8 +4,9 @@ const assert = std.debug.assert;
 const game = @import("game.zig");
 
 pub const MaxSudokuExtent = 16;
+pub const NumbersString = [MaxSudokuExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
 
-const u32_2 = @Vector(2, u32);
+pub const u32_2 = @Vector(2, u32);
 
 pub const RegularSudoku = struct {
     box_w: u32,

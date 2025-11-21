@@ -1,8 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sudoku = @import("game.zig");
-const BoardState = sudoku.BoardState;
+const board_state = @import("board_legacy.zig");
+const BoardState = board_state.BoardState;
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
 

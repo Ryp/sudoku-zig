@@ -8,13 +8,15 @@ const c = @cImport({
 const TrueType = @import("TrueType.zig");
 
 const sudoku = @import("../sudoku/game.zig");
-const solver_logical = @import("../sudoku/solver_logical.zig");
 const GameState = sudoku.GameState;
-const BoardState = sudoku.BoardState;
-const u32_2 = sudoku.u32_2;
 
-const boards = @import("../sudoku/boards.zig");
-const NumbersString = boards.NumbersString;
+const solver_logical = @import("../sudoku/solver_logical.zig");
+
+const board_legacy = @import("../sudoku/board_legacy.zig");
+const BoardState = board_legacy.BoardState;
+const NumbersString = board_legacy.NumbersString;
+const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
+const u32_2 = board_legacy.u32_2;
 
 const ui_palette = @import("color_palette.zig");
 const ColorRGBA8 = ui_palette.ColorRGBA8;
@@ -151,7 +153,7 @@ fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, s
     var buffer: std.ArrayListUnmanaged(u8) = .empty;
     defer buffer.deinit(allocator);
 
-    var glyph_indices_full: [sudoku.MaxSudokuExtent]TrueType.GlyphIndex = undefined;
+    var glyph_indices_full: [MaxSudokuExtent]TrueType.GlyphIndex = undefined;
     const glyph_indices = glyph_indices_full[0..sudoku_extent];
 
     var numbers_string_iterator = std.unicode.Utf8View.initComptime(&NumbersString).iterator();
@@ -217,7 +219,7 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     const extent = game.board.extent;
 
-    var box_region_colors_full: [sudoku.MaxSudokuExtent]ColorRGBA8 = undefined;
+    var box_region_colors_full: [MaxSudokuExtent]ColorRGBA8 = undefined;
     const box_region_colors = box_region_colors_full[0..extent];
 
     fill_box_regions_colors(game.board.game_type, box_region_colors);
@@ -228,7 +230,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     defer allocator.free(title_string);
 
     const candidate_layout = get_candidate_layout(extent);
-    var candidate_local_rects_full: [sudoku.MaxSudokuExtent]c.SDL_FRect = undefined;
+    var candidate_local_rects_full: [MaxSudokuExtent]c.SDL_FRect = undefined;
     const candidate_local_rects = candidate_local_rects_full[0..extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
@@ -439,7 +441,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     destroy_sdl_context(allocator, sdl_context);
 }
 
-fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []ColorRGBA8) void {
+fn fill_box_regions_colors(game_type: board_legacy.GameType, box_region_colors: []ColorRGBA8) void {
     switch (game_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern

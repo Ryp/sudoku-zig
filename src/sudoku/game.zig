@@ -5,13 +5,10 @@ const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
-const board_legacy = @import("board_legacy.zig");
 
-// FIXME
-pub const RegularSudoku = board_legacy.RegularSudoku;
-pub const JigsawSudoku = board_legacy.JigsawSudoku;
-pub const GameType = board_legacy.GameType;
-pub const BoardState = board_legacy.BoardState;
+const board_legacy = @import("board_legacy.zig");
+const BoardState = board_legacy.BoardState;
+const u32_2 = board_legacy.u32_2;
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -22,10 +19,9 @@ pub fn all(vector: anytype) bool {
     return @reduce(.And, vector);
 }
 
-pub const u32_2 = @Vector(2, u32);
 const i32_2 = @Vector(2, i32);
 
-pub const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
+const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
 const MaxHistorySize = 512;
 
 const GameFlow = enum {
@@ -47,7 +43,7 @@ pub const GameState = struct {
     solver_event: ?SolverEvent,
 };
 
-pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudoku_string: []const u8) !GameState {
+pub fn create_game_state(allocator: std.mem.Allocator, game_type: board_legacy.GameType, sudoku_string: []const u8) !GameState {
     var board = try BoardState.create(allocator, game_type);
 
     if (sudoku_string.len == 0) {
@@ -142,7 +138,7 @@ pub fn fill_string_from_board(sudoku_string: []u8, board: []const ?u4, extent: u
 
     for (board, sudoku_string) |number_opt, *char| {
         if (number_opt) |number| {
-            char.* = boards.NumbersString[number];
+            char.* = board_legacy.NumbersString[number];
         } else {
             char.* = '.';
         }

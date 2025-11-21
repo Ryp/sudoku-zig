@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const sudoku = @import("sudoku/game.zig");
+const board_legacy = @import("sudoku/board_legacy.zig");
 const grader = @import("sudoku/grader.zig");
 
 const sdl = @import("frontend/sdl.zig");
@@ -23,12 +24,12 @@ pub fn main() !void {
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
     const game_type = if (args.len < 5)
-        sudoku.GameType{ .regular = .{
+        board_legacy.GameType{ .regular = .{
             .box_w = box_w,
             .box_h = box_h,
         } }
     else
-        sudoku.GameType{
+        board_legacy.GameType{
             .jigsaw = .{
                 .size = box_w * box_h, // FIXME use different format like 3x3 for regular
                 .box_indices_string = args[4],
