@@ -254,14 +254,14 @@ pub const PlayerAction = union(enum) {
     move_selection: PlayerMoveSelection,
     set_number: PlayerSetNumberAtSelection,
     toggle_candidate: PlayerToggleCandidateAtSelection,
-    clear_selected_cell: PlayerClearSelectedCell,
-    undo: PlayerUndo,
-    redo: PlayerRedo,
-    fill_candidates: PlayerFillCandidates,
-    fill_all_candidates: PlayerFillAllCandidates,
-    clear_all_candidates: PlayerClearCandidates,
-    get_hint: PlayerGetHint,
-    solve_board: PlayerSolveBoard,
+    clear_selected_cell,
+    undo,
+    redo,
+    fill_candidates,
+    fill_all_candidates,
+    clear_all_candidates,
+    get_hint,
+    solve_board,
 };
 
 pub fn apply_player_event(game: *GameState, action: PlayerAction) void {
@@ -393,10 +393,6 @@ fn player_toggle_candidate(game: *GameState, number: u4) void {
     }
 }
 
-const PlayerClearSelectedCell = struct {
-    // Nothing yet
-};
-
 fn player_clear_selected_cell(game: *GameState) void {
     if (game.selected_cells.len > 0) {
         const cell_index = game.selected_cells[0];
@@ -408,10 +404,6 @@ fn player_clear_selected_cell(game: *GameState) void {
     }
 }
 
-const PlayerUndo = struct {
-    // Nothing yet
-};
-
 fn player_undo(game: *GameState) void {
     if (game.history_index > 0) {
         game.history_index -= 1;
@@ -419,10 +411,6 @@ fn player_undo(game: *GameState) void {
         load_state_from_history(game, game.history_index);
     }
 }
-
-const PlayerRedo = struct {
-    // Nothing yet
-};
 
 fn player_redo(game: *GameState) void {
     if (game.history_index < game.max_history_index) {
@@ -432,19 +420,11 @@ fn player_redo(game: *GameState) void {
     }
 }
 
-const PlayerFillCandidates = struct {
-    // Nothing yet
-};
-
 fn player_fill_candidates(game: *GameState) void {
     fill_candidate_mask(game.board, game.candidate_masks);
 
     push_state_to_history(game);
 }
-
-const PlayerFillAllCandidates = struct {
-    // Nothing yet
-};
 
 fn player_fill_candidates_all(game: *GameState) void {
     const full_mask = game.board.full_candidate_mask();
@@ -458,10 +438,6 @@ fn player_fill_candidates_all(game: *GameState) void {
     push_state_to_history(game);
 }
 
-const PlayerClearCandidates = struct {
-    // Nothing yet
-};
-
 fn player_clear_candidates(game: *GameState) void {
     for (game.candidate_masks) |*candidate_mask| {
         candidate_mask.* = 0;
@@ -469,10 +445,6 @@ fn player_clear_candidates(game: *GameState) void {
 
     push_state_to_history(game);
 }
-
-const PlayerGetHint = struct {
-    // Nothing yet
-};
 
 fn player_get_hint(game: *GameState) void {
     solver_logical.solve_trivial_candidates(&game.board, game.candidate_masks);
@@ -505,10 +477,6 @@ fn player_apply_hint(game: *GameState) void {
         @panic("Solver event not found!");
     }
 }
-
-const PlayerSolveBoard = struct {
-    // Nothing yet
-};
 
 fn player_solve_board(game: *GameState) void {
     if (solver.solve(&game.board, .{ .dancing_links = .{} })) {

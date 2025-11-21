@@ -288,24 +288,24 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                                             sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                         else
                                             sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-                                        c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = .{} },
+                                        c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = undefined },
                                         c.SDLK_Z => if (is_any_ctrl_pressed)
                                             if (is_any_shift_pressed)
-                                                sudoku.PlayerAction{ .redo = .{} }
+                                                sudoku.PlayerAction{ .redo = undefined }
                                             else
-                                                sudoku.PlayerAction{ .undo = .{} }
+                                                sudoku.PlayerAction{ .undo = undefined }
                                         else
                                             null,
                                         c.SDLK_H => if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .clear_all_candidates = .{} }
+                                            sudoku.PlayerAction{ .clear_all_candidates = undefined }
                                         else if (is_any_ctrl_pressed)
-                                            sudoku.PlayerAction{ .fill_all_candidates = .{} }
+                                            sudoku.PlayerAction{ .fill_all_candidates = undefined }
                                         else
-                                            sudoku.PlayerAction{ .fill_candidates = .{} },
+                                            sudoku.PlayerAction{ .fill_candidates = undefined },
                                         c.SDLK_RETURN => if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .get_hint = .{} }
+                                            sudoku.PlayerAction{ .get_hint = undefined }
                                         else
-                                            sudoku.PlayerAction{ .solve_board = .{} },
+                                            sudoku.PlayerAction{ .solve_board = undefined },
                                         else => null,
                                     };
 
@@ -316,7 +316,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             .WaitingForHintValidation => {
                                 switch (key_sym) {
                                     c.SDLK_RETURN => {
-                                        sudoku.apply_player_event(game, sudoku.PlayerAction{ .get_hint = .{} });
+                                        sudoku.apply_player_event(game, sudoku.PlayerAction{ .get_hint = undefined });
                                     },
                                     else => {},
                                 }
