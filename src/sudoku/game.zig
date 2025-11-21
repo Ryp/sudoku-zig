@@ -114,12 +114,6 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     game.board.destroy(allocator);
 }
 
-pub fn fill_empty_board(board: []u5) void {
-    for (board) |*cell_number| {
-        cell_number.* = UnsetNumber;
-    }
-}
-
 pub fn fill_board_from_string(board: []u5, sudoku_string: []const u8, extent: u32) void {
     assert(board.len == extent * extent);
     assert(sudoku_string.len == extent * extent);

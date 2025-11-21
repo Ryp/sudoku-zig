@@ -176,9 +176,6 @@ test "Naked pair" {
     } });
     defer board.destroy(allocator);
 
-    // Start with an empty board
-    sudoku.fill_empty_board(board.numbers);
-
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     defer allocator.free(candidate_masks);
 

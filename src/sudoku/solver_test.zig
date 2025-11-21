@@ -13,15 +13,11 @@ test "Box-line removal" {
 
     const allocator = gpa.allocator();
 
-    // Create game board
     var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
     defer board.destroy(allocator);
-
-    // Start with an empty board
-    sudoku.fill_empty_board(board.numbers);
 
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     defer allocator.free(candidate_masks);
