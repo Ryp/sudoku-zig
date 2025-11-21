@@ -37,6 +37,7 @@ pub const BoardState = struct {
     box_regions: [][]u32,
     box_indices: []u4,
 
+    // Creates an empty sudoku board
     pub fn create(allocator: std.mem.Allocator, game_type: GameType) !BoardState {
         const extent = switch (game_type) {
             .regular => |regular| regular.box_w * regular.box_h,

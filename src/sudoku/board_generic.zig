@@ -135,6 +135,7 @@ pub fn board_state(extent: comptime_int) type {
         numbers: [ExtentSqr]?NumberType,
         regions: Regions,
 
+        // Creates an empty sudoku board
         pub fn init(board_type: BoardType) Self {
             return .{
                 .numbers = .{null} ** ExtentSqr,

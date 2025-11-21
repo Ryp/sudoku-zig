@@ -7,19 +7,6 @@ const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
 
-fn first_bit_index_u16(mask_ro: u16) u4 {
-    var mask = mask_ro;
-
-    for (0..16) |bit_index| {
-        if ((mask & 1) != 0)
-            return @intCast(bit_index);
-        mask = mask >> 1;
-    }
-
-    assert(false);
-    return 0;
-}
-
 pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;
     candidate_masks[cell_index] = 0;
@@ -86,7 +73,7 @@ pub fn apply_naked_single(board: *BoardState, candidate_masks: []u16, naked_sing
 pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
     for (board.numbers, candidate_masks, 0..) |cell_number, candidate_mask, cell_index| {
         if (cell_number == UnsetNumber and @popCount(candidate_mask) == 1) {
-            const number = first_bit_index_u16(candidate_mask);
+            const number: u4 = @intCast(@ctz(candidate_mask));
 
             return NakedSingle{
                 .cell_index = @intCast(cell_index),
@@ -137,8 +124,8 @@ pub fn find_naked_pair_region(board: BoardState, candidate_masks: []const u16, r
                 const candidate_mask_b = candidate_masks[cell_index_b];
 
                 if (candidate_mask_a == candidate_mask_b) {
-                    const number_a = first_bit_index_u16(candidate_mask_a);
-                    const number_b = first_bit_index_u16(candidate_mask_a - board.mask_for_number(@intCast(number_a)));
+                    const number_a: u4 = @intCast(@ctz(candidate_mask_a));
+                    const number_b: u4 = @intCast(@ctz(candidate_mask_a - board.mask_for_number(@intCast(number_a))));
 
                     // Regional mask
                     var deletion_mask_a: u16 = 0;
@@ -532,7 +519,7 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
         }
 
         if (@popCount(box_index_mask) == 1) {
-            const box_index = first_bit_index_u16(box_index_mask);
+            const box_index = @ctz(box_index_mask);
             const box_region = board.box_regions[box_index];
 
             var deletion_mask: u16 = 0;
