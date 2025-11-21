@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
-const UnsetNumber = board_state.UnsetNumber;
 
 pub const Options = struct {
     check_if_unique: bool = false,
@@ -227,8 +226,8 @@ fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsIndices
 fn cover_columns_for_given_clues(board: BoardState, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
     // We now have the initial fully connected matrix
     // Let's remove the rows we already have a clue for
-    for (board.numbers, 0..) |number, cell_index| {
-        if (number != UnsetNumber) {
+    for (board.numbers, 0..) |number_opt, cell_index| {
+        if (number_opt) |number| {
             const choice_index = get_choice_index(@intCast(cell_index), number, board.extent);
             const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
 

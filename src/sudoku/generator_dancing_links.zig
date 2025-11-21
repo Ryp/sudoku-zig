@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const sudoku = @import("game.zig");
 const BoardState = sudoku.BoardState;
-const UnsetNumber = sudoku.UnsetNumber;
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
 
@@ -86,7 +85,7 @@ pub fn generate(board: *BoardState, seed: u64, difficulty: u32) void {
         const random_index = rng.random().uintLessThan(u32, board.extent * board.extent);
         const number_at_random_index = board.numbers[random_index];
 
-        board.numbers[random_index] = UnsetNumber;
+        board.numbers[random_index] = null;
 
         is_unique = dancing_links_solver.solve(board, .{ .check_if_unique = true });
 

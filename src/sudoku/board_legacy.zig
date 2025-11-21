@@ -4,7 +4,6 @@ const assert = std.debug.assert;
 const game = @import("game.zig");
 
 pub const MaxSudokuExtent = 16;
-pub const UnsetNumber: u5 = 0x1F;
 
 const u32_2 = @Vector(2, u32);
 
@@ -26,7 +25,7 @@ pub const GameType = union(enum) {
 pub const BoardState = struct {
     const Self = @This();
 
-    numbers: []u5,
+    numbers: []?u4,
     extent: u32,
     game_type: GameType,
     // Helpers to iterate over regions
@@ -47,11 +46,11 @@ pub const BoardState = struct {
         assert(extent > 1);
         assert(extent <= MaxSudokuExtent);
 
-        const board = try allocator.alloc(u5, extent * extent);
+        const board = try allocator.alloc(?u4, extent * extent);
         errdefer allocator.free(board);
 
-        for (board) |*cell_number| {
-            cell_number.* = UnsetNumber;
+        for (board) |*number_opt| {
+            number_opt.* = null;
         }
 
         const region_offsets = try allocator.alloc(u32, board.len * 3);

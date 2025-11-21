@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
-const UnsetNumber = board_state.UnsetNumber;
 const MaxSudokuExtent = board_state.MaxSudokuExtent;
 
 const sudoku = @import("game.zig");
@@ -47,17 +46,13 @@ fn solve_trivial_candidates_region(board: *BoardState, candidate_masks: []u16, r
     var used_mask: u16 = 0;
 
     for (region) |cell_index| {
-        const cell_number = board.numbers[cell_index];
-
-        if (cell_number != UnsetNumber) {
-            used_mask |= board.mask_for_number(@intCast(cell_number));
+        if (board.numbers[cell_index]) |number| {
+            used_mask |= board.mask_for_number(number);
         }
     }
 
     for (region) |cell_index| {
-        const cell_number = board.numbers[cell_index];
-
-        if (cell_number == UnsetNumber) {
+        if (board.numbers[cell_index] == null) {
             candidate_masks[cell_index] &= ~used_mask;
         }
     }
@@ -74,8 +69,8 @@ pub fn apply_naked_single(board: *BoardState, candidate_masks: []u16, naked_sing
 
 // If there's a cell with a single possibility left, put it down
 pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
-    for (board.numbers, candidate_masks, 0..) |cell_number, candidate_mask, cell_index| {
-        if (cell_number == UnsetNumber and @popCount(candidate_mask) == 1) {
+    for (board.numbers, candidate_masks, 0..) |number_opt, candidate_mask, cell_index| {
+        if (number_opt == null and @popCount(candidate_mask) == 1) {
             const number: u4 = @intCast(@ctz(candidate_mask));
 
             return NakedSingle{
@@ -285,10 +280,9 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
         if (count == 1) {
             const number: u4 = @intCast(number_usize);
             const cell_index = last_cell_indices[number];
-            const cell_number = board.numbers[cell_index];
             const deletion_mask = candidate_masks[cell_index] & ~board.mask_for_number(number);
 
-            if (cell_number == UnsetNumber and deletion_mask != 0) {
+            if (board.numbers[cell_index] == null and deletion_mask != 0) {
                 return HiddenSingle{
                     .number = number,
                     .cell_index = cell_index,
@@ -344,7 +338,6 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
                     const deletion_mask_a = candidate_masks[cell_index_a] & ~mask;
                     const deletion_mask_b = candidate_masks[cell_index_b] & ~mask;
 
-                    // FIXME assert(cell_number == UnsetNumber);
                     if (deletion_mask_a != 0 or deletion_mask_b != 0) {
                         return HiddenPair{
                             .a = HiddenSingle{

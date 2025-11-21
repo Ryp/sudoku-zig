@@ -98,10 +98,10 @@ test "Solver critical path" {
     try expect(solved);
 
     // Compare with solution
-    const solution_board = try allocator.alloc(u5, board.extent * board.extent);
+    const solution_board = try allocator.alloc(?u4, board.extent * board.extent);
     defer allocator.free(solution_board);
 
     sudoku.fill_board_from_string(solution_board, boards.easy_000.solution, board.extent);
 
-    try expect(std.mem.eql(u5, board.numbers, solution_board));
+    try expect(std.mem.eql(?u4, board.numbers, solution_board));
 }

@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
-const UnsetNumber = board_state.UnsetNumber;
 const RegularSudoku = board_state.RegularSudoku;
 
 // Only generates a regular sudoku board
@@ -46,10 +45,8 @@ pub fn generate(board: *BoardState, seed: u64) void {
     while (numbers_to_remove > 0) {
         const cell_index = rng.random().uintLessThan(u32, board.extent * board.extent);
 
-        const cell_number = &board.numbers[cell_index];
-
-        if (cell_number.* != UnsetNumber) {
-            cell_number.* = UnsetNumber;
+        if (board.numbers[cell_index] != null) {
+            board.numbers[cell_index] = null;
             numbers_to_remove -= 1;
         }
     }
@@ -79,6 +76,6 @@ fn swap_random_row(board: *BoardState, regular_type: RegularSudoku, rng: *std.Ra
 
 fn swap_region(board: *BoardState, region_a: []u32, region_b: []u32) void {
     for (region_a, region_b) |cell_index_a, cell_index_b| {
-        std.mem.swap(u5, &board.numbers[cell_index_a], &board.numbers[cell_index_b]);
+        std.mem.swap(?u4, &board.numbers[cell_index_a], &board.numbers[cell_index_b]);
     }
 }

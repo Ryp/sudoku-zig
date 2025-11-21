@@ -11,7 +11,6 @@ const sudoku = @import("../sudoku/game.zig");
 const solver_logical = @import("../sudoku/solver_logical.zig");
 const GameState = sudoku.GameState;
 const BoardState = sudoku.BoardState;
-const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 
 const boards = @import("../sudoku/boards.zig");
@@ -330,10 +329,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         var highlight_mask: u16 = 0;
         for (game.selected_cells) |selected_cell_index| {
-            const cell_number = game.board.numbers[selected_cell_index];
-
-            if (cell_number != UnsetNumber) {
-                highlight_mask |= game.board.mask_for_number(@intCast(cell_number));
+            if (game.board.numbers[selected_cell_index]) |number| {
+                highlight_mask |= game.board.mask_for_number(number);
             }
         }
 
@@ -341,7 +338,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         _ = SDL_SetRenderDrawColor2(sdl_context.renderer, BgColor);
         _ = c.SDL_RenderClear(sdl_context.renderer);
 
-        for (game.board.numbers, 0..) |cell_number, cell_index| {
+        for (game.board.numbers, 0..) |number_opt, cell_index| {
             const box_index = game.board.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
 
@@ -371,8 +368,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         _ = c.SDL_SetRenderDrawBlendMode(sdl_context.renderer, c.SDL_BLENDMODE_NONE);
                     }
 
-                    if (cell_number != UnsetNumber) {
-                        if (highlight_mask & game.board.mask_for_number(@intCast(cell_number)) != 0) {
+                    if (number_opt) |number| {
+                        if (highlight_mask & game.board.mask_for_number(number) != 0) {
                             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
                             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
                         }
@@ -394,16 +391,16 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             draw_validation_error(sdl_context, candidate_local_rects, game.board, validation_error);
         }
 
-        for (game.board.numbers, 0..) |cell_number, cell_index| {
+        for (game.board.numbers, 0..) |number_opt, cell_index| {
             const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw placed numbers
-            if (cell_number != UnsetNumber) {
-                const glyph_rect = sdl_context.text_aabbs[cell_number];
+            if (number_opt) |number| {
+                const glyph_rect = sdl_context.text_aabbs[number];
                 const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
 
-                _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.text_textures[cell_number], &glyph_rect, &centered_glyph_rect);
+                _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.text_textures[number], &glyph_rect, &centered_glyph_rect);
             }
         }
 

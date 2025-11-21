@@ -26,7 +26,6 @@ pub const u32_2 = @Vector(2, u32);
 const i32_2 = @Vector(2, i32);
 
 pub const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
-pub const UnsetNumber: u5 = board_legacy.UnsetNumber;
 const MaxHistorySize = 512;
 
 const GameFlow = enum {
@@ -40,7 +39,7 @@ pub const GameState = struct {
     selected_cells_full: []u32, // Full allocated array, we usually don't use it directly
     selected_cells: []u32, // Code handles this as a list but only a single cell is supported
     flow: GameFlow,
-    board_history: []u5,
+    board_history: []?u4,
     candidate_masks_history: []u16,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
@@ -82,7 +81,7 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudo
     errdefer allocator.free(selected_cells_full);
 
     // Allocate history stack
-    const board_history = try allocator.alloc(u5, board.numbers.len * MaxHistorySize);
+    const board_history = try allocator.alloc(?u4, board.numbers.len * MaxHistorySize);
     errdefer allocator.free(board_history);
 
     const candidate_masks_history = try allocator.alloc(u16, board.numbers.len * MaxHistorySize);
@@ -114,36 +113,38 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     game.board.destroy(allocator);
 }
 
-pub fn fill_board_from_string(board: []u5, sudoku_string: []const u8, extent: u32) void {
+pub fn fill_board_from_string(board: []?u4, sudoku_string: []const u8, extent: u32) void {
     assert(board.len == extent * extent);
     assert(sudoku_string.len == extent * extent);
 
-    for (board, sudoku_string) |*cell_number, char| {
-        var number: u8 = UnsetNumber;
+    for (board, sudoku_string) |*board_number_opt, char| {
+        var number_opt: ?u4 = null;
 
         if (char >= '1' and char <= '9') {
-            number = char - '1';
+            number_opt = @intCast(char - '1');
         } else if (char >= 'A' and char <= 'G') {
-            number = char - 'A' + 9;
+            number_opt = @intCast(char - 'A' + 9);
         } else if (char >= 'a' and char <= 'g') {
-            number = char - 'a' + 9;
+            number_opt = @intCast(char - 'a' + 9);
         }
 
-        assert(number < extent or number == UnsetNumber);
+        if (number_opt) |number| {
+            assert(number < extent);
+        }
 
-        cell_number.* = @intCast(number);
+        board_number_opt.* = number_opt;
     }
 }
 
-pub fn fill_string_from_board(sudoku_string: []u8, board: []const u5, extent: u32) void {
+pub fn fill_string_from_board(sudoku_string: []u8, board: []const ?u4, extent: u32) void {
     assert(board.len == extent * extent);
     assert(sudoku_string.len == extent * extent);
 
-    for (board, sudoku_string) |cell_number, *char| {
-        if (cell_number == UnsetNumber) {
-            char.* = '.';
+    for (board, sudoku_string) |number_opt, *char| {
+        if (number_opt) |number| {
+            char.* = boards.NumbersString[number];
         } else {
-            char.* = boards.NumbersString[cell_number];
+            char.* = '.';
         }
     }
 }
@@ -153,7 +154,7 @@ pub const SolverEvent = union(enum) {
     found_nothing,
 };
 
-fn get_board_history_slice(game: *GameState, history_index: u32) []u5 {
+fn get_board_history_slice(game: *GameState, history_index: u32) []?u4 {
     const cell_count = game.board.numbers.len;
     const start = cell_count * history_index;
     const stop = start + cell_count;
@@ -199,7 +200,7 @@ pub fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
     fill_candidate_mask_regions(board, col_region_candidate_masks, row_region_candidate_masks, box_region_candidate_masks);
 
     for (candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
-        if (board.numbers[cell_index] == UnsetNumber) {
+        if (board.numbers[cell_index] == null) {
             const cell_coord = board.cell_coord_from_index(cell_index);
             const col = cell_coord[0];
             const row = cell_coord[1];
@@ -232,15 +233,15 @@ fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []
         box_region_candidate_mask.* = full_mask;
     }
 
-    for (board.numbers, 0..) |cell_number, cell_index| {
-        if (cell_number != UnsetNumber) {
+    for (board.numbers, 0..) |number_opt, cell_index| {
+        if (number_opt) |number| {
             const cell_coord = board.cell_coord_from_index(cell_index);
 
             const col = cell_coord[0];
             const row = cell_coord[1];
             const box = board.box_indices[cell_index];
 
-            const mask = ~board.mask_for_number(@intCast(cell_number));
+            const mask = ~board.mask_for_number(number);
 
             col_region_candidate_masks[col] &= mask;
             row_region_candidate_masks[row] &= mask;
@@ -385,7 +386,7 @@ fn player_toggle_candidate(game: *GameState, number: u4) void {
     if (number < extent and game.selected_cells.len > 0) {
         const cell_index = game.selected_cells[0];
 
-        if (game.board.numbers[cell_index] == UnsetNumber) {
+        if (game.board.numbers[cell_index] == null) {
             game.candidate_masks[cell_index] ^= game.board.mask_for_number(number);
         }
 
@@ -397,7 +398,7 @@ fn player_clear_selected_cell(game: *GameState) void {
     if (game.selected_cells.len > 0) {
         const cell_index = game.selected_cells[0];
 
-        game.board.numbers[cell_index] = UnsetNumber;
+        game.board.numbers[cell_index] = null;
         game.candidate_masks[cell_index] = 0;
 
         push_state_to_history(game);
@@ -430,7 +431,7 @@ fn player_fill_candidates_all(game: *GameState) void {
     const full_mask = game.board.full_candidate_mask();
 
     for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
-        if (game.board.numbers[cell_index] == UnsetNumber) {
+        if (game.board.numbers[cell_index] == null) {
             cell_candidate_mask.* = full_mask;
         }
     }

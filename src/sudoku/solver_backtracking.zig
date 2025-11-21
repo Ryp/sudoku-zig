@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
-const UnsetNumber = board_state.UnsetNumber;
 const MaxSudokuExtent = board_state.MaxSudokuExtent;
 
 pub fn solve(board: *BoardState, recursive: bool) bool {
@@ -51,7 +50,7 @@ fn solve_backtracking_recursive(board: *BoardState, free_cell_list: []CellInfo, 
         }
     }
 
-    cell_number.* = UnsetNumber;
+    cell_number.* = null;
     return false;
 }
 
@@ -82,7 +81,7 @@ fn solve_backtracking_iterative(board: *BoardState, free_cell_list: []CellInfo) 
                 break :main;
             }
         } else {
-            cell_number.* = UnsetNumber;
+            cell_number.* = null;
             current_guess[list_index] = 0;
 
             // Backtracking at index zero means we didn't find a solution
@@ -107,25 +106,11 @@ fn populate_valid_candidates(board: *BoardState, cell_info: CellInfo, valid_cand
         candidate.* = true;
     }
 
-    // Remove possible solutions based on visible regions
-    for (board.col_regions[cell_info.col]) |cell_index| {
-        const cell_number = board.numbers[cell_index];
-        if (cell_number != UnsetNumber) {
-            valid_candidates[cell_number] = false;
-        }
-    }
-
-    for (board.row_regions[cell_info.row]) |cell_index| {
-        const cell_number = board.numbers[cell_index];
-        if (cell_number != UnsetNumber) {
-            valid_candidates[cell_number] = false;
-        }
-    }
-
-    for (board.box_regions[box]) |cell_index| {
-        const cell_number = board.numbers[cell_index];
-        if (cell_number != UnsetNumber) {
-            valid_candidates[cell_number] = false;
+    inline for (.{ board.col_regions[cell_info.col], board.row_regions[cell_info.row], board.box_regions[box] }) |region| {
+        for (region) |cell_index| {
+            if (board.numbers[cell_index]) |number| {
+                valid_candidates[number] = false;
+            }
         }
     }
 }
@@ -134,7 +119,7 @@ fn populate_free_list(board: *BoardState, free_cell_list_full: []CellInfo) []Cel
     var list_index: u8 = 0;
 
     for (board.numbers, 0..) |cell_number, cell_index| {
-        if (cell_number == UnsetNumber) {
+        if (cell_number == null) {
             const cell_coord = board.cell_coord_from_index(cell_index);
 
             free_cell_list_full[list_index] = CellInfo{
@@ -152,44 +137,20 @@ fn populate_free_list(board: *BoardState, free_cell_list_full: []CellInfo) []Cel
 fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
     const full_mask = board.full_candidate_mask();
 
-    var col_region_masks_full: [MaxSudokuExtent]u16 = undefined;
-    const col_region_masks = col_region_masks_full[0..board.extent];
+    // 3 for the three region types: cols, rows, boxes
+    var region_type_masks_full: [3][MaxSudokuExtent]u16 = undefined;
 
-    for (board.col_regions, col_region_masks) |region, *region_mask| {
-        region_mask.* = full_mask;
+    // Region type order must match the use below
+    inline for (.{ board.col_regions, board.row_regions, board.box_regions }, 0..) |region_set, region_set_index| {
+        const region_masks = region_type_masks_full[region_set_index][0..board.extent];
 
-        for (region) |cell_index| {
-            const cell_number = board.numbers[cell_index];
-            if (cell_number != UnsetNumber) {
-                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
-            }
-        }
-    }
+        for (region_set, region_masks) |region, *region_mask| {
+            region_mask.* = full_mask;
 
-    var row_region_masks_full: [MaxSudokuExtent]u16 = undefined;
-    const row_region_masks = row_region_masks_full[0..board.extent];
-
-    for (board.row_regions, row_region_masks) |region, *region_mask| {
-        region_mask.* = full_mask;
-
-        for (region) |cell_index| {
-            const cell_number = board.numbers[cell_index];
-            if (cell_number != UnsetNumber) {
-                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
-            }
-        }
-    }
-
-    var box_region_masks_full: [MaxSudokuExtent]u16 = undefined;
-    const box_region_masks = box_region_masks_full[0..board.extent];
-
-    for (board.box_regions, box_region_masks) |region, *region_mask| {
-        region_mask.* = full_mask;
-
-        for (region) |cell_index| {
-            const cell_number = board.numbers[cell_index];
-            if (cell_number != UnsetNumber) {
-                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
+            for (region) |cell_index| {
+                if (board.numbers[cell_index]) |number| {
+                    region_mask.* &= ~board.mask_for_number(number);
+                }
             }
         }
     }
@@ -199,11 +160,12 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
 
     for (candidate_counts, 0..) |*candidate_count, cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);
+
         const col = cell_coord[0];
         const row = cell_coord[1];
         const box = board.box_indices[cell_index];
 
-        const mask = col_region_masks[col] & row_region_masks[row] & box_region_masks[box];
+        const mask = region_type_masks_full[0][col] & region_type_masks_full[1][row] & region_type_masks_full[2][box];
         candidate_count.* = @popCount(mask);
     }
 

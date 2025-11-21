@@ -49,8 +49,8 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: game.B
         }
     }
 
-    for (board.numbers) |cell| {
-        if (cell == game.UnsetNumber) {
+    for (board.numbers) |number_opt| {
+        if (number_opt == null) {
             std.debug.print("WARNING: Couldn't fully solve this board with logic!\n", .{});
             break;
         }
