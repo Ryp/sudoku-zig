@@ -1,9 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const board_state = @import("board_legacy.zig");
+const BoardState = board_state.BoardState;
+const UnsetNumber = board_state.UnsetNumber;
+const MaxSudokuExtent = board_state.MaxSudokuExtent;
+
 const sudoku = @import("game.zig");
-const BoardState = sudoku.BoardState;
-const UnsetNumber = sudoku.UnsetNumber;
 const u32_2 = sudoku.u32_2;
 const all = sudoku.all;
 
@@ -167,7 +170,7 @@ test "Naked pair" {
     const allocator = gpa.allocator();
 
     // Create game board
-    const board = try sudoku.BoardState.create(allocator, .{ .regular = .{
+    const board = try BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
@@ -263,10 +266,10 @@ pub fn find_hidden_pair(board: BoardState, candidate_masks: []const u16) ?Hidden
 fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenSingle {
     assert(region.len == board.extent);
 
-    var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+    var counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
     const counts = counts_full[0..board.extent];
 
-    var last_cell_indices_full: [sudoku.MaxSudokuExtent]u32 = undefined;
+    var last_cell_indices_full: [MaxSudokuExtent]u32 = undefined;
     const last_cell_indices = last_cell_indices_full[0..board.extent];
 
     for (region) |cell_index| {
@@ -305,12 +308,12 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
 fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenPair {
     assert(region.len == board.extent);
 
-    var counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+    var counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
     var counts = counts_full[0..board.extent];
 
     // Contains first and last position
     const min_max_initial_value = u32_2{ board.extent, 0 };
-    var region_min_max_cell_indices_full = [_]u32_2{min_max_initial_value} ** sudoku.MaxSudokuExtent;
+    var region_min_max_cell_indices_full = [_]u32_2{min_max_initial_value} ** MaxSudokuExtent;
     const region_min_max_cell_indices = region_min_max_cell_indices_full[0..board.extent];
 
     for (region, 0..) |cell_index, region_cell_index| {
@@ -398,10 +401,10 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
     for (0..board.extent) |box_index| {
         const box_region = board.box_regions[box_index];
 
-        var box_aabbs_full: [sudoku.MaxSudokuExtent]AABB_u32 = undefined;
+        var box_aabbs_full: [MaxSudokuExtent]AABB_u32 = undefined;
         const box_aabbs = box_aabbs_full[0..board.extent];
 
-        var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent]u32);
+        var candidate_counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
         const candidate_counts = candidate_counts_full[0..board.extent];
 
         // Compute AABB of candidates for each number
