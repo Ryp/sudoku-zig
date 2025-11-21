@@ -28,7 +28,7 @@ pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_mask
 }
 
 pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
-    const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+    const cell_coord = board.cell_coord_from_index(cell_index);
     const box_index = board.box_indices[cell_index];
 
     const col_region = board.col_regions[cell_coord[0]];
@@ -180,11 +180,11 @@ test "Naked pair" {
     const allocator = gpa.allocator();
 
     // Create game board
-    const board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
+    const board = try sudoku.BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
-    defer sudoku.destroy_board_state(allocator, board);
+    defer board.destroy(allocator);
 
     // Start with an empty board
     sudoku.fill_empty_board(board.numbers);
@@ -430,7 +430,7 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
 
             for (box_region, 0..) |cell_index, region_cell_index| {
                 const cell_candidate_mask = candidate_masks[cell_index];
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
 
                 if ((cell_candidate_mask & number_mask) != 0) {
                     aabb.min = @min(aabb.min, cell_coord);
@@ -537,7 +537,7 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
 
             var deletion_mask: u16 = 0;
             for (box_region, 0..) |cell_index, region_cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
 
                 if (all(cell_coord != line_coord)) {
                     if (candidate_masks[cell_index] & number_mask != 0) {

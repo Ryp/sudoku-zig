@@ -5,8 +5,8 @@ const solver_logical = @import("solver_logical.zig");
 
 pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: game.BoardState) !void {
     // Create a dummy board we can modify
-    var board = try game.create_board_state(allocator, const_board.game_type);
-    defer game.destroy_board_state(allocator, board);
+    var board = try game.BoardState.create(allocator, const_board.game_type);
+    defer board.destroy(allocator);
 
     @memcpy(board.numbers, const_board.numbers);
 

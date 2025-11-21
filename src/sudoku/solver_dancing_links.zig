@@ -1,9 +1,9 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sudoku = @import("game.zig");
-const BoardState = sudoku.BoardState;
-const UnsetNumber = sudoku.UnsetNumber;
+const board_state = @import("board_legacy.zig");
+const BoardState = board_state.BoardState;
+const UnsetNumber = board_state.UnsetNumber;
 
 pub const Options = struct {
     check_if_unique: bool = false,

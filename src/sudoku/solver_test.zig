@@ -14,11 +14,11 @@ test "Box-line removal" {
     const allocator = gpa.allocator();
 
     // Create game board
-    var board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
+    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
-    defer sudoku.destroy_board_state(allocator, board);
+    defer board.destroy(allocator);
 
     // Start with an empty board
     sudoku.fill_empty_board(board.numbers);
@@ -43,7 +43,7 @@ test "Box-line removal" {
     // Remove candidates until we can apply the box-line solver
     for (3..9) |row_index| {
         const mask = sudoku.mask_for_number(number);
-        const cell_index = sudoku.cell_index_from_coord(board.extent, sudoku.u32_2{ 0, @intCast(row_index) });
+        const cell_index = board.cell_index_from_coord(sudoku.u32_2{ 0, @intCast(row_index) });
         candidate_masks[cell_index] &= ~mask;
     }
 
@@ -70,7 +70,7 @@ test "Box-line removal" {
     // Remove candidates until we can apply the box-line solver
     for (3..9) |col_index| {
         const mask = sudoku.mask_for_number(number);
-        const cell_index = sudoku.cell_index_from_coord(board.extent, sudoku.u32_2{ @intCast(col_index), 0 });
+        const cell_index = board.cell_index_from_coord(sudoku.u32_2{ @intCast(col_index), 0 });
         candidate_masks[cell_index] &= ~mask;
     }
 
@@ -88,11 +88,11 @@ test "Solver critical path" {
     const allocator = gpa.allocator();
 
     // Create game board
-    var board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
+    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
-    defer sudoku.destroy_board_state(allocator, board);
+    defer board.destroy(allocator);
 
     sudoku.fill_board_from_string(board.numbers, boards.easy_000.board, board.extent);
 

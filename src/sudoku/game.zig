@@ -5,6 +5,13 @@ const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const boards = @import("boards.zig");
+const board_legacy = @import("board_legacy.zig");
+
+// FIXME
+pub const RegularSudoku = board_legacy.RegularSudoku;
+pub const JigsawSudoku = board_legacy.JigsawSudoku;
+pub const GameType = board_legacy.GameType;
+pub const BoardState = board_legacy.BoardState;
 
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
@@ -18,37 +25,9 @@ pub fn all(vector: anytype) bool {
 pub const u32_2 = @Vector(2, u32);
 const i32_2 = @Vector(2, i32);
 
-pub const MaxSudokuExtent = 16;
-pub const UnsetNumber: u5 = 0x1F;
+pub const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
+pub const UnsetNumber: u5 = board_legacy.UnsetNumber;
 const MaxHistorySize = 512;
-
-pub const RegularSudoku = struct {
-    box_w: u32,
-    box_h: u32,
-};
-
-pub const JigsawSudoku = struct {
-    size: u32,
-    box_indices_string: []const u8,
-};
-
-pub const GameType = union(enum) {
-    regular: RegularSudoku,
-    jigsaw: JigsawSudoku,
-};
-
-pub const BoardState = struct {
-    numbers: []u5,
-    extent: u32,
-    game_type: GameType,
-    // Helpers to iterate over regions
-    region_offsets: []u32, // Raw memory, shouldn't be used directly
-    all_regions: [][]u32,
-    col_regions: [][]u32,
-    row_regions: [][]u32,
-    box_regions: [][]u32,
-    box_indices: []u4,
-};
 
 const GameFlow = enum {
     Normal,
@@ -69,20 +48,6 @@ pub const GameState = struct {
     solver_event: ?SolverEvent,
 };
 
-pub fn cell_coord_from_index(extent: u32, cell_index: usize) u32_2 {
-    const x: u32 = @intCast(cell_index % extent);
-    const y: u32 = @intCast(cell_index / extent);
-
-    assert(x < extent and y < extent);
-
-    return .{ x, y };
-}
-
-pub fn cell_index_from_coord(extent: u32, position: u32_2) u32 {
-    assert(all(position < u32_2{ extent, extent }));
-    return position[0] + extent * position[1];
-}
-
 pub fn mask_for_number(number: u4) u16 {
     return @as(u16, 1) << number;
 }
@@ -91,77 +56,8 @@ pub fn full_candidate_mask(game_extent: u32) u16 {
     return @intCast((@as(u32, 1) << @intCast(game_extent)) - 1);
 }
 
-pub fn create_board_state(allocator: std.mem.Allocator, game_type: GameType) !BoardState {
-    const extent = switch (game_type) {
-        .regular => |regular| regular.box_w * regular.box_h,
-        .jigsaw => |jigsaw| jigsaw.size,
-    };
-
-    assert(extent > 1);
-    assert(extent <= MaxSudokuExtent);
-
-    const board = try allocator.alloc(u5, extent * extent);
-    errdefer allocator.free(board);
-
-    for (board) |*cell_number| {
-        cell_number.* = UnsetNumber;
-    }
-
-    const region_offsets = try allocator.alloc(u32, board.len * 3);
-    errdefer allocator.free(region_offsets);
-
-    const all_regions = try allocator.alloc([]u32, extent * 3);
-    errdefer allocator.free(all_regions);
-
-    const box_indices = try allocator.alloc(u4, board.len);
-    errdefer allocator.free(box_indices);
-
-    switch (game_type) {
-        .regular => |regular| {
-            fill_region_indices_regular(box_indices, extent, regular.box_w, regular.box_h);
-        },
-        .jigsaw => |jigsaw| {
-            fill_region_indices_from_string(box_indices, jigsaw.box_indices_string, extent);
-        },
-    }
-
-    // Map regions to raw offset slices
-    for (all_regions, 0..) |*region, region_index| {
-        const slice_start = region_index * extent;
-
-        region.* = region_offsets[slice_start .. slice_start + extent];
-    }
-
-    const col_regions = all_regions[0 * extent .. 1 * extent];
-    const row_regions = all_regions[1 * extent .. 2 * extent];
-    const box_regions = all_regions[2 * extent .. 3 * extent];
-
-    fill_regions(extent, col_regions, row_regions, box_regions, box_indices);
-
-    const board_state = BoardState{
-        .numbers = board,
-        .extent = extent,
-        .game_type = game_type,
-        .region_offsets = region_offsets,
-        .all_regions = all_regions,
-        .col_regions = col_regions,
-        .row_regions = row_regions,
-        .box_regions = box_regions,
-        .box_indices = box_indices,
-    };
-
-    return board_state;
-}
-
-pub fn destroy_board_state(allocator: std.mem.Allocator, board: BoardState) void {
-    allocator.free(board.numbers);
-    allocator.free(board.region_offsets);
-    allocator.free(board.all_regions);
-    allocator.free(board.box_indices);
-}
-
 pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudoku_string: []const u8) !GameState {
-    var board = try create_board_state(allocator, game_type);
+    var board = try BoardState.create(allocator, game_type);
 
     if (sudoku_string.len == 0) {
         var random_buffer: [8]u8 = undefined;
@@ -223,41 +119,7 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.selected_cells_full);
     allocator.free(game.candidate_masks);
 
-    destroy_board_state(allocator, game.board);
-}
-
-fn fill_regions(extent: u32, col_regions: [][]u32, row_regions: [][]u32, box_regions: [][]u32, box_indices: []const u4) void {
-    for (0..extent) |region_index_usize| {
-        const col_region = col_regions[region_index_usize];
-        const row_region = row_regions[region_index_usize];
-
-        assert(col_region.len == extent);
-        assert(row_region.len == extent);
-
-        const region_index: u32 = @intCast(region_index_usize);
-
-        for (col_region, row_region, 0..) |*col_cell, *row_cell, cell_index_usize| {
-            const cell_index: u32 = @intCast(cell_index_usize);
-            col_cell.* = cell_index_from_coord(extent, .{ region_index, cell_index });
-            row_cell.* = cell_index_from_coord(extent, .{ cell_index, region_index });
-        }
-    }
-
-    var region_slot_full = std.mem.zeroes([MaxSudokuExtent]u32);
-    var region_slot = region_slot_full[0..extent];
-
-    for (box_indices, 0..) |box_index, cell_index| {
-        const slot = region_slot[box_index];
-
-        var box_region = box_regions[box_index];
-        box_region[slot] = @intCast(cell_index);
-
-        region_slot[box_index] += 1;
-    }
-
-    for (region_slot) |slot| {
-        assert(slot == extent);
-    }
+    game.board.destroy(allocator);
 }
 
 pub fn fill_empty_board(board: []u5) void {
@@ -297,45 +159,6 @@ pub fn fill_string_from_board(sudoku_string: []u8, board: []const u5, extent: u3
         } else {
             char.* = boards.NumbersString[cell_number];
         }
-    }
-}
-
-fn fill_region_indices_regular(box_indices: []u4, extent: u32, box_w: u32, box_h: u32) void {
-    for (box_indices, 0..) |*box_index, i| {
-        const cell_coord = cell_coord_from_index(extent, i);
-        const box_coord_x = (cell_coord[0] / box_w);
-        const box_coord_y = (cell_coord[1] / box_h);
-
-        box_index.* = @intCast(box_coord_x + box_coord_y * box_h);
-    }
-}
-
-fn fill_region_indices_from_string(box_indices: []u4, box_indices_string: []const u8, extent: u32) void {
-    assert(box_indices_string.len == extent * extent);
-
-    var region_sizes_full = std.mem.zeroes([MaxSudokuExtent]u32);
-    var region_sizes = region_sizes_full[0..extent];
-
-    for (box_indices, box_indices_string) |*box_index, char| {
-        var number: u8 = undefined;
-
-        if (char >= '1' and char <= '9') {
-            number = char - '1';
-        } else if (char >= 'A' and char <= 'G') {
-            number = char - 'A' + 9;
-        } else if (char >= 'a' and char <= 'g') {
-            number = char - 'a' + 9;
-        }
-
-        assert(number < extent);
-
-        box_index.* = @intCast(number);
-
-        region_sizes[number] += 1;
-    }
-
-    for (region_sizes) |region_size| {
-        assert(region_size == extent);
     }
 }
 
@@ -391,7 +214,7 @@ pub fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
 
     for (candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
         if (board.numbers[cell_index] == UnsetNumber) {
-            const cell_coord = cell_coord_from_index(board.extent, cell_index);
+            const cell_coord = board.cell_coord_from_index(cell_index);
             const col = cell_coord[0];
             const row = cell_coord[1];
             const box = board.box_indices[cell_index];
@@ -425,7 +248,7 @@ fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []
 
     for (board.numbers, 0..) |cell_number, cell_index| {
         if (cell_number != UnsetNumber) {
-            const cell_coord = cell_coord_from_index(board.extent, cell_index);
+            const cell_coord = board.cell_coord_from_index(cell_index);
 
             const col = cell_coord[0];
             const row = cell_coord[1];
@@ -519,7 +342,7 @@ const PlayerToggleSelect = struct {
 };
 
 fn player_toggle_select(game: *GameState, toggle_coord: u32_2) void {
-    const toggle_index = cell_index_from_coord(game.board.extent, toggle_coord);
+    const toggle_index = game.board.cell_index_from_coord(toggle_coord);
 
     if (game.selected_cells.len > 0 and toggle_index == game.selected_cells[0]) {
         game.selected_cells = game.selected_cells_full[0..0];
@@ -536,7 +359,7 @@ const PlayerMoveSelection = struct {
 
 fn player_move_selection(game: *GameState, event: PlayerMoveSelection) void {
     if (game.selected_cells.len > 0) {
-        var current_pos: i32_2 = @intCast(cell_coord_from_index(game.board.extent, game.selected_cells[0]));
+        var current_pos: i32_2 = @intCast(game.board.cell_coord_from_index(game.selected_cells[0]));
 
         const extent: i32 = @intCast(game.board.extent);
         assert(all(current_pos < i32_2{ extent, extent }));
@@ -551,7 +374,7 @@ fn player_move_selection(game: *GameState, event: PlayerMoveSelection) void {
             }
         }
 
-        game.selected_cells[0] = cell_index_from_coord(game.board.extent, @intCast(current_pos));
+        game.selected_cells[0] = game.board.cell_index_from_coord(@intCast(current_pos));
     }
 }
 

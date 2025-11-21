@@ -134,7 +134,7 @@ fn populate_free_list(board: *BoardState, free_cell_list_full: []CellInfo) []Cel
 
     for (board.numbers, 0..) |cell_number, cell_index| {
         if (cell_number == UnsetNumber) {
-            const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+            const cell_coord = board.cell_coord_from_index(cell_index);
 
             free_cell_list_full[list_index] = CellInfo{
                 .index = @intCast(cell_index),
@@ -197,7 +197,7 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
     const candidate_counts = candidate_counts_full[0..board.numbers.len];
 
     for (candidate_counts, 0..) |*candidate_count, cell_index| {
-        const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+        const cell_coord = board.cell_coord_from_index(cell_index);
         const col = cell_coord[0];
         const row = cell_coord[1];
         const box = board.box_indices[cell_index];

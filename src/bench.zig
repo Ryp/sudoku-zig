@@ -8,11 +8,11 @@ const boards = @import("sudoku/boards.zig");
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var board = try sudoku.create_board_state(allocator, sudoku.GameType{ .regular = .{
+    var board = try sudoku.BoardState.create(allocator, .{ .regular = .{
         .box_w = 3,
         .box_h = 3,
     } });
-    defer sudoku.destroy_board_state(allocator, board);
+    defer board.destroy(allocator);
 
     sudoku.fill_board_from_string(board.numbers, boards.special_dancing_links.board, board.extent);
 

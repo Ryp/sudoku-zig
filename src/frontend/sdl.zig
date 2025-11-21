@@ -345,7 +345,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             const box_index = game.board.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
 
-            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
+            const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw box background
@@ -355,7 +355,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             // Draw highlighted cell
             if (game.selected_cells.len > 0) {
                 const selected_cell_index = game.selected_cells[0];
-                const selected_coord = sudoku.cell_coord_from_index(extent, selected_cell_index);
+                const selected_coord = game.board.cell_coord_from_index(selected_cell_index);
                 const selected_col = selected_coord[0];
                 const selected_row = selected_coord[1];
                 const selected_box = game.board.box_indices[selected_cell_index];
@@ -395,7 +395,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         for (game.board.numbers, 0..) |cell_number, cell_index| {
-            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
+            const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw placed numbers
@@ -408,7 +408,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         for (game.candidate_masks, 0..) |cell_candidate_mask, cell_index| {
-            const cell_coord = sudoku.cell_coord_from_index(extent, cell_index);
+            const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw candidates
@@ -470,7 +470,7 @@ fn fill_box_regions_colors(game_type: sudoku.GameType, box_region_colors: []Colo
 fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, technique: solver_logical.Technique) void {
     switch (technique) {
         .naked_single => |naked_single| {
-            const cell_coord = sudoku.cell_coord_from_index(board.extent, naked_single.cell_index);
+            const cell_coord = board.cell_coord_from_index(naked_single.cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -485,7 +485,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         },
         .naked_pair => |naked_pair| {
             for (naked_pair.region, 0..) |cell_index, region_cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 // Highlight region that was considered
@@ -531,7 +531,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         .hidden_single => |hidden_single| {
             // Highlight region that was considered
             for (hidden_single.region) |cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -539,7 +539,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             }
 
             // Highlight the candidates we removed and the single that was considered
-            const cell_coord = sudoku.cell_coord_from_index(board.extent, hidden_single.cell_index);
+            const cell_coord = board.cell_coord_from_index(hidden_single.cell_index);
             const cell_rect = cell_rectangle(cell_coord);
 
             // Draw candidates
@@ -564,7 +564,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Highlight region that was considered
             assert(hidden_pair.a.region.ptr == hidden_pair.b.region.ptr);
             for (hidden_pair.a.region) |cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -573,7 +573,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
             inline for (.{ hidden_pair.a, hidden_pair.b }) |hidden_single| {
                 // Highlight the candidates we removed and the single that was considered
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, hidden_single.cell_index);
+                const cell_coord = board.cell_coord_from_index(hidden_single.cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 // Draw candidates
@@ -598,7 +598,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         .pointing_line => |pointing_line| {
             // Draw line
             for (pointing_line.line_region, 0..) |cell_index, line_region_cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -618,7 +618,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
             // Draw box
             for (pointing_line.box_region, 0..) |cell_index, box_region_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
@@ -638,7 +638,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         .box_line_reduction => |box_line_reduction| {
             // Draw box
             for (box_line_reduction.box_region, 0..) |cell_index, line_region_cell_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -658,7 +658,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
             // Draw line
             for (box_line_reduction.line_region, 0..) |cell_index, box_region_index| {
-                const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+                const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
@@ -680,7 +680,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
 fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, validation_error: sudoku.ValidationError) void {
     for (validation_error.region) |cell_index| {
-        const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+        const cell_coord = board.cell_coord_from_index(cell_index);
         const cell_rect = cell_rectangle(cell_coord);
 
         if (validation_error.reference_cell_index == cell_index or validation_error.invalid_cell_index == cell_index and !validation_error.is_candidate) {
@@ -706,13 +706,13 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
 
     for (0..board.numbers.len) |cell_index| {
         const box_index = board.box_indices[cell_index];
-        const cell_coord = sudoku.cell_coord_from_index(board.extent, cell_index);
+        const cell_coord = board.cell_coord_from_index(cell_index);
         const cell_rect = cell_rectangle(cell_coord);
 
         var thick_vertical = true;
 
         if (cell_coord[0] + 1 < board.extent) {
-            const neighbor_cell_index = sudoku.cell_index_from_coord(board.extent, cell_coord + u32_2{ 1, 0 });
+            const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 1, 0 });
             const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_vertical = box_index != neighbor_box_index;
         }
@@ -720,7 +720,7 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
         var thick_horizontal = true;
 
         if (cell_coord[1] + 1 < board.extent) {
-            const neighbor_cell_index = sudoku.cell_index_from_coord(board.extent, cell_coord + u32_2{ 0, 1 });
+            const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 0, 1 });
             const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_horizontal = box_index != neighbor_box_index;
         }
