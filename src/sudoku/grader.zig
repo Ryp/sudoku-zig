@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const sudoku = @import("game.zig");
-
 const solver_logical = @import("solver_logical.zig");
 const board_legacy = @import("board_legacy.zig");
 const BoardState = board_legacy.BoardState;
+
+const check_board_for_validation_errors = @import("game.zig").check_board_for_validation_errors;
 
 pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardState) !void {
     // Create a dummy board we can modify
@@ -36,7 +36,7 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardS
             break;
         }
 
-        if (sudoku.check_board_for_validation_errors(board, candidate_masks)) |validation_error| {
+        if (check_board_for_validation_errors(board, candidate_masks)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});
             return;
         }

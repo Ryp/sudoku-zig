@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const game = @import("game.zig");
+const all = @import("game.zig").all;
 
 pub const MaxSudokuExtent = 16;
 pub const NumbersString = [MaxSudokuExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
@@ -25,6 +25,12 @@ pub const GameType = union(enum) {
 
 pub const BoardState = struct {
     const Self = @This();
+    const MaskType = @Type(.{
+        .int = .{
+            .signedness = .unsigned,
+            .bits = MaxSudokuExtent,
+        },
+    });
 
     numbers: []?u4,
     extent: u32,
@@ -121,21 +127,21 @@ pub const BoardState = struct {
         return position[0] + self.extent * position[1];
     }
 
-    pub fn mask_for_number(self: Self, number: u4) u16 {
+    pub fn mask_for_number(self: Self, number: u4) MaskType {
         _ = self;
-        return @as(u16, 1) << number;
+        return @as(MaskType, 1) << number;
     }
 
-    pub fn full_candidate_mask(self: Self) u16 {
+    pub fn full_candidate_mask(self: Self) MaskType {
         return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
     }
 
-    pub fn fill_candidate_mask(self: Self, candidate_masks: []u16) void {
+    pub fn fill_candidate_mask(self: Self, candidate_masks: []MaskType) void {
         const full_mask = self.full_candidate_mask();
 
-        var col_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
-        var row_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
-        var box_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
+        var col_region_candidate_masks: [MaxSudokuExtent]MaskType = .{full_mask} ** MaxSudokuExtent;
+        var row_region_candidate_masks: [MaxSudokuExtent]MaskType = .{full_mask} ** MaxSudokuExtent;
+        var box_region_candidate_masks: [MaxSudokuExtent]MaskType = .{full_mask} ** MaxSudokuExtent;
 
         for (self.numbers, 0..) |number_opt, cell_index| {
             if (number_opt) |number| {
@@ -170,6 +176,36 @@ pub const BoardState = struct {
 
                 cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
             }
+        }
+    }
+
+    pub fn fill_board_from_string(self: Self, sudoku_string: []const u8) void {
+        assert(sudoku_string.len == self.extent * self.extent);
+
+        for (self.numbers, sudoku_string) |*board_number_opt, char| {
+            var number_opt: ?u4 = null;
+
+            if (char >= '1' and char <= '9') {
+                number_opt = @intCast(char - '1');
+            } else if (char >= 'A' and char <= 'G') {
+                number_opt = @intCast(char - 'A' + 9);
+            } else if (char >= 'a' and char <= 'g') {
+                number_opt = @intCast(char - 'a' + 9);
+            }
+
+            if (number_opt) |number| {
+                assert(number < self.extent);
+            }
+
+            board_number_opt.* = number_opt;
+        }
+    }
+
+    pub fn fill_string_from_board(self: Self, sudoku_string: []u8) void {
+        assert(sudoku_string.len == self.extent * self.extent);
+
+        for (self.numbers, sudoku_string) |number_opt, *char| {
+            char.* = if (number_opt) |number| NumbersString[number] else '.';
         }
     }
 

@@ -54,14 +54,14 @@ pub fn create_game_state(allocator: std.mem.Allocator, game_type: board_legacy.G
 
         generator.generate(&board, .{ .dancing_links = .{ .difficulty = 200 } }, seed);
     } else {
-        fill_board_from_string(board.numbers, sudoku_string, board.extent);
+        board.fill_board_from_string(sudoku_string);
     }
 
     {
         const string = try allocator.alloc(u8, board.numbers.len);
         defer allocator.free(string);
 
-        fill_string_from_board(string, board.numbers, board.extent);
+        board.fill_string_from_board(string);
 
         std.debug.print("Board: {s}\n", .{string});
     }
@@ -107,42 +107,6 @@ pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
     allocator.free(game.candidate_masks);
 
     game.board.destroy(allocator);
-}
-
-pub fn fill_board_from_string(board: []?u4, sudoku_string: []const u8, extent: u32) void {
-    assert(board.len == extent * extent);
-    assert(sudoku_string.len == extent * extent);
-
-    for (board, sudoku_string) |*board_number_opt, char| {
-        var number_opt: ?u4 = null;
-
-        if (char >= '1' and char <= '9') {
-            number_opt = @intCast(char - '1');
-        } else if (char >= 'A' and char <= 'G') {
-            number_opt = @intCast(char - 'A' + 9);
-        } else if (char >= 'a' and char <= 'g') {
-            number_opt = @intCast(char - 'a' + 9);
-        }
-
-        if (number_opt) |number| {
-            assert(number < extent);
-        }
-
-        board_number_opt.* = number_opt;
-    }
-}
-
-pub fn fill_string_from_board(sudoku_string: []u8, board: []const ?u4, extent: u32) void {
-    assert(board.len == extent * extent);
-    assert(sudoku_string.len == extent * extent);
-
-    for (board, sudoku_string) |number_opt, *char| {
-        if (number_opt) |number| {
-            char.* = board_legacy.NumbersString[number];
-        } else {
-            char.* = '.';
-        }
-    }
 }
 
 pub const SolverEvent = union(enum) {

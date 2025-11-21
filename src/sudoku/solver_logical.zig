@@ -6,8 +6,7 @@ const BoardState = board_state.BoardState;
 const MaxSudokuExtent = board_state.MaxSudokuExtent;
 const u32_2 = board_state.u32_2;
 
-const sudoku = @import("game.zig");
-const all = sudoku.all;
+const all = @import("game.zig").all;
 
 pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;

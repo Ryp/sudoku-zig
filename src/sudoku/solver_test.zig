@@ -2,8 +2,6 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
-const sudoku = @import("game.zig");
-
 const board_legacy = @import("board_legacy.zig");
 const BoardState = board_legacy.BoardState;
 
@@ -94,18 +92,17 @@ test "Solver critical path" {
     } });
     defer board.destroy(allocator);
 
-    sudoku.fill_board_from_string(board.numbers, boards.easy_000.board, board.extent);
+    board.fill_board_from_string(boards.easy_000.board);
 
     try expectEqual(board.extent, 9);
 
     const solved = solver.solve(&board, .{ .dancing_links = .{} });
     try expect(solved);
 
-    // Compare with solution
-    const solution_board = try allocator.alloc(?u4, board.extent * board.extent);
-    defer allocator.free(solution_board);
+    var solution_board = try BoardState.create(allocator, board.game_type);
+    defer solution_board.destroy(allocator);
 
-    sudoku.fill_board_from_string(solution_board, boards.easy_000.solution, board.extent);
+    solution_board.fill_board_from_string(boards.easy_000.solution);
 
-    try expect(std.mem.eql(?u4, board.numbers, solution_board));
+    try expect(std.mem.eql(?u4, board.numbers, solution_board.numbers));
 }
