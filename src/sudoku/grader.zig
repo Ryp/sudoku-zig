@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const game = @import("game.zig");
+const sudoku = @import("game.zig");
+
 const solver_logical = @import("solver_logical.zig");
 const board_legacy = @import("board_legacy.zig");
 const BoardState = board_legacy.BoardState;
@@ -21,7 +22,7 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardS
 
     var technique_histogram = [_]u32{0} ** 8;
 
-    game.fill_candidate_mask(board, candidate_masks);
+    board.fill_candidate_mask(candidate_masks);
 
     while (true) {
         solver_logical.solve_trivial_candidates(&board, candidate_masks);
@@ -35,7 +36,7 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardS
             break;
         }
 
-        if (game.check_board_for_validation_errors(board, candidate_masks)) |validation_error| {
+        if (sudoku.check_board_for_validation_errors(board, candidate_masks)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});
             return;
         }

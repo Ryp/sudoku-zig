@@ -185,67 +185,6 @@ fn load_state_from_history(game: *GameState, index: u32) void {
     @memcpy(game.candidate_masks, get_candidate_masks_history_slice(game, index));
 }
 
-pub fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
-    var col_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
-    var row_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
-    var box_region_candidate_masks_full: [MaxSudokuExtent]u16 = undefined;
-    const col_region_candidate_masks = col_region_candidate_masks_full[0..board.extent];
-    const row_region_candidate_masks = row_region_candidate_masks_full[0..board.extent];
-    const box_region_candidate_masks = box_region_candidate_masks_full[0..board.extent];
-
-    fill_candidate_mask_regions(board, col_region_candidate_masks, row_region_candidate_masks, box_region_candidate_masks);
-
-    for (candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
-        if (board.numbers[cell_index] == null) {
-            const cell_coord = board.cell_coord_from_index(cell_index);
-            const col = cell_coord[0];
-            const row = cell_coord[1];
-            const box = board.box_indices[cell_index];
-
-            const col_candidate_mask = col_region_candidate_masks[col];
-            const row_candidate_mask = row_region_candidate_masks[row];
-            const box_candidate_mask = box_region_candidate_masks[box];
-
-            cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
-        } else {
-            // It should already be zero for set numbers
-            assert(cell_candidate_mask.* == 0);
-        }
-    }
-}
-
-fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []u16, row_region_candidate_masks: []u16, box_region_candidate_masks: []u16) void {
-    const full_mask = board.full_candidate_mask();
-
-    for (col_region_candidate_masks) |*col_region_candidate_mask| {
-        col_region_candidate_mask.* = full_mask;
-    }
-
-    for (row_region_candidate_masks) |*row_region_candidate_mask| {
-        row_region_candidate_mask.* = full_mask;
-    }
-
-    for (box_region_candidate_masks) |*box_region_candidate_mask| {
-        box_region_candidate_mask.* = full_mask;
-    }
-
-    for (board.numbers, 0..) |number_opt, cell_index| {
-        if (number_opt) |number| {
-            const cell_coord = board.cell_coord_from_index(cell_index);
-
-            const col = cell_coord[0];
-            const row = cell_coord[1];
-            const box = board.box_indices[cell_index];
-
-            const mask = ~board.mask_for_number(number);
-
-            col_region_candidate_masks[col] &= mask;
-            row_region_candidate_masks[row] &= mask;
-            box_region_candidate_masks[box] &= mask;
-        }
-    }
-}
-
 pub const PlayerAction = union(enum) {
     toggle_select: PlayerToggleSelect,
     move_selection: PlayerMoveSelection,
@@ -418,7 +357,7 @@ fn player_redo(game: *GameState) void {
 }
 
 fn player_fill_candidates(game: *GameState) void {
-    fill_candidate_mask(game.board, game.candidate_masks);
+    game.board.fill_candidate_mask(game.candidate_masks);
 
     push_state_to_history(game);
 }

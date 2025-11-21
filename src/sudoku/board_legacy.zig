@@ -130,6 +130,49 @@ pub const BoardState = struct {
         return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
     }
 
+    pub fn fill_candidate_mask(self: Self, candidate_masks: []u16) void {
+        const full_mask = self.full_candidate_mask();
+
+        var col_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
+        var row_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
+        var box_region_candidate_masks: [MaxSudokuExtent]u16 = .{full_mask} ** MaxSudokuExtent;
+
+        for (self.numbers, 0..) |number_opt, cell_index| {
+            if (number_opt) |number| {
+                const cell_coord = self.cell_coord_from_index(cell_index);
+
+                const col = cell_coord[0];
+                const row = cell_coord[1];
+                const box = self.box_indices[cell_index];
+
+                const mask = ~self.mask_for_number(number);
+
+                col_region_candidate_masks[col] &= mask;
+                row_region_candidate_masks[row] &= mask;
+                box_region_candidate_masks[box] &= mask;
+            }
+        }
+
+        for (candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
+            if (self.numbers[cell_index]) |_| {
+                // It should already be zero for set numbers
+                assert(cell_candidate_mask.* == 0);
+            } else {
+                const cell_coord = self.cell_coord_from_index(cell_index);
+
+                const col = cell_coord[0];
+                const row = cell_coord[1];
+                const box = self.box_indices[cell_index];
+
+                const col_candidate_mask = col_region_candidate_masks[col];
+                const row_candidate_mask = row_region_candidate_masks[row];
+                const box_candidate_mask = box_region_candidate_masks[box];
+
+                cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
+            }
+        }
+    }
+
     fn fill_regions(self: Self) void {
         for (0..self.extent) |region_index_usize| {
             const col_region = self.col_regions[region_index_usize];
