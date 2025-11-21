@@ -26,7 +26,7 @@ test "Box-line removal" {
     const candidate_masks = try allocator.alloc(u16, board.numbers.len);
     defer allocator.free(candidate_masks);
 
-    const full_mask = sudoku.full_candidate_mask(board.extent);
+    const full_mask = board.full_candidate_mask();
 
     // Fill candidate masks fully
     for (candidate_masks) |*cell_candidate_mask| {
@@ -42,7 +42,7 @@ test "Box-line removal" {
 
     // Remove candidates until we can apply the box-line solver
     for (3..9) |row_index| {
-        const mask = sudoku.mask_for_number(number);
+        const mask = board.mask_for_number(number);
         const cell_index = board.cell_index_from_coord(sudoku.u32_2{ 0, @intCast(row_index) });
         candidate_masks[cell_index] &= ~mask;
     }
@@ -69,7 +69,7 @@ test "Box-line removal" {
 
     // Remove candidates until we can apply the box-line solver
     for (3..9) |col_index| {
-        const mask = sudoku.mask_for_number(number);
+        const mask = board.mask_for_number(number);
         const cell_index = board.cell_index_from_coord(sudoku.u32_2{ @intCast(col_index), 0 });
         candidate_masks[cell_index] &= ~mask;
     }

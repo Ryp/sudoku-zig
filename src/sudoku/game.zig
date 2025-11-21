@@ -48,14 +48,6 @@ pub const GameState = struct {
     solver_event: ?SolverEvent,
 };
 
-pub fn mask_for_number(number: u4) u16 {
-    return @as(u16, 1) << number;
-}
-
-pub fn full_candidate_mask(game_extent: u32) u16 {
-    return @intCast((@as(u32, 1) << @intCast(game_extent)) - 1);
-}
-
 pub fn create_game_state(allocator: std.mem.Allocator, game_type: GameType, sudoku_string: []const u8) !GameState {
     var board = try BoardState.create(allocator, game_type);
 
@@ -232,7 +224,7 @@ pub fn fill_candidate_mask(board: BoardState, candidate_masks: []u16) void {
 }
 
 fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []u16, row_region_candidate_masks: []u16, box_region_candidate_masks: []u16) void {
-    const full_mask = full_candidate_mask(board.extent);
+    const full_mask = board.full_candidate_mask();
 
     for (col_region_candidate_masks) |*col_region_candidate_mask| {
         col_region_candidate_mask.* = full_mask;
@@ -254,7 +246,7 @@ fn fill_candidate_mask_regions(board: BoardState, col_region_candidate_masks: []
             const row = cell_coord[1];
             const box = board.box_indices[cell_index];
 
-            const mask = ~mask_for_number(@intCast(cell_number));
+            const mask = ~board.mask_for_number(@intCast(cell_number));
 
             col_region_candidate_masks[col] &= mask;
             row_region_candidate_masks[row] &= mask;
@@ -400,7 +392,7 @@ fn player_toggle_candidate(game: *GameState, number: u4) void {
         const cell_index = game.selected_cells[0];
 
         if (game.board.numbers[cell_index] == UnsetNumber) {
-            game.candidate_masks[cell_index] ^= mask_for_number(number);
+            game.candidate_masks[cell_index] ^= game.board.mask_for_number(number);
         }
 
         push_state_to_history(game);
@@ -461,7 +453,7 @@ const PlayerFillAllCandidates = struct {
 };
 
 fn player_fill_candidates_all(game: *GameState) void {
-    const full_mask = full_candidate_mask(game.board.extent);
+    const full_mask = game.board.full_candidate_mask();
 
     for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
         if (game.board.numbers[cell_index] == UnsetNumber) {
@@ -546,7 +538,7 @@ pub const ValidationError = struct {
 pub fn check_board_for_validation_errors(board: BoardState, candidate_masks: []const u16) ?ValidationError {
     for (0..board.extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
-        const number_mask = mask_for_number(number);
+        const number_mask = board.mask_for_number(number);
 
         for (board.all_regions) |region| {
             var last_cell_index: u32 = undefined;

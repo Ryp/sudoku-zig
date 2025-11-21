@@ -1,12 +1,13 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sudoku = @import("game.zig");
-const BoardState = sudoku.BoardState;
-const UnsetNumber = sudoku.UnsetNumber;
+const board_state = @import("board_legacy.zig");
+const BoardState = board_state.BoardState;
+const UnsetNumber = board_state.UnsetNumber;
+const MaxSudokuExtent = board_state.MaxSudokuExtent;
 
 pub fn solve(board: *BoardState, recursive: bool) bool {
-    var free_cell_list_full: [sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]CellInfo = undefined;
+    var free_cell_list_full: [MaxSudokuExtent * MaxSudokuExtent]CellInfo = undefined;
     const free_cell_list = populate_free_list(board, &free_cell_list_full);
 
     sort_free_cell_list(board, free_cell_list);
@@ -32,7 +33,7 @@ fn solve_backtracking_recursive(board: *BoardState, free_cell_list: []CellInfo, 
     const free_cell: CellInfo = free_cell_list[list_index];
 
     // List all possible candidates for this cell
-    var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
+    var valid_candidates_full: [MaxSudokuExtent]bool = undefined;
     const valid_candidates = valid_candidates_full[0..board.extent];
 
     populate_valid_candidates(board, free_cell, valid_candidates);
@@ -55,10 +56,10 @@ fn solve_backtracking_recursive(board: *BoardState, free_cell_list: []CellInfo, 
 }
 
 fn solve_backtracking_iterative(board: *BoardState, free_cell_list: []CellInfo) bool {
-    var current_guess_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u4);
+    var current_guess_full = std.mem.zeroes([MaxSudokuExtent * MaxSudokuExtent]u4);
     var current_guess = current_guess_full[0..free_cell_list.len];
 
-    var valid_candidates_full: [sudoku.MaxSudokuExtent]bool = undefined;
+    var valid_candidates_full: [MaxSudokuExtent]bool = undefined;
     var valid_candidates = valid_candidates_full[0..board.extent];
 
     var list_index: u32 = 0;
@@ -149,9 +150,9 @@ fn populate_free_list(board: *BoardState, free_cell_list_full: []CellInfo) []Cel
 }
 
 fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
-    const full_mask = sudoku.full_candidate_mask(board.extent);
+    const full_mask = board.full_candidate_mask();
 
-    var col_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var col_region_masks_full: [MaxSudokuExtent]u16 = undefined;
     const col_region_masks = col_region_masks_full[0..board.extent];
 
     for (board.col_regions, col_region_masks) |region, *region_mask| {
@@ -160,12 +161,12 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
         for (region) |cell_index| {
             const cell_number = board.numbers[cell_index];
             if (cell_number != UnsetNumber) {
-                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
             }
         }
     }
 
-    var row_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var row_region_masks_full: [MaxSudokuExtent]u16 = undefined;
     const row_region_masks = row_region_masks_full[0..board.extent];
 
     for (board.row_regions, row_region_masks) |region, *region_mask| {
@@ -174,12 +175,12 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
         for (region) |cell_index| {
             const cell_number = board.numbers[cell_index];
             if (cell_number != UnsetNumber) {
-                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
             }
         }
     }
 
-    var box_region_masks_full: [sudoku.MaxSudokuExtent]u16 = undefined;
+    var box_region_masks_full: [MaxSudokuExtent]u16 = undefined;
     const box_region_masks = box_region_masks_full[0..board.extent];
 
     for (board.box_regions, box_region_masks) |region, *region_mask| {
@@ -188,12 +189,12 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
         for (region) |cell_index| {
             const cell_number = board.numbers[cell_index];
             if (cell_number != UnsetNumber) {
-                region_mask.* &= ~sudoku.mask_for_number(@intCast(cell_number));
+                region_mask.* &= ~board.mask_for_number(@intCast(cell_number));
             }
         }
     }
 
-    var candidate_counts_full = std.mem.zeroes([sudoku.MaxSudokuExtent * sudoku.MaxSudokuExtent]u8);
+    var candidate_counts_full = std.mem.zeroes([MaxSudokuExtent * MaxSudokuExtent]u8);
     const candidate_counts = candidate_counts_full[0..board.numbers.len];
 
     for (candidate_counts, 0..) |*candidate_count, cell_index| {

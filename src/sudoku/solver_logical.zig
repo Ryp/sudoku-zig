@@ -35,7 +35,7 @@ pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, 
     const row_region = board.row_regions[cell_coord[1]];
     const box_region = board.box_regions[box_index];
 
-    const mask = sudoku.mask_for_number(number);
+    const mask = board.mask_for_number(number);
 
     for (col_region, row_region, box_region) |col_cell, row_cell, box_cell| {
         candidate_masks[col_cell] &= ~mask;
@@ -60,7 +60,7 @@ fn solve_trivial_candidates_region(board: *BoardState, candidate_masks: []u16, r
         const cell_number = board.numbers[cell_index];
 
         if (cell_number != UnsetNumber) {
-            used_mask |= sudoku.mask_for_number(@intCast(cell_number));
+            used_mask |= board.mask_for_number(@intCast(cell_number));
         }
     }
 
@@ -117,7 +117,7 @@ pub fn apply_naked_pair(candidate_masks: []u16, naked_pair: NakedPair) void {
 
 pub fn find_naked_pair(board: BoardState, candidate_masks: []const u16) ?NakedPair {
     for (board.all_regions) |region| {
-        if (find_naked_pair_region(candidate_masks, region)) |naked_pair| {
+        if (find_naked_pair_region(board, candidate_masks, region)) |naked_pair| {
             return naked_pair;
         }
     }
@@ -127,7 +127,7 @@ pub fn find_naked_pair(board: BoardState, candidate_masks: []const u16) ?NakedPa
 
 // This function works once per region, meaning that if candidates to remove are found in overlapping regions,
 // like in a line as well as in a box, then we're only counting one of them.
-pub fn find_naked_pair_region(candidate_masks: []const u16, region: []u32) ?NakedPair {
+pub fn find_naked_pair_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?NakedPair {
     for (region, 0..) |cell_index_a, region_cell_index_a| {
         const candidate_mask_a = candidate_masks[cell_index_a];
         const candidate_count_a = @popCount(candidate_mask_a);
@@ -138,7 +138,7 @@ pub fn find_naked_pair_region(candidate_masks: []const u16, region: []u32) ?Nake
 
                 if (candidate_mask_a == candidate_mask_b) {
                     const number_a = first_bit_index_u16(candidate_mask_a);
-                    const number_b = first_bit_index_u16(candidate_mask_a - sudoku.mask_for_number(@intCast(number_a)));
+                    const number_b = first_bit_index_u16(candidate_mask_a - board.mask_for_number(@intCast(number_a)));
 
                     // Regional mask
                     var deletion_mask_a: u16 = 0;
@@ -202,7 +202,7 @@ test "Naked pair" {
 
     const number_a: u4 = 0;
     const number_b: u4 = 8;
-    const pair_mask = sudoku.mask_for_number(number_a) | sudoku.mask_for_number(number_b);
+    const pair_mask = board.mask_for_number(number_a) | board.mask_for_number(number_b);
 
     // Setup a naked pair
     candidate_masks[0] = pair_mask;
@@ -211,8 +211,8 @@ test "Naked pair" {
     // There shouldn't be any hit if there's no candidates to remove
     try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
 
-    candidate_masks[2] = sudoku.mask_for_number(number_a);
-    candidate_masks[3] = sudoku.mask_for_number(number_b);
+    candidate_masks[2] = board.mask_for_number(number_a);
+    candidate_masks[3] = board.mask_for_number(number_b);
 
     // Make sure we get a hit
     if (find_naked_pair(board, candidate_masks)) |naked_pair| {
@@ -299,7 +299,7 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
             const number: u4 = @intCast(number_usize);
             const cell_index = last_cell_indices[number];
             const cell_number = board.numbers[cell_index];
-            const deletion_mask = candidate_masks[cell_index] & ~sudoku.mask_for_number(number);
+            const deletion_mask = candidate_masks[cell_index] & ~board.mask_for_number(number);
 
             if (cell_number == UnsetNumber and deletion_mask != 0) {
                 return HiddenSingle{
@@ -349,7 +349,7 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
                 assert(second_number < board.extent);
 
                 if (second_number_count == 2 and all(region_min_max_cell_indices[first_number] == region_min_max_cell_indices[second_number])) {
-                    const mask = sudoku.mask_for_number(@intCast(first_number)) | sudoku.mask_for_number(@intCast(second_number));
+                    const mask = board.mask_for_number(@intCast(first_number)) | board.mask_for_number(@intCast(second_number));
                     const region_cell_index_a = region_min_max_cell_indices[first_number][0];
                     const region_cell_index_b = region_min_max_cell_indices[first_number][1];
                     const cell_index_a = region[region_cell_index_a];
@@ -390,11 +390,11 @@ pub const PointingLine = struct {
     box_region_mask: u16,
 };
 
-pub fn apply_pointing_line(candidate_masks: []u16, pointing_line: PointingLine) void {
-    const number_mask = sudoku.mask_for_number(pointing_line.number);
+pub fn apply_pointing_line(board: BoardState, candidate_masks: []u16, pointing_line: PointingLine) void {
+    const number_mask = board.mask_for_number(pointing_line.number);
     for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
         // FIXME super confusing
-        if (sudoku.mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
+        if (board.mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
         }
     }
@@ -421,7 +421,7 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
         // FIXME cache remaining candidates per box and only iterate on this?
         for (box_aabbs, candidate_counts, 0..) |*aabb, *candidate_count, number_usize| {
             const number: u4 = @intCast(number_usize);
-            const number_mask = sudoku.mask_for_number(number);
+            const number_mask = board.mask_for_number(number);
 
             aabb.max = u32_2{ 0, 0 };
             aabb.min = u32_2{ board.extent, board.extent };
@@ -436,7 +436,7 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
                     aabb.min = @min(aabb.min, cell_coord);
                     aabb.max = @max(aabb.max, cell_coord);
                     candidate_count.* += 1;
-                    box_region_mask |= sudoku.mask_for_number(@intCast(region_cell_index));
+                    box_region_mask |= board.mask_for_number(@intCast(region_cell_index));
                 }
             }
 
@@ -486,11 +486,11 @@ pub const BoxLineReduction = struct {
     line_region_mask: u16,
 };
 
-pub fn apply_box_line_reduction(candidate_masks: []u16, box_line_reduction: BoxLineReduction) void {
-    const number_mask = sudoku.mask_for_number(box_line_reduction.number);
+pub fn apply_box_line_reduction(board: BoardState, candidate_masks: []u16, box_line_reduction: BoxLineReduction) void {
+    const number_mask = board.mask_for_number(box_line_reduction.number);
     for (box_line_reduction.box_region, 0..) |cell_index, region_cell_index| {
         // FIXME super confusing
-        if (sudoku.mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
+        if (board.mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
         }
     }
@@ -515,7 +515,7 @@ pub fn find_box_line_reduction(board: BoardState, candidate_masks: []const u16) 
 pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []const u16, line_region: []u32, line_coord: u32_2) ?BoxLineReduction {
     for (0..board.extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
-        const number_mask = sudoku.mask_for_number(number);
+        const number_mask = board.mask_for_number(number);
 
         var line_region_mask: u16 = 0;
         var box_index_mask: u16 = 0;
@@ -527,7 +527,7 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
                 line_region_mask |= @as(u16, 1) << region_cell_index;
 
                 const box_index = board.box_indices[cell_index];
-                box_index_mask |= sudoku.mask_for_number(@intCast(box_index));
+                box_index_mask |= board.mask_for_number(@intCast(box_index));
             }
         }
 
@@ -541,7 +541,7 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
 
                 if (all(cell_coord != line_coord)) {
                     if (candidate_masks[cell_index] & number_mask != 0) {
-                        deletion_mask |= sudoku.mask_for_number(@intCast(region_cell_index));
+                        deletion_mask |= board.mask_for_number(@intCast(region_cell_index));
                     }
                 }
             }
@@ -603,10 +603,10 @@ pub fn apply_technique(board: *BoardState, candidate_masks: []u16, solver_event:
             apply_hidden_pair(candidate_masks, hidden_pair);
         },
         .pointing_line => |pointing_line| {
-            apply_pointing_line(candidate_masks, pointing_line);
+            apply_pointing_line(board.*, candidate_masks, pointing_line);
         },
         .box_line_reduction => |box_line_reduction| {
-            apply_box_line_reduction(candidate_masks, box_line_reduction);
+            apply_box_line_reduction(board.*, candidate_masks, box_line_reduction);
         },
     }
 }

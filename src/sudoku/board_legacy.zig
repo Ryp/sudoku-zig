@@ -120,6 +120,15 @@ pub const BoardState = struct {
         return position[0] + self.extent * position[1];
     }
 
+    pub fn mask_for_number(self: Self, number: u4) u16 {
+        _ = self;
+        return @as(u16, 1) << number;
+    }
+
+    pub fn full_candidate_mask(self: Self) u16 {
+        return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
+    }
+
     fn fill_regions(self: Self) void {
         for (0..self.extent) |region_index_usize| {
             const col_region = self.col_regions[region_index_usize];

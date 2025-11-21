@@ -333,7 +333,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             const cell_number = game.board.numbers[selected_cell_index];
 
             if (cell_number != UnsetNumber) {
-                highlight_mask |= sudoku.mask_for_number(@intCast(cell_number));
+                highlight_mask |= game.board.mask_for_number(@intCast(cell_number));
             }
         }
 
@@ -372,7 +372,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     }
 
                     if (cell_number != UnsetNumber) {
-                        if (highlight_mask & sudoku.mask_for_number(@intCast(cell_number)) != 0) {
+                        if (highlight_mask & game.board.mask_for_number(@intCast(cell_number)) != 0) {
                             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
                             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
                         }
@@ -419,7 +419,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
-                    if (highlight_mask & sudoku.mask_for_number(number) != 0) {
+                    if (highlight_mask & game.board.mask_for_number(number) != 0) {
                         _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
@@ -545,7 +545,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Draw candidates
             for (0..board.extent) |number_usize| {
                 const number: u4 = @intCast(number_usize);
-                const number_mask = sudoku.mask_for_number(number);
+                const number_mask = board.mask_for_number(number);
 
                 const is_deleted = hidden_single.deletion_mask & number_mask != 0;
                 const is_single = hidden_single.number == number;
@@ -579,7 +579,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 // Draw candidates
                 for (0..board.extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
-                    const number_mask = sudoku.mask_for_number(number);
+                    const number_mask = board.mask_for_number(number);
 
                     const is_deleted = hidden_single.deletion_mask & number_mask != 0;
                     const is_single = hidden_pair.a.number == number or hidden_pair.b.number == number;
@@ -604,7 +604,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
-                const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
+                const region_index_mask = board.mask_for_number(@intCast(line_region_cell_index));
 
                 if (pointing_line.line_region_deletion_mask & region_index_mask != 0) {
                     var candidate_rect = candidate_local_rects[pointing_line.number];
@@ -624,7 +624,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
-                const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
+                const region_index_mask = board.mask_for_number(@intCast(box_region_index));
                 if (pointing_line.box_region_mask & region_index_mask != 0) {
                     var candidate_rect = candidate_local_rects[pointing_line.number];
                     candidate_rect.x += cell_rect.x;
@@ -644,7 +644,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
-                const region_index_mask = sudoku.mask_for_number(@intCast(line_region_cell_index));
+                const region_index_mask = board.mask_for_number(@intCast(line_region_cell_index));
 
                 if (box_line_reduction.box_region_deletion_mask & region_index_mask != 0) {
                     var candidate_rect = candidate_local_rects[box_line_reduction.number];
@@ -664,7 +664,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
-                const region_index_mask = sudoku.mask_for_number(@intCast(box_region_index));
+                const region_index_mask = board.mask_for_number(@intCast(box_region_index));
                 if (box_line_reduction.line_region_mask & region_index_mask != 0) {
                     var candidate_rect = candidate_local_rects[box_line_reduction.number];
                     candidate_rect.x += cell_rect.x;
