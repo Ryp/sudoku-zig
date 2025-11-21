@@ -4,9 +4,10 @@ const assert = std.debug.assert;
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
 const MaxSudokuExtent = board_state.MaxSudokuExtent;
-const u32_2 = board_state.u32_2;
 
-const all = @import("game.zig").all;
+const common = @import("common.zig");
+const u32_2 = common.u32_2;
+const all = common.all;
 
 pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;

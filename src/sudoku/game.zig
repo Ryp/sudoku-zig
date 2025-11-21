@@ -4,24 +4,15 @@ const assert = std.debug.assert;
 const generator = @import("generator.zig");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
-const boards = @import("boards.zig");
 
 const board_legacy = @import("board_legacy.zig");
 const BoardState = board_legacy.BoardState;
-const u32_2 = board_legacy.u32_2;
 
-// I borrowed this name from HLSL
-pub fn all(vector: anytype) bool {
-    const type_info = @typeInfo(@TypeOf(vector));
-    assert(type_info.vector.child == bool);
-    assert(type_info.vector.len > 1);
+const common = @import("common.zig");
+const u32_2 = common.u32_2;
+const i32_2 = common.i32_2;
+const all = common.all;
 
-    return @reduce(.And, vector);
-}
-
-const i32_2 = @Vector(2, i32);
-
-const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
 const MaxHistorySize = 512;
 
 const GameFlow = enum {

@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 
 const board_legacy = @import("sudoku/board_legacy.zig");
 const solver = @import("sudoku/solver.zig");
-const boards = @import("sudoku/boards.zig");
+const known_boards = @import("sudoku/known_boards.zig");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -14,7 +14,7 @@ pub fn main() !void {
     } });
     defer board.destroy(allocator);
 
-    board.fill_board_from_string(boards.special_dancing_links.board);
+    board.fill_board_from_string(known_boards.special_dancing_links.board);
 
     assert(solver.solve(&board, .{ .dancing_links = .{} }));
 }

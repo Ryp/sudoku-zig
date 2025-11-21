@@ -16,7 +16,9 @@ const board_legacy = @import("../sudoku/board_legacy.zig");
 const BoardState = board_legacy.BoardState;
 const NumbersString = board_legacy.NumbersString;
 const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
-const u32_2 = board_legacy.u32_2;
+
+const common = @import("../sudoku/common.zig");
+const u32_2 = common.u32_2;
 
 const ui_palette = @import("color_palette.zig");
 const ColorRGBA8 = ui_palette.ColorRGBA8;

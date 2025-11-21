@@ -1,12 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const all = @import("game.zig").all;
+const common = @import("common.zig");
+const all = common.all;
+const u32_2 = common.u32_2;
 
 pub const MaxSudokuExtent = 16;
 pub const NumbersString = [MaxSudokuExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
-
-pub const u32_2 = @Vector(2, u32);
 
 pub const RegularSudoku = struct {
     box_w: u32,
@@ -123,7 +123,7 @@ pub const BoardState = struct {
     }
 
     pub fn cell_index_from_coord(self: Self, position: u32_2) u32 {
-        assert(game.all(position < u32_2{ self.extent, self.extent }));
+        assert(all(position < u32_2{ self.extent, self.extent }));
         return position[0] + self.extent * position[1];
     }
 

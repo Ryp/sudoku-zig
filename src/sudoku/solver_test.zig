@@ -7,7 +7,7 @@ const BoardState = board_legacy.BoardState;
 
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
-const boards = @import("boards.zig");
+const known_boards = @import("known_boards.zig");
 
 test "Box-line removal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -92,7 +92,9 @@ test "Solver critical path" {
     } });
     defer board.destroy(allocator);
 
-    board.fill_board_from_string(boards.easy_000.board);
+    const known_board = known_boards.easy_000;
+
+    board.fill_board_from_string(known_board.board);
 
     try expectEqual(board.extent, 9);
 
@@ -102,7 +104,7 @@ test "Solver critical path" {
     var solution_board = try BoardState.create(allocator, board.game_type);
     defer solution_board.destroy(allocator);
 
-    solution_board.fill_board_from_string(boards.easy_000.solution);
+    solution_board.fill_board_from_string(known_board.solution);
 
     try expect(std.mem.eql(?u4, board.numbers, solution_board.numbers));
 }
