@@ -23,8 +23,8 @@ const u32_2 = common.u32_2;
 const ui_palette = @import("color_palette.zig");
 const ColorRGBA8 = ui_palette.ColorRGBA8;
 
-const CandidateBoxExtent = 27;
-const CellExtent = 2 + 3 * CandidateBoxExtent;
+const CandidateBoxExtent = 33;
+const CellExtentBasePx = 2 + 3 * CandidateBoxExtent;
 
 const BlackColor = ui_palette.Lucky_Point;
 const BgColor = ui_palette.Swan_White;
@@ -43,38 +43,43 @@ const JigsawRegionSaturation = 0.32;
 const JigsawRegionValue = 1.0;
 
 const SdlContext = struct {
+    cell_extent: f32,
     window: *c.SDL_Window,
     renderer: *c.SDL_Renderer,
-    text_textures: []*c.SDL_Texture,
-    text_aabbs: []c.SDL_FRect,
-    small_text_textures: []*c.SDL_Texture,
-    small_text_aabbs: []c.SDL_FRect,
+    fonts: FontResources,
+
+    pub fn cell_rectangle(self: @This(), cell_coord: u32_2) c.SDL_FRect {
+        const rect = c.SDL_FRect{
+            .x = @as(f32, @floatFromInt(cell_coord[0])) * self.cell_extent + 1.0,
+            .y = @as(f32, @floatFromInt(cell_coord[1])) * self.cell_extent + 1.0,
+            .w = self.cell_extent,
+            .h = self.cell_extent,
+        };
+
+        return rect;
+    }
+
+    pub fn resize_fonts(self: *@This(), allocator: std.mem.Allocator, board_extent: u32) !void {
+        self.fonts.destroy(allocator);
+        self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent, board_extent);
+    }
 };
 
-fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
+fn create_sdl_context(allocator: std.mem.Allocator, board_extent: u32) !SdlContext {
     if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
         c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     }
     errdefer c.SDL_Quit();
 
-    const window_width = extent * CellExtent;
-    const window_height = extent * CellExtent;
+    const window_width = board_extent * CellExtentBasePx;
+    const window_height = board_extent * CellExtentBasePx;
 
     const window = c.SDL_CreateWindow("Sudoku", @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
     errdefer c.SDL_DestroyWindow(window);
-
-    const content_scale = c.SDL_GetDisplayContentScale(c.SDL_GetPrimaryDisplay());
-    std.debug.print("SDL_GetDisplayContentScale: {}\n", .{content_scale});
-
-    const scale = c.SDL_GetWindowDisplayScale(window);
-    std.debug.print("SDL_GetWindowDisplayScale: {}\n", .{scale});
-
-    const density = c.SDL_GetWindowPixelDensity(window);
-    std.debug.print("SDL_GetWindowPixelDensity: {}\n", .{density});
 
     if (!c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1")) {
         c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
@@ -87,63 +92,87 @@ fn create_sdl_context(allocator: std.mem.Allocator, extent: u32) !SdlContext {
     };
     errdefer c.SDL_DestroyRenderer(renderer);
 
-    const text_palette = c.SDL_CreatePalette(256) orelse {
-        c.SDL_Log("Unable to create palette: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    defer c.SDL_DestroyPalette(text_palette);
+    const display_scale = c.SDL_GetWindowDisplayScale(window);
+    const cell_extent = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
 
-    var palette_colors_full: [256]c.SDL_Color = undefined;
-    for (&palette_colors_full, 0..) |*color, color_index| {
-        const alpha: u8 = @as(u8, @intCast(color_index));
-        color.* = c.SDL_Color{
-            .r = @intCast((@as(u32, @intCast(TextColor.r)) * alpha) / 255),
-            .g = @intCast((@as(u32, @intCast(TextColor.g)) * alpha) / 255),
-            .b = @intCast((@as(u32, @intCast(TextColor.b)) * alpha) / 255),
-            .a = alpha,
-        };
-    }
-    _ = c.SDL_SetPaletteColors(text_palette, &palette_colors_full, 0, 256);
-
-    const regular_ttf = try TrueType.load(@embedFile("font_regular"));
-    const regular_ttf_scale = regular_ttf.scaleForPixelHeight(CellExtent);
-
-    const regular_ttf_textures, const regular_ttf_aabbs = try create_font_textures_and_aabbs(allocator, regular_ttf, regular_ttf_scale, renderer, text_palette, extent);
-
-    const small_ttf = try TrueType.load(@embedFile("font_small"));
-    const small_ttf_scale = small_ttf.scaleForPixelHeight(CellExtent / 3);
-
-    const small_ttf_textures, const small_ttf_aabbs = try create_font_textures_and_aabbs(allocator, small_ttf, small_ttf_scale, renderer, text_palette, extent);
+    const fonts = try FontResources.create(allocator, renderer, cell_extent, board_extent);
+    errdefer fonts.destroy(allocator);
 
     return .{
+        .cell_extent = cell_extent,
         .window = window,
         .renderer = renderer,
-        .text_textures = regular_ttf_textures,
-        .text_aabbs = regular_ttf_aabbs,
-        .small_text_textures = small_ttf_textures,
-        .small_text_aabbs = small_ttf_aabbs,
+        .fonts = fonts,
     };
 }
 
 fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) void {
-    // Regular text
-    for (sdl_context.text_textures) |texture| {
-        c.SDL_DestroyTexture(texture);
-    }
-    allocator.free(sdl_context.text_textures);
-    allocator.free(sdl_context.text_aabbs);
-
-    // Small text
-    for (sdl_context.small_text_textures) |texture| {
-        c.SDL_DestroyTexture(texture);
-    }
-    allocator.free(sdl_context.small_text_textures);
-    allocator.free(sdl_context.small_text_aabbs);
+    sdl_context.fonts.destroy(allocator);
 
     c.SDL_DestroyRenderer(sdl_context.renderer);
     c.SDL_DestroyWindow(sdl_context.window);
     c.SDL_Quit();
 }
+
+const FontResources = struct {
+    const Self = @This();
+
+    regular_text_textures: []*c.SDL_Texture,
+    regular_text_aabbs: []c.SDL_FRect,
+    small_text_textures: []*c.SDL_Texture,
+    small_text_aabbs: []c.SDL_FRect,
+
+    pub fn create(allocator: std.mem.Allocator, renderer: *c.SDL_Renderer, cell_extent: f32, board_extent: u32) !Self {
+        const text_palette = c.SDL_CreatePalette(256) orelse {
+            c.SDL_Log("Unable to create palette: %s", c.SDL_GetError());
+            return error.SDLInitializationFailed;
+        };
+        defer c.SDL_DestroyPalette(text_palette);
+
+        var palette_colors_full: [256]c.SDL_Color = undefined;
+        for (&palette_colors_full, 0..) |*color, color_index| {
+            const alpha: u8 = @as(u8, @intCast(color_index));
+            color.* = c.SDL_Color{
+                .r = @intCast((@as(u32, @intCast(TextColor.r)) * alpha) / 255),
+                .g = @intCast((@as(u32, @intCast(TextColor.g)) * alpha) / 255),
+                .b = @intCast((@as(u32, @intCast(TextColor.b)) * alpha) / 255),
+                .a = alpha,
+            };
+        }
+        _ = c.SDL_SetPaletteColors(text_palette, &palette_colors_full, 0, 256);
+
+        const regular_ttf = try TrueType.load(@embedFile("font_regular"));
+        const regular_ttf_scale = regular_ttf.scaleForPixelHeight(cell_extent);
+
+        const regular_ttf_textures, const regular_ttf_aabbs = try create_font_textures_and_aabbs(allocator, regular_ttf, regular_ttf_scale, renderer, text_palette, board_extent);
+
+        const small_ttf = try TrueType.load(@embedFile("font_small"));
+        const small_ttf_scale = small_ttf.scaleForPixelHeight(cell_extent / 3.0);
+
+        const small_ttf_textures, const small_ttf_aabbs = try create_font_textures_and_aabbs(allocator, small_ttf, small_ttf_scale, renderer, text_palette, board_extent);
+
+        return .{
+            .regular_text_textures = regular_ttf_textures,
+            .regular_text_aabbs = regular_ttf_aabbs,
+            .small_text_textures = small_ttf_textures,
+            .small_text_aabbs = small_ttf_aabbs,
+        };
+    }
+
+    pub fn destroy(self: Self, allocator: std.mem.Allocator) void {
+        for (self.regular_text_textures) |texture| {
+            c.SDL_DestroyTexture(texture);
+        }
+        allocator.free(self.regular_text_textures);
+        allocator.free(self.regular_text_aabbs);
+
+        for (self.small_text_textures) |texture| {
+            c.SDL_DestroyTexture(texture);
+        }
+        allocator.free(self.small_text_textures);
+        allocator.free(self.small_text_aabbs);
+    }
+};
 
 fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, scale: f32, sdl_renderer: *c.SDL_Renderer, palette: *c.SDL_Palette, sudoku_extent: u32) !struct { []*c.SDL_Texture, []c.SDL_FRect } {
     const textures = try allocator.alloc(*c.SDL_Texture, sudoku_extent);
@@ -219,62 +248,65 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 }
 
 pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
-    const extent = game.board.extent;
+    const board_extent = game.board.extent;
 
     var box_region_colors_full: [MaxSudokuExtent]ColorRGBA8 = undefined;
-    const box_region_colors = box_region_colors_full[0..extent];
+    const box_region_colors = box_region_colors_full[0..board_extent];
 
     fill_box_regions_colors(game.board.game_type, box_region_colors);
 
-    const sdl_context = try create_sdl_context(allocator, extent);
+    var sdl_context = try create_sdl_context(allocator, board_extent);
 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
 
-    const candidate_layout = get_candidate_layout(extent);
+    const candidate_layout = get_candidate_layout(board_extent);
+    const candidate_box_extent = .{
+        sdl_context.cell_extent / @as(f32, @floatFromInt(candidate_layout[0])),
+        sdl_context.cell_extent / @as(f32, @floatFromInt(candidate_layout[1])),
+    };
+
     var candidate_local_rects_full: [MaxSudokuExtent]c.SDL_FRect = undefined;
-    const candidate_local_rects = candidate_local_rects_full[0..extent];
+    const candidate_local_rects = candidate_local_rects_full[0..board_extent];
 
     for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
-        const x: c_int = @intCast(@rem(number, candidate_layout[0]) * CellExtent / candidate_layout[0]);
-        const y: c_int = @intCast(@divTrunc(number, candidate_layout[0]) * CellExtent / candidate_layout[1]);
-        const x2: c_int = @intCast((@rem(number, candidate_layout[0]) + 1) * CellExtent / candidate_layout[0]);
-        const y2: c_int = @intCast((@divTrunc(number, candidate_layout[0]) + 1) * CellExtent / candidate_layout[1]);
-
         candidate_local_rect.* = .{
-            .x = @floatFromInt(x),
-            .y = @floatFromInt(y),
-            .w = @floatFromInt(x2 - x),
-            .h = @floatFromInt(y2 - y),
+            .x = candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
+            .y = candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
+            .w = candidate_box_extent[0],
+            .h = candidate_box_extent[1],
         };
     }
 
     main_loop: while (true) {
         // Poll events
-        var sdlEvent: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&sdlEvent)) {
+        var sdl_event: c.SDL_Event = undefined;
+        while (c.SDL_PollEvent(&sdl_event)) {
             const mods = c.SDL_GetModState();
             const is_any_ctrl_pressed = (mods & c.SDL_KMOD_CTRL) != 0;
             const is_any_shift_pressed = (mods & c.SDL_KMOD_SHIFT) != 0;
 
-            switch (sdlEvent.type) {
+            switch (sdl_event.type) {
                 c.SDL_EVENT_QUIT => {
                     break :main_loop;
                 },
-                // c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
-                //     const scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
-                //     //c.SDL_SetWindowSize(sdl_context.window, (int)(640.0f * scale), (int)(480.0f * scale));
-                //     std.debug.print("SDL_GetWindowDisplayScale returned: {}\n", .{scale});
-                // },
+                c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
+                    const display_scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
+                    sdl_context.cell_extent = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
+
+                    try sdl_context.resize_fonts(allocator, board_extent);
+                },
                 c.SDL_EVENT_MOUSE_BUTTON_UP => {
-                    const x: u32 = @intFromFloat(sdlEvent.button.x / CellExtent);
-                    const y: u32 = @intFromFloat(sdlEvent.button.y / CellExtent);
-                    if (sdlEvent.button.button == c.SDL_BUTTON_LEFT) {
+                    _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
+
+                    const x: u32 = @intFromFloat(sdl_event.button.x / sdl_context.cell_extent);
+                    const y: u32 = @intFromFloat(sdl_event.button.y / sdl_context.cell_extent);
+                    if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
                         sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
                     }
                 },
                 c.SDL_EVENT_KEY_DOWN => {
-                    const key_sym = sdlEvent.key.key;
+                    const key_sym = sdl_event.key.key;
                     switch (key_sym) {
                         c.SDLK_ESCAPE => {
                             break :main_loop;
@@ -347,7 +379,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             const box_region_color = box_region_colors[box_index];
 
             const cell_coord = game.board.cell_coord_from_index(cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw box background
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, box_region_color);
@@ -397,20 +429,20 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
         for (game.board.numbers, 0..) |number_opt, cell_index| {
             const cell_coord = game.board.cell_coord_from_index(cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw placed numbers
             if (number_opt) |number| {
-                const glyph_rect = sdl_context.text_aabbs[number];
+                const glyph_rect = sdl_context.fonts.regular_text_aabbs[number];
                 const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
 
-                _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.text_textures[number], &glyph_rect, &centered_glyph_rect);
+                _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.fonts.regular_text_textures[number], &glyph_rect, &centered_glyph_rect);
             }
         }
 
         for (game.candidate_masks, 0..) |cell_candidate_mask, cell_index| {
             const cell_coord = game.board.cell_coord_from_index(cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw candidates
             for (candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
@@ -425,15 +457,15 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                         _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
                     }
 
-                    const glyph_rect = sdl_context.small_text_aabbs[number];
+                    const glyph_rect = sdl_context.fonts.small_text_aabbs[number];
                     const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
 
-                    _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.small_text_textures[number], &glyph_rect, &centered_glyph_rect);
+                    _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.fonts.small_text_textures[number], &glyph_rect, &centered_glyph_rect);
                 }
             }
         }
 
-        draw_sudoku_grid(sdl_context.renderer, game.board);
+        draw_sudoku_grid(sdl_context, game.board);
 
         set_window_title(sdl_context.window, game, title_string);
 
@@ -472,7 +504,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
     switch (technique) {
         .naked_single => |naked_single| {
             const cell_coord = board.cell_coord_from_index(naked_single.cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -487,7 +519,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         .naked_pair => |naked_pair| {
             for (naked_pair.region, 0..) |cell_index, region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 // Highlight region that was considered
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
@@ -533,7 +565,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Highlight region that was considered
             for (hidden_single.region) |cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -541,7 +573,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 
             // Highlight the candidates we removed and the single that was considered
             const cell_coord = board.cell_coord_from_index(hidden_single.cell_index);
-            const cell_rect = cell_rectangle(cell_coord);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw candidates
             for (0..board.extent) |number_usize| {
@@ -566,7 +598,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             assert(hidden_pair.a.region.ptr == hidden_pair.b.region.ptr);
             for (hidden_pair.a.region) |cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -575,7 +607,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             inline for (.{ hidden_pair.a, hidden_pair.b }) |hidden_single| {
                 // Highlight the candidates we removed and the single that was considered
                 const cell_coord = board.cell_coord_from_index(hidden_single.cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 // Draw candidates
                 for (0..board.extent) |number_usize| {
@@ -600,7 +632,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Draw line
             for (pointing_line.line_region, 0..) |cell_index, line_region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -620,7 +652,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Draw box
             for (pointing_line.box_region, 0..) |cell_index, box_region_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -640,7 +672,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Draw box
             for (box_line_reduction.box_region, 0..) |cell_index, line_region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -660,7 +692,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             // Draw line
             for (box_line_reduction.line_region, 0..) |cell_index, box_region_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
-                const cell_rect = cell_rectangle(cell_coord);
+                const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverYellow);
                 _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
@@ -682,7 +714,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
 fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, validation_error: sudoku.ValidationError) void {
     for (validation_error.region) |cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);
-        const cell_rect = cell_rectangle(cell_coord);
+        const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
         if (validation_error.reference_cell_index == cell_index or validation_error.invalid_cell_index == cell_index and !validation_error.is_candidate) {
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
@@ -702,13 +734,13 @@ fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL
     }
 }
 
-fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
-    _ = SDL_SetRenderDrawColor2(renderer, GridColor);
+fn draw_sudoku_grid(sdl_context: SdlContext, board: BoardState) void {
+    _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
 
     for (0..board.numbers.len) |cell_index| {
         const box_index = board.box_indices[cell_index];
         const cell_coord = board.cell_coord_from_index(cell_index);
-        const cell_rect = cell_rectangle(cell_coord);
+        const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
         var thick_vertical = true;
 
@@ -734,7 +766,7 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
                 .h = cell_rect.h + 5.0,
             };
 
-            _ = c.SDL_RenderFillRect(renderer, &rect);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &rect);
         }
 
         if (thick_horizontal) {
@@ -745,28 +777,28 @@ fn draw_sudoku_grid(renderer: *c.SDL_Renderer, board: BoardState) void {
                 .h = 5.0,
             };
 
-            _ = c.SDL_RenderFillRect(renderer, &rect);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &rect);
         }
     }
 
     // Draw thin grid
     for (0..board.extent + 1) |index| {
         const horizontal_rect = c.SDL_FRect{
-            .x = @floatFromInt(index * CellExtent),
+            .x = @as(f32, @floatFromInt(index)) * sdl_context.cell_extent,
             .y = 0.0,
             .w = 1.0,
-            .h = @floatFromInt(board.extent * CellExtent),
+            .h = @as(f32, @floatFromInt(board.extent)) * sdl_context.cell_extent,
         };
 
         const vertical_rect = c.SDL_FRect{
             .x = 0.0,
-            .y = @floatFromInt(index * CellExtent),
-            .w = @floatFromInt(board.extent * CellExtent),
+            .y = @as(f32, @floatFromInt(index)) * sdl_context.cell_extent,
+            .w = @as(f32, @floatFromInt(board.extent)) * sdl_context.cell_extent,
             .h = 1.0,
         };
 
-        _ = c.SDL_RenderFillRect(renderer, &vertical_rect);
-        _ = c.SDL_RenderFillRect(renderer, &horizontal_rect);
+        _ = c.SDL_RenderFillRect(sdl_context.renderer, &vertical_rect);
+        _ = c.SDL_RenderFillRect(sdl_context.renderer, &horizontal_rect);
     }
 }
 
@@ -784,15 +816,6 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
     } else {
         return .{ game_extent, 1 };
     }
-}
-
-fn cell_rectangle(cell_coord: u32_2) c.SDL_FRect {
-    return .{
-        .x = @floatFromInt(cell_coord[0] * CellExtent + 1),
-        .y = @floatFromInt(cell_coord[1] * CellExtent + 1),
-        .w = CellExtent,
-        .h = CellExtent,
-    };
 }
 
 fn center_rect_inside_rect(rect: c.SDL_FRect, reference_rect: c.SDL_FRect) c.SDL_FRect {
