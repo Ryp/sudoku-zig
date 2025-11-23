@@ -513,8 +513,8 @@ fn fill_box_regions_colors(game_type: board_legacy.GameType, box_region_colors: 
         .regular => |regular| {
             // Draw a checkerboard pattern
             for (box_region_colors, 0..) |*box_region_color, box_index| {
-                const box_index_x = box_index % regular.box_h;
-                const box_index_y = box_index / regular.box_h;
+                const box_index_x = box_index % regular.box_extent[1];
+                const box_index_y = box_index / regular.box_extent[1];
 
                 if (((box_index_x & 1) ^ (box_index_y & 1)) != 0) {
                     box_region_color.* = BoxBgColor;

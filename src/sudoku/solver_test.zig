@@ -16,8 +16,7 @@ test "Box-line removal" {
     const allocator = gpa.allocator();
 
     var board = try BoardState.create(allocator, .{ .regular = .{
-        .box_w = 3,
-        .box_h = 3,
+        .box_extent = .{ 3, 3 },
     } });
     defer board.destroy(allocator);
 
@@ -87,8 +86,7 @@ test "Solver critical path" {
 
     // Create game board
     var board = try BoardState.create(allocator, .{ .regular = .{
-        .box_w = 3,
-        .box_h = 3,
+        .box_extent = .{ 3, 3 },
     } });
     defer board.destroy(allocator);
 

@@ -9,8 +9,7 @@ pub const MaxSudokuExtent = 16;
 pub const NumbersString = [MaxSudokuExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
 
 pub const RegularSudoku = struct {
-    box_w: u32,
-    box_h: u32,
+    box_extent: u32_2,
 };
 
 pub const JigsawSudoku = struct {
@@ -46,7 +45,7 @@ pub const BoardState = struct {
     // Creates an empty sudoku board
     pub fn create(allocator: std.mem.Allocator, game_type: GameType) !BoardState {
         const extent = switch (game_type) {
-            .regular => |regular| regular.box_w * regular.box_h,
+            .regular => |regular| regular.box_extent[0] * regular.box_extent[1],
             .jigsaw => |jigsaw| jigsaw.size,
         };
 
@@ -94,7 +93,7 @@ pub const BoardState = struct {
 
         switch (game_type) {
             .regular => |regular| {
-                board_state.fill_region_indices_regular(regular.box_w, regular.box_h);
+                board_state.fill_region_indices_regular(regular.box_extent);
             },
             .jigsaw => |jigsaw| {
                 board_state.fill_region_indices_from_string(jigsaw.box_indices_string);
@@ -243,13 +242,13 @@ pub const BoardState = struct {
         }
     }
 
-    fn fill_region_indices_regular(self: Self, box_w: u32, box_h: u32) void {
+    fn fill_region_indices_regular(self: Self, box_extent: u32_2) void {
         for (self.box_indices, 0..) |*box_index, i| {
             const cell_coord = self.cell_coord_from_index(i);
-            const box_coord_x = (cell_coord[0] / box_w);
-            const box_coord_y = (cell_coord[1] / box_h);
+            const box_coord_x = (cell_coord[0] / box_extent[0]);
+            const box_coord_y = (cell_coord[1] / box_extent[1]);
 
-            box_index.* = @intCast(box_coord_x + box_coord_y * box_h);
+            box_index.* = @intCast(box_coord_x + box_coord_y * box_extent[1]);
         }
     }
 

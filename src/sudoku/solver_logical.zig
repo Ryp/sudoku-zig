@@ -166,8 +166,7 @@ test "Naked pair" {
 
     // Create game board
     const board = try BoardState.create(allocator, .{ .regular = .{
-        .box_w = 3,
-        .box_h = 3,
+        .box_extent = .{ 3, 3 },
     } });
     defer board.destroy(allocator);
 

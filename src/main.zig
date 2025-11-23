@@ -25,8 +25,7 @@ pub fn main() !void {
 
     const game_type = if (args.len < 5)
         board_legacy.GameType{ .regular = .{
-            .box_w = box_w,
-            .box_h = box_h,
+            .box_extent = .{ box_w, box_h },
         } }
     else
         board_legacy.GameType{

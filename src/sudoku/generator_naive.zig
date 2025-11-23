@@ -14,8 +14,8 @@ pub fn generate(board: *BoardState, seed: u64) void {
     // that guarantees a valid output
     for (0..board.extent) |region_index| {
         for (board.row_regions[region_index], 0..) |cell_index, i| {
-            const line_offset = region_index * regular_type.box_w;
-            const box_offset = region_index / regular_type.box_h;
+            const line_offset = region_index * regular_type.box_extent[0];
+            const box_offset = region_index / regular_type.box_extent[1];
             const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % board.extent);
 
             board.numbers[cell_index] = number;
@@ -54,10 +54,10 @@ pub fn generate(board: *BoardState, seed: u64) void {
 
 fn swap_random_col(board: *BoardState, regular_type: RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
-    const box_x = rng.random().uintLessThan(u32, regular_type.box_h);
-    const col_offset = box_x * regular_type.box_w;
-    const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_w);
-    const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_w - 1) + col_a + 1) % regular_type.box_w;
+    const box_x = rng.random().uintLessThan(u32, regular_type.box_extent[1]);
+    const col_offset = box_x * regular_type.box_extent[0];
+    const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_extent[0]);
+    const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_extent[0] - 1) + col_a + 1) % regular_type.box_extent[0];
 
     assert(col_a != col_b);
     swap_region(board, board.col_regions[col_a], board.col_regions[col_b]);
@@ -65,10 +65,10 @@ fn swap_random_col(board: *BoardState, regular_type: RegularSudoku, rng: *std.Ra
 
 fn swap_random_row(board: *BoardState, regular_type: RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
-    const box_y = rng.random().uintLessThan(u32, regular_type.box_w);
-    const row_offset = box_y * regular_type.box_h;
-    const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_h);
-    const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_h - 1) + row_a + 1) % regular_type.box_h;
+    const box_y = rng.random().uintLessThan(u32, regular_type.box_extent[0]);
+    const row_offset = box_y * regular_type.box_extent[1];
+    const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_extent[1]);
+    const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_extent[1] - 1) + row_a + 1) % regular_type.box_extent[1];
 
     assert(row_a != row_b);
     swap_region(board, board.row_regions[row_a], board.row_regions[row_b]);

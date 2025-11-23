@@ -9,8 +9,7 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     var board = try board_legacy.BoardState.create(allocator, .{ .regular = .{
-        .box_w = 3,
-        .box_h = 3,
+        .box_extent = .{ 3, 3 },
     } });
     defer board.destroy(allocator);
 

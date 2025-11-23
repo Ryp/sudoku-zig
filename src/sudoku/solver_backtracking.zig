@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const board_state = @import("board_legacy.zig");
 const BoardState = board_state.BoardState;
 const MaxSudokuExtent = board_state.MaxSudokuExtent;
+const known_boards = @import("known_boards.zig");
 
 pub fn solve(board: *BoardState, recursive: bool) bool {
     var free_cell_list_full: [MaxSudokuExtent * MaxSudokuExtent]CellInfo = undefined;
@@ -174,4 +175,28 @@ fn sort_free_cell_list(board: *BoardState, free_cell_list: []CellInfo) void {
 
 fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo, rhs: CellInfo) bool {
     return candidate_counts[lhs.index] < candidate_counts[rhs.index];
+}
+
+test "Basic iterative" {
+    const allocator = std.testing.allocator;
+
+    // Create game board
+    var solver_board = try BoardState.create(allocator,.{ .regular = .{
+        .box_extent = .{ 3, 3 },
+    } });
+    defer solver_board.destroy(allocator);
+
+    const known_board = known_boards.easy_000;
+
+    solver_board.fill_board_from_string(known_board.board);
+
+    const solved = solve(&solver_board, false);
+    try std.testing.expect(solved);
+
+    var solution_board = try BoardState.create(allocator, solver_board.game_type);
+    defer solution_board.destroy(allocator);
+
+    solution_board.fill_board_from_string(known_board.solution);
+
+    try std.testing.expect(std.mem.eql(?u4, solver_board.numbers, solution_board.numbers));
 }
