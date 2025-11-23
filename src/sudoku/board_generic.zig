@@ -69,8 +69,7 @@ pub fn board_state(extent: comptime_int) type {
                 for (regions.box_indices, 0..) |box_index, cell_index| {
                     const slot = box_region_slots[box_index];
 
-                    var box_region = regions.box[box_index];
-                    box_region[slot] = @intCast(cell_index);
+                    regions.box[box_index][slot] = @intCast(cell_index);
 
                     box_region_slots[box_index] += 1;
                 }
