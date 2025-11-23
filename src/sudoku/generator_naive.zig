@@ -1,22 +1,25 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const board_state = @import("board_legacy.zig");
-const BoardState = board_state.BoardState;
-const RegularSudoku = board_state.RegularSudoku;
+const board_generic = @import("board_generic.zig");
 
 // Only generates a regular sudoku board
 // This is a naive implementation that doesn't guarantee a unique solution
-pub fn generate(board: *BoardState, seed: u64) void {
-    const regular_type = board.game_type.regular;
+pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed: u64) board_generic.State(extent) {
+    var board = board_generic.State(extent).init(board_type);
+
+    const regular_type: board_generic.RegularSudoku = switch (board.board_type) {
+        .regular => |r| r,
+        else => @panic("Naive generator only supports regular sudoku boards"),
+    };
 
     // Generate a full board by using an ordered sequence
     // that guarantees a valid output
     for (0..board.extent) |region_index| {
-        for (board.row_regions[region_index], 0..) |cell_index, i| {
+        for (board.regions.row(region_index), 0..) |cell_index, col| {
             const line_offset = region_index * regular_type.box_extent[0];
             const box_offset = region_index / regular_type.box_extent[1];
-            const number: u4 = @intCast(@as(u32, @intCast(i + line_offset + box_offset)) % board.extent);
+            const number: u4 = @intCast(@as(u32, @intCast(col + line_offset + box_offset)) % board.extent);
 
             board.numbers[cell_index] = number;
         }
@@ -31,8 +34,8 @@ pub fn generate(board: *BoardState, seed: u64) void {
     // - Flip horizontally or vertically
     // - Rotate by 180 degrees
     for (0..rounds) |_| {
-        swap_random_col(board, regular_type, &rng);
-        swap_random_row(board, regular_type, &rng);
+        swap_random_col(extent, &board, regular_type, &rng);
+        swap_random_row(extent, &board, regular_type, &rng);
     }
 
     // Remove numbers at random places to give a challenge to the player.
@@ -43,16 +46,18 @@ pub fn generate(board: *BoardState, seed: u64) void {
     assert(numbers_to_remove < board.numbers.len);
 
     while (numbers_to_remove > 0) {
-        const cell_index = rng.random().uintLessThan(u32, board.extent * board.extent);
+        const cell_index = rng.random().uintLessThan(u32, board.extent_sqr);
 
         if (board.numbers[cell_index] != null) {
             board.numbers[cell_index] = null;
             numbers_to_remove -= 1;
         }
     }
+
+    return board;
 }
 
-fn swap_random_col(board: *BoardState, regular_type: RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
     const box_x = rng.random().uintLessThan(u32, regular_type.box_extent[1]);
     const col_offset = box_x * regular_type.box_extent[0];
@@ -60,10 +65,11 @@ fn swap_random_col(board: *BoardState, regular_type: RegularSudoku, rng: *std.Ra
     const col_b = col_offset + (rng.random().uintLessThan(u32, regular_type.box_extent[0] - 1) + col_a + 1) % regular_type.box_extent[0];
 
     assert(col_a != col_b);
-    swap_region(board, board.col_regions[col_a], board.col_regions[col_b]);
+
+    swap_region(extent, board, &board.regions.col(col_a), &board.regions.col(col_b));
 }
 
-fn swap_random_row(board: *BoardState, regular_type: RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+fn swap_random_row(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     // FIXME Use box count var
     const box_y = rng.random().uintLessThan(u32, regular_type.box_extent[0]);
     const row_offset = box_y * regular_type.box_extent[1];
@@ -71,10 +77,11 @@ fn swap_random_row(board: *BoardState, regular_type: RegularSudoku, rng: *std.Ra
     const row_b = row_offset + (rng.random().uintLessThan(u32, regular_type.box_extent[1] - 1) + row_a + 1) % regular_type.box_extent[1];
 
     assert(row_a != row_b);
-    swap_region(board, board.row_regions[row_a], board.row_regions[row_b]);
+
+    swap_region(extent, board, &board.regions.row(row_a), &board.regions.row(row_b));
 }
 
-fn swap_region(board: *BoardState, region_a: []u32, region_b: []u32) void {
+fn swap_region(extent: comptime_int, board: *board_generic.State(extent), region_a: []const u32, region_b: []const u32) void {
     for (region_a, region_b) |cell_index_a, cell_index_b| {
         std.mem.swap(?u4, &board.numbers[cell_index_a], &board.numbers[cell_index_b]);
     }

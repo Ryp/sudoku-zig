@@ -1,19 +1,18 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
-const board_legacy = @import("sudoku/board_legacy.zig");
+const board_generic = @import("sudoku/board_generic.zig");
 const solver = @import("sudoku/solver.zig");
 const known_boards = @import("sudoku/known_boards.zig");
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-
-    var board = try board_legacy.BoardState.create(allocator, .{ .regular = .{
+    const board_type = board_generic.BoardType{ .regular = .{
         .box_extent = .{ 3, 3 },
-    } });
-    defer board.destroy(allocator);
+    } };
+    const board_extent = comptime board_type.extent();
+
+    var board = board_generic.State(board_extent).init(board_type);
 
     board.fill_board_from_string(known_boards.special_dancing_links.board);
 
-    assert(solver.solve(&board, .{ .dancing_links = .{} }));
+    std.debug.assert(solver.solve(board_extent, &board, .{ .dancing_links = .{} }));
 }

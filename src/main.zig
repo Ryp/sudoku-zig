@@ -1,8 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const sudoku = @import("sudoku/game.zig");
-const board_legacy = @import("sudoku/board_legacy.zig");
+const game = @import("sudoku/game.zig");
+const board_generic = @import("sudoku/board_generic.zig");
 const grader = @import("sudoku/grader.zig");
 
 const sdl = @import("frontend/sdl.zig");
@@ -20,28 +20,32 @@ pub fn main() !void {
 
     assert(args.len >= 3);
 
+    // FIXME use different format for jigsaw (like 3x3 for regular)
     const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
     const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
 
-    const game_type = if (args.len < 5)
-        board_legacy.GameType{ .regular = .{
-            .box_extent = .{ box_w, box_h },
-        } }
-    else
-        board_legacy.GameType{
-            .jigsaw = .{
-                .size = box_w * box_h, // FIXME use different format like 3x3 for regular
-                .box_indices_string = args[4],
-            },
-        };
-
     const sudoku_string = if (args.len > 3) args[3] else "";
 
-    // Create game state
-    var game = try sudoku.create_game_state(gpa_allocator, game_type, sudoku_string);
-    defer sudoku.destroy_game_state(gpa_allocator, &game);
+    const board_type: board_generic.BoardType = if (args.len < 5)
+        .{ .regular = .{ .box_extent = .{ box_w, box_h } } }
+    else
+        .{ .jigsaw = .{ .extent = box_w * box_h, .box_indices_string = args[4] } };
 
-    try grader.grade_and_print_summary(gpa_allocator, game.board);
+    const board_extent = board_type.extent();
 
-    try sdl.execute_main_loop(gpa_allocator, &game);
+    // Scalarize extent
+    inline for (board_generic.MinExtent..board_generic.MaxExtent) |comptime_extent| {
+        if (board_extent == comptime_extent) {
+            var game_state = try game.State(comptime_extent).init(gpa_allocator, board_type, sudoku_string);
+            defer game_state.deinit(gpa_allocator);
+
+            grader.grade_and_print_summary(comptime_extent, game_state.board);
+
+            try sdl.execute_main_loop(comptime_extent, &game_state, gpa_allocator);
+
+            break;
+        }
+    } else {
+        @panic("Invalid sudoku extent!");
+    }
 }

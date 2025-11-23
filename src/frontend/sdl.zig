@@ -7,21 +7,19 @@ const c = @cImport({
 
 const TrueType = @import("TrueType.zig");
 
-const sudoku = @import("../sudoku/game.zig");
-const GameState = sudoku.GameState;
-
+const board_generic = @import("../sudoku/board_generic.zig");
 const solver_logical = @import("../sudoku/solver_logical.zig");
 
-const board_legacy = @import("../sudoku/board_legacy.zig");
-const BoardState = board_legacy.BoardState;
-const NumbersString = board_legacy.NumbersString;
-const MaxSudokuExtent = board_legacy.MaxSudokuExtent;
+const game_state = @import("../sudoku/game.zig");
+const PlayerAction = game_state.PlayerAction;
 
 const common = @import("../sudoku/common.zig");
 const u32_2 = common.u32_2;
 
 const ui_palette = @import("color_palette.zig");
 const ColorRGBA8 = ui_palette.ColorRGBA8;
+
+const DefaultWindowTitle = "Sudoku";
 
 const BlackColor = ui_palette.Lucky_Point;
 const BgColor = ui_palette.Swan_White;
@@ -98,7 +96,7 @@ fn create_sdl_context(allocator: std.mem.Allocator, board_extent: u32) !SdlConte
     const window_width = SdlContext.get_default_window_extent(board_extent);
     const window_height = SdlContext.get_default_window_extent(board_extent);
 
-    const window = c.SDL_CreateWindow("Sudoku", @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
+    const window = c.SDL_CreateWindow(DefaultWindowTitle, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
     };
@@ -207,24 +205,24 @@ const FontResources = struct {
     }
 };
 
-fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, scale: f32, sdl_renderer: *c.SDL_Renderer, palette: *c.SDL_Palette, sudoku_extent: u32) !struct { []*c.SDL_Texture, []c.SDL_FRect } {
-    const textures = try allocator.alloc(*c.SDL_Texture, sudoku_extent);
+fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, scale: f32, sdl_renderer: *c.SDL_Renderer, palette: *c.SDL_Palette, board_extent: u32) !struct { []*c.SDL_Texture, []c.SDL_FRect } {
+    const textures = try allocator.alloc(*c.SDL_Texture, board_extent);
     errdefer allocator.free(textures);
 
-    const aabbs = try allocator.alloc(c.SDL_FRect, sudoku_extent);
+    const aabbs = try allocator.alloc(c.SDL_FRect, board_extent);
     errdefer allocator.free(aabbs);
 
     var buffer: std.ArrayListUnmanaged(u8) = .empty;
     defer buffer.deinit(allocator);
 
-    var glyph_indices_full: [MaxSudokuExtent]TrueType.GlyphIndex = undefined;
-    const glyph_indices = glyph_indices_full[0..sudoku_extent];
+    var glyph_indices_full: [board_generic.MaxExtent]TrueType.GlyphIndex = undefined;
+    const glyph_indices = glyph_indices_full[0..board_extent];
 
-    var numbers_string_iterator = std.unicode.Utf8View.initComptime(&NumbersString).iterator();
+    var numbers_string_iterator = std.unicode.Utf8View.initComptime(&board_generic.MaxNumbersString).iterator();
 
     var index: u32 = 0;
     while (numbers_string_iterator.nextCodepoint()) |codepoint| : (index += 1) {
-        if (index >= sudoku_extent) {
+        if (index >= board_extent) {
             break;
         }
 
@@ -280,13 +278,12 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
     };
 }
 
-pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
+pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), allocator: std.mem.Allocator) !void {
     const board_extent = game.board.extent;
 
-    var box_region_colors_full: [MaxSudokuExtent]ColorRGBA8 = undefined;
-    const box_region_colors = box_region_colors_full[0..board_extent];
+    var box_region_colors: [extent]ColorRGBA8 = undefined;
 
-    fill_box_regions_colors(game.board.game_type, box_region_colors);
+    fill_box_regions_colors(game.board.board_type, &box_region_colors);
 
     var sdl_context = try create_sdl_context(allocator, board_extent);
 
@@ -299,10 +296,9 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         sdl_context.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[1])),
     };
 
-    var candidate_local_rects_full: [MaxSudokuExtent]c.SDL_FRect = undefined;
-    const candidate_local_rects = candidate_local_rects_full[0..board_extent];
+    var candidate_local_rects: [extent]c.SDL_FRect = undefined;
 
-    for (candidate_local_rects, 0..) |*candidate_local_rect, number| {
+    for (&candidate_local_rects, 0..) |*candidate_local_rect, number| {
         candidate_local_rect.* = .{
             .x = candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
             .y = candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
@@ -335,7 +331,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                     const x: u32 = @intFromFloat(sdl_event.button.x / sdl_context.cell_extent_px);
                     const y: u32 = @intFromFloat(sdl_event.button.y / sdl_context.cell_extent_px);
                     if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
-                        sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
+                        game.apply_player_event(.{ .toggle_select = .{ .coord = .{ x, y } } });
                     }
                 },
                 c.SDL_EVENT_KEY_DOWN => {
@@ -348,43 +344,43 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                             .Normal => {
                                 const player_event =
                                     switch (key_sym) {
-                                        c.SDLK_LEFT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
-                                        c.SDLK_RIGHT => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
-                                        c.SDLK_UP => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
-                                        c.SDLK_DOWN => sudoku.PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
+                                        c.SDLK_LEFT => PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
+                                        c.SDLK_RIGHT => PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
+                                        c.SDLK_UP => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
+                                        c.SDLK_DOWN => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
                                         c.SDLK_1...c.SDLK_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
+                                            PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                         else
-                                            sudoku.PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-                                        c.SDLK_DELETE, c.SDLK_0 => sudoku.PlayerAction{ .clear_selected_cell = undefined },
+                                            PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
+                                        c.SDLK_DELETE, c.SDLK_0 => PlayerAction{ .clear_selected_cell = undefined },
                                         c.SDLK_Z => if (is_any_ctrl_pressed)
                                             if (is_any_shift_pressed)
-                                                sudoku.PlayerAction{ .redo = undefined }
+                                                PlayerAction{ .redo = undefined }
                                             else
-                                                sudoku.PlayerAction{ .undo = undefined }
+                                                PlayerAction{ .undo = undefined }
                                         else
                                             null,
                                         c.SDLK_H => if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .clear_all_candidates = undefined }
+                                            PlayerAction{ .clear_all_candidates = undefined }
                                         else if (is_any_ctrl_pressed)
-                                            sudoku.PlayerAction{ .fill_all_candidates = undefined }
+                                            PlayerAction{ .fill_all_candidates = undefined }
                                         else
-                                            sudoku.PlayerAction{ .fill_candidates = undefined },
+                                            PlayerAction{ .fill_candidates = undefined },
                                         c.SDLK_RETURN => if (is_any_shift_pressed)
-                                            sudoku.PlayerAction{ .get_hint = undefined }
+                                            PlayerAction{ .get_hint = undefined }
                                         else
-                                            sudoku.PlayerAction{ .solve_board = undefined },
+                                            PlayerAction{ .solve_board = undefined },
                                         else => null,
                                     };
 
                                 if (player_event) |event| {
-                                    sudoku.apply_player_event(game, event);
+                                    game.apply_player_event(event);
                                 }
                             },
                             .WaitingForHintValidation => {
                                 switch (key_sym) {
                                     c.SDLK_RETURN => {
-                                        sudoku.apply_player_event(game, sudoku.PlayerAction{ .get_hint = undefined });
+                                        game.apply_player_event(PlayerAction{ .get_hint = undefined });
                                     },
                                     else => {},
                                 }
@@ -396,6 +392,28 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
+        // Set window title
+        if (game.solver_event) |solver_event| {
+            const NumbersString = game.board.numbers_string;
+
+            _ = switch (solver_event) {
+                .found_technique => |technique| switch (technique) {
+                    .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} single", .{ DefaultWindowTitle, NumbersString[naked_single.number] }),
+                    .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} and {c} pair", .{ DefaultWindowTitle, NumbersString[naked_pair.number_a], NumbersString[naked_pair.number_b] }),
+                    .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} single", .{ DefaultWindowTitle, NumbersString[hidden_single.number] }),
+                    .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} and {c} pair", .{ DefaultWindowTitle, NumbersString[hidden_pair.a.number], NumbersString[hidden_pair.b.number] }),
+                    .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {c}", .{ DefaultWindowTitle, NumbersString[pointing_line.number] }),
+                    .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {c}", .{ DefaultWindowTitle, NumbersString[box_line_reduction.number] }),
+                },
+                .found_nothing => std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{DefaultWindowTitle}),
+            } catch unreachable;
+        } else {
+            _ = std.fmt.bufPrintZ(title_string, "{s}", .{DefaultWindowTitle}) catch unreachable;
+        }
+
+        _ = c.SDL_SetWindowTitle(sdl_context.window, title_string.ptr);
+
+        // Compute hishlight mask
         var highlight_mask: u16 = 0;
         for (game.selected_cells) |selected_cell_index| {
             if (game.board.numbers[selected_cell_index]) |number| {
@@ -408,7 +426,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         _ = c.SDL_RenderClear(sdl_context.renderer);
 
         for (game.board.numbers, 0..) |number_opt, cell_index| {
-            const box_index = game.board.box_indices[cell_index];
+            const box_index = game.board.regions.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
 
             const cell_coord = game.board.cell_coord_from_index(cell_index);
@@ -424,7 +442,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 const selected_coord = game.board.cell_coord_from_index(selected_cell_index);
                 const selected_col = selected_coord[0];
                 const selected_row = selected_coord[1];
-                const selected_box = game.board.box_indices[selected_cell_index];
+                const selected_box = game.board.regions.box_indices[selected_cell_index];
 
                 if (selected_cell_index == cell_index) {
                     _ = SDL_SetRenderDrawColor2(sdl_context.renderer, HighlightColor);
@@ -450,14 +468,14 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         if (game.solver_event) |solver_event| {
             switch (solver_event) {
                 .found_technique => |technique| {
-                    draw_solver_technique_overlay(sdl_context, candidate_local_rects, game.board, technique);
+                    draw_solver_technique_overlay(extent, game.board, sdl_context, candidate_local_rects, technique);
                 },
                 .found_nothing => {}, // Do nothing
             }
         }
 
         if (game.validation_error) |validation_error| {
-            draw_validation_error(sdl_context, candidate_local_rects, game.board, validation_error);
+            draw_validation_error(extent, game.board, sdl_context, candidate_local_rects, validation_error);
         }
 
         for (game.board.numbers, 0..) |number_opt, cell_index| {
@@ -498,9 +516,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        draw_sudoku_box_regions(sdl_context, game.board);
-
-        set_window_title(sdl_context.window, game, title_string);
+        draw_sudoku_box_regions(sdl_context, extent, game.board);
 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
@@ -508,8 +524,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
     destroy_sdl_context(allocator, sdl_context);
 }
 
-fn fill_box_regions_colors(game_type: board_legacy.GameType, box_region_colors: []ColorRGBA8) void {
-    switch (game_type) {
+fn fill_box_regions_colors(board_type: board_generic.BoardType, box_region_colors: []ColorRGBA8) void {
+    switch (board_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern
             for (box_region_colors, 0..) |*box_region_color, box_index| {
@@ -533,7 +549,7 @@ fn fill_box_regions_colors(game_type: board_legacy.GameType, box_region_colors: 
     }
 }
 
-fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, technique: solver_logical.Technique) void {
+fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext, candidate_local_rects: [extent]c.SDL_FRect, technique: solver_logical.Technique) void {
     switch (technique) {
         .naked_single => |naked_single| {
             const cell_coord = board.cell_coord_from_index(naked_single.cell_index);
@@ -550,7 +566,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
         },
         .naked_pair => |naked_pair| {
-            for (naked_pair.region, 0..) |cell_index, region_cell_index| {
+            for (board.regions.get(naked_pair.region_index), 0..) |cell_index, region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -596,7 +612,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         },
         .hidden_single => |hidden_single| {
             // Highlight region that was considered
-            for (hidden_single.region) |cell_index| {
+            for (board.regions.get(hidden_single.region_index)) |cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -628,8 +644,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         },
         .hidden_pair => |hidden_pair| {
             // Highlight region that was considered
-            assert(hidden_pair.a.region.ptr == hidden_pair.b.region.ptr);
-            for (hidden_pair.a.region) |cell_index| {
+            for (board.regions.get(hidden_pair.a.region_index)) |cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -663,7 +678,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         },
         .pointing_line => |pointing_line| {
             // Draw line
-            for (pointing_line.line_region, 0..) |cell_index, line_region_cell_index| {
+            for (board.regions.get(pointing_line.line_region_index), 0..) |cell_index, line_region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -683,7 +698,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             }
 
             // Draw box
-            for (pointing_line.box_region, 0..) |cell_index, box_region_index| {
+            for (board.regions.get(pointing_line.box_region_index), 0..) |cell_index, box_region_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -703,7 +718,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
         },
         .box_line_reduction => |box_line_reduction| {
             // Draw box
-            for (box_line_reduction.box_region, 0..) |cell_index, line_region_cell_index| {
+            for (board.regions.get(box_line_reduction.box_region_index), 0..) |cell_index, line_region_cell_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -723,7 +738,7 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
             }
 
             // Draw line
-            for (box_line_reduction.line_region, 0..) |cell_index, box_region_index| {
+            for (board.regions.get(box_line_reduction.line_region_index), 0..) |cell_index, box_region_index| {
                 const cell_coord = board.cell_coord_from_index(cell_index);
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -744,8 +759,10 @@ fn draw_solver_technique_overlay(sdl_context: SdlContext, candidate_local_rects:
     }
 }
 
-fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL_FRect, board: BoardState, validation_error: sudoku.ValidationError) void {
-    for (validation_error.region) |cell_index| {
+fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext, candidate_local_rects: [extent]c.SDL_FRect, validation_error: game_state.ValidationError) void {
+    const region = board.regions.get(validation_error.region_index);
+
+    for (region) |cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);
         const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
@@ -767,20 +784,20 @@ fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL
     }
 }
 
-fn draw_sudoku_box_regions(sdl_context: SdlContext, board: BoardState) void {
+fn draw_sudoku_box_regions(sdl_context: SdlContext, extent: comptime_int, board: board_generic.State(extent)) void {
     _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
 
     const thickness_large_half_offset = (sdl_context.thick_line_px - sdl_context.thin_line_px) / 2.0;
 
     for (0..board.numbers.len) |cell_index| {
-        const box_index = board.box_indices[cell_index];
+        const box_index = board.regions.box_indices[cell_index];
         const cell_coord = board.cell_coord_from_index(cell_index);
 
         var thick_vertical = true;
 
         if (cell_coord[0] + 1 < board.extent) {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 1, 0 });
-            const neighbor_box_index = board.box_indices[neighbor_cell_index];
+            const neighbor_box_index = board.regions.box_indices[neighbor_cell_index];
             thick_vertical = box_index != neighbor_box_index;
         } else {
             thick_vertical = false;
@@ -790,7 +807,7 @@ fn draw_sudoku_box_regions(sdl_context: SdlContext, board: BoardState) void {
 
         if (cell_coord[1] + 1 < board.extent) {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 0, 1 });
-            const neighbor_box_index = board.box_indices[neighbor_cell_index];
+            const neighbor_box_index = board.regions.box_indices[neighbor_cell_index];
             thick_horizontal = box_index != neighbor_box_index;
         } else {
             thick_horizontal = false;
@@ -865,28 +882,6 @@ fn hsv_to_rgba8(hue: f32, saturation: f32, value: f32) ColorRGBA8 {
         5 => ColorRGBA8{ .r = c_u8, .g = m_u8, .b = x_u8, .a = 255 },
         else => unreachable,
     };
-}
-
-fn set_window_title(window: *c.SDL_Window, game: *GameState, title_string: []u8) void {
-    const title = "Sudoku";
-
-    if (game.solver_event) |solver_event| {
-        _ = switch (solver_event) {
-            .found_technique => |technique| switch (technique) {
-                .naked_single => |naked_single| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} single", .{ title, NumbersString[naked_single.number] }),
-                .naked_pair => |naked_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: naked {c} and {c} pair", .{ title, NumbersString[naked_pair.number_a], NumbersString[naked_pair.number_b] }),
-                .hidden_single => |hidden_single| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} single", .{ title, NumbersString[hidden_single.number] }),
-                .hidden_pair => |hidden_pair| std.fmt.bufPrintZ(title_string, "{s} | hint: hidden {c} and {c} pair", .{ title, NumbersString[hidden_pair.a.number], NumbersString[hidden_pair.b.number] }),
-                .pointing_line => |pointing_line| std.fmt.bufPrintZ(title_string, "{s} | hint: pointing line of {c}", .{ title, NumbersString[pointing_line.number] }),
-                .box_line_reduction => |box_line_reduction| std.fmt.bufPrintZ(title_string, "{s} | hint: box line reduction of {c}", .{ title, NumbersString[box_line_reduction.number] }),
-            },
-            .found_nothing => std.fmt.bufPrintZ(title_string, "{s} | hint: nothing found!", .{title}),
-        } catch unreachable;
-    } else {
-        _ = std.fmt.bufPrintZ(title_string, "{s}", .{title}) catch unreachable;
-    }
-
-    _ = c.SDL_SetWindowTitle(window, title_string.ptr);
 }
 
 fn SDL_SetRenderDrawColor2(renderer: *c.SDL_Renderer, color: ColorRGBA8) bool {

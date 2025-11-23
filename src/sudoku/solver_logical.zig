@@ -1,28 +1,28 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const board_state = @import("board_legacy.zig");
-const BoardState = board_state.BoardState;
-const MaxSudokuExtent = board_state.MaxSudokuExtent;
+const board_generic = @import("board_generic.zig");
+const RegionIndex = board_generic.RegionIndex;
+const RegionSet = board_generic.RegionSet;
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
 const all = common.all;
 
-pub fn place_number_remove_trivial_candidates(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
+pub fn place_number_remove_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;
     candidate_masks[cell_index] = 0;
 
-    remove_trivial_candidates_at(board, candidate_masks, cell_index, number);
+    remove_trivial_candidates_at(extent, board.*, candidate_masks, cell_index, number);
 }
 
-pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, cell_index: u32, number: u4) void {
+pub fn remove_trivial_candidates_at(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     const cell_coord = board.cell_coord_from_index(cell_index);
-    const box_index = board.box_indices[cell_index];
+    const box_index = board.regions.box_indices[cell_index];
 
-    const col_region = board.col_regions[cell_coord[0]];
-    const row_region = board.row_regions[cell_coord[1]];
-    const box_region = board.box_regions[box_index];
+    const col_region = board.regions.col(cell_coord[0]);
+    const row_region = board.regions.row(cell_coord[1]);
+    const box_region = board.regions.box(box_index);
 
     const mask = board.mask_for_number(number);
 
@@ -34,15 +34,16 @@ pub fn remove_trivial_candidates_at(board: *BoardState, candidate_masks: []u16, 
 }
 
 // Removes trivial candidates from basic sudoku rules
-pub fn solve_trivial_candidates(board: *BoardState, candidate_masks: []u16) void {
-    for (board.all_regions) |region| {
-        solve_trivial_candidates_region(board, candidate_masks, region);
+pub fn solve_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16) void {
+    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+        for (0..extent) |sub_index| {
+            const region = board.regions.get(.{ .set = set, .sub_index = sub_index });
+            solve_trivial_candidates_region(extent, board, candidate_masks, region);
+        }
     }
 }
 
-// FIXME could use fill_candidate_mask_regions() as a base
-fn solve_trivial_candidates_region(board: *BoardState, candidate_masks: []u16, region: []u32) void {
-    assert(region.len == board.extent);
+fn solve_trivial_candidates_region(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, region: [extent]u32) void {
     var used_mask: u16 = 0;
 
     for (region) |cell_index| {
@@ -63,12 +64,12 @@ pub const NakedSingle = struct {
     number: u4,
 };
 
-pub fn apply_naked_single(board: *BoardState, candidate_masks: []u16, naked_single: NakedSingle) void {
-    place_number_remove_trivial_candidates(board, candidate_masks, naked_single.cell_index, naked_single.number);
+pub fn apply_naked_single(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, naked_single: NakedSingle) void {
+    place_number_remove_trivial_candidates(extent, board, candidate_masks, naked_single.cell_index, naked_single.number);
 }
 
 // If there's a cell with a single possibility left, put it down
-pub fn find_naked_single(board: BoardState, candidate_masks: []const u16) ?NakedSingle {
+pub fn find_naked_single(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?NakedSingle {
     for (board.numbers, candidate_masks, 0..) |number_opt, candidate_mask, cell_index| {
         if (number_opt == null and @popCount(candidate_mask) == 1) {
             const number: u4 = @intCast(@ctz(candidate_mask));
@@ -90,20 +91,22 @@ pub const NakedPair = struct {
     deletion_mask_b: u16,
     cell_index_u: u32,
     cell_index_v: u32,
-    region: []u32,
+    region_index: RegionIndex,
 };
 
-pub fn apply_naked_pair(candidate_masks: []u16, naked_pair: NakedPair) void {
-    for (naked_pair.region, 0..) |cell_index, region_cell_index| {
+pub fn apply_naked_pair(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, naked_pair: NakedPair) void {
+    for (board.regions.get(naked_pair.region_index), 0..) |cell_index, region_cell_index| {
         candidate_masks[cell_index] &= ~(((naked_pair.deletion_mask_a >> @as(u4, @intCast(region_cell_index))) & 0b1) << naked_pair.number_a);
         candidate_masks[cell_index] &= ~(((naked_pair.deletion_mask_b >> @as(u4, @intCast(region_cell_index))) & 0b1) << naked_pair.number_b);
     }
 }
 
-pub fn find_naked_pair(board: BoardState, candidate_masks: []const u16) ?NakedPair {
-    for (board.all_regions) |region| {
-        if (find_naked_pair_region(board, candidate_masks, region)) |naked_pair| {
-            return naked_pair;
+pub fn find_naked_pair(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?NakedPair {
+    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+        for (0..extent) |sub_index| {
+            if (find_naked_pair_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |naked_pair| {
+                return naked_pair;
+            }
         }
     }
 
@@ -112,7 +115,9 @@ pub fn find_naked_pair(board: BoardState, candidate_masks: []const u16) ?NakedPa
 
 // This function works once per region, meaning that if candidates to remove are found in overlapping regions,
 // like in a line as well as in a box, then we're only counting one of them.
-pub fn find_naked_pair_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?NakedPair {
+pub fn find_naked_pair_region(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, region_index: RegionIndex) ?NakedPair {
+    const region = board.regions.get(region_index);
+
     for (region, 0..) |cell_index_a, region_cell_index_a| {
         const candidate_mask_a = candidate_masks[cell_index_a];
         const candidate_count_a = @popCount(candidate_mask_a);
@@ -147,7 +152,7 @@ pub fn find_naked_pair_region(board: BoardState, candidate_masks: []const u16, r
                             .deletion_mask_b = deletion_mask_b,
                             .cell_index_u = cell_index_a,
                             .cell_index_v = cell_index_b,
-                            .region = region,
+                            .region_index = region_index,
                         };
                     }
                 }
@@ -159,27 +164,17 @@ pub fn find_naked_pair_region(board: BoardState, candidate_masks: []const u16, r
 }
 
 test "Naked pair" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-
-    // Create game board
-    const board = try BoardState.create(allocator, .{ .regular = .{
+    const board_type = board_generic.BoardType{ .regular = .{
         .box_extent = .{ 3, 3 },
-    } });
-    defer board.destroy(allocator);
+    } };
+    const extent = comptime board_type.extent();
 
-    const candidate_masks = try allocator.alloc(u16, board.numbers.len);
-    defer allocator.free(candidate_masks);
+    var board = board_generic.State(extent).init(board_type);
 
-    // Fill candidate masks fully
-    for (candidate_masks) |*cell_candidate_mask| {
-        cell_candidate_mask.* = 0;
-    }
+    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
 
     // Make sure that there's no hit for the initial board
-    try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+    try std.testing.expect(find_naked_pair(extent, board, &candidate_masks) == null);
 
     const number_a: u4 = 0;
     const number_b: u4 = 8;
@@ -190,23 +185,23 @@ test "Naked pair" {
     candidate_masks[1] = pair_mask;
 
     // There shouldn't be any hit if there's no candidates to remove
-    try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+    try std.testing.expect(find_naked_pair(extent, board, &candidate_masks) == null);
 
     candidate_masks[2] = board.mask_for_number(number_a);
     candidate_masks[3] = board.mask_for_number(number_b);
 
     // Make sure we get a hit
-    if (find_naked_pair(board, candidate_masks)) |naked_pair| {
+    if (find_naked_pair(extent, board, &candidate_masks)) |naked_pair| {
         try std.testing.expectEqual(number_a, naked_pair.number_a);
         try std.testing.expectEqual(number_b, naked_pair.number_b);
         try std.testing.expectEqual(0b0100, naked_pair.deletion_mask_a);
         try std.testing.expectEqual(0b1000, naked_pair.deletion_mask_b);
 
         // Apply the solver event
-        apply_naked_pair(candidate_masks, naked_pair);
+        apply_naked_pair(extent, board, &candidate_masks, naked_pair);
 
         // Make sure we don't hit again after applying the solver event
-        try std.testing.expect(find_naked_pair(board, candidate_masks) == null);
+        try std.testing.expect(find_naked_pair(extent, board, &candidate_masks) == null);
     } else {
         try std.testing.expect(false);
     }
@@ -216,17 +211,19 @@ pub const HiddenSingle = struct {
     number: u4,
     cell_index: u32,
     deletion_mask: u16, // Mask of candidates that can be removed
-    region: []u32,
+    region_index: RegionIndex,
 };
 
-pub fn apply_hidden_single(board: *BoardState, candidate_masks: []u16, hidden_single: HiddenSingle) void {
-    place_number_remove_trivial_candidates(board, candidate_masks, hidden_single.cell_index, hidden_single.number);
+pub fn apply_hidden_single(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, hidden_single: HiddenSingle) void {
+    place_number_remove_trivial_candidates(extent, board, candidate_masks, hidden_single.cell_index, hidden_single.number);
 }
 
-pub fn find_hidden_single(board: BoardState, candidate_masks: []const u16) ?HiddenSingle {
-    for (board.all_regions) |region| {
-        if (find_hidden_single_region(board, candidate_masks, region)) |solver_event| {
-            return solver_event;
+pub fn find_hidden_single(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?HiddenSingle {
+    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+        for (0..extent) |sub_index| {
+            if (find_hidden_single_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |solver_event| {
+                return solver_event;
+            }
         }
     }
 
@@ -238,15 +235,17 @@ pub const HiddenPair = struct {
     b: HiddenSingle,
 };
 
-pub fn apply_hidden_pair(candidate_masks: []u16, hidden_pair: HiddenPair) void {
+pub fn apply_hidden_pair(extent: comptime_int, candidate_masks: []board_generic.MaskType(extent), hidden_pair: HiddenPair) void {
     candidate_masks[hidden_pair.a.cell_index] &= ~hidden_pair.a.deletion_mask;
     candidate_masks[hidden_pair.b.cell_index] &= ~hidden_pair.b.deletion_mask;
 }
 
-pub fn find_hidden_pair(board: BoardState, candidate_masks: []const u16) ?HiddenPair {
-    for (board.all_regions) |region| {
-        if (find_hidden_pair_region(board, candidate_masks, region)) |hidden_pair| {
-            return hidden_pair;
+pub fn find_hidden_pair(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const board_generic.MaskType(extent)) ?HiddenPair {
+    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+        for (0..extent) |sub_index| {
+            if (find_hidden_pair_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |hidden_pair| {
+                return hidden_pair;
+            }
         }
     }
 
@@ -254,19 +253,14 @@ pub fn find_hidden_pair(board: BoardState, candidate_masks: []const u16) ?Hidden
 }
 
 // If there's a region (col/row/box) where a possibility appears only once, put it down
-fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenSingle {
-    assert(region.len == board.extent);
+fn find_hidden_single_region(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, region_index: RegionIndex) ?HiddenSingle {
+    var counts = std.mem.zeroes([board.extent]u32);
+    var last_cell_indices: [board.extent]u32 = undefined;
 
-    var counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
-    const counts = counts_full[0..board.extent];
-
-    var last_cell_indices_full: [MaxSudokuExtent]u32 = undefined;
-    const last_cell_indices = last_cell_indices_full[0..board.extent];
-
-    for (region) |cell_index| {
+    for (board.regions.get(region_index)) |cell_index| {
         var mask = candidate_masks[cell_index];
 
-        for (counts, last_cell_indices) |*count, *last_cell_index| {
+        for (&counts, &last_cell_indices) |*count, *last_cell_index| {
             if ((mask & 1) != 0) {
                 count.* += 1;
                 last_cell_index.* = cell_index;
@@ -286,7 +280,7 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
                     .number = number,
                     .cell_index = cell_index,
                     .deletion_mask = deletion_mask,
-                    .region = region,
+                    .region_index = region_index,
                 };
             }
         }
@@ -295,21 +289,19 @@ fn find_hidden_single_region(board: BoardState, candidate_masks: []const u16, re
     return null;
 }
 
-fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, region: []u32) ?HiddenPair {
-    assert(region.len == board.extent);
+fn find_hidden_pair_region(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, region_index: RegionIndex) ?HiddenPair {
+    const region = board.regions.get(region_index);
 
-    var counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
-    var counts = counts_full[0..board.extent];
+    var counts = std.mem.zeroes([board.extent]u32);
 
     // Contains first and last position
     const min_max_initial_value = u32_2{ board.extent, 0 };
-    var region_min_max_cell_indices_full = [_]u32_2{min_max_initial_value} ** MaxSudokuExtent;
-    const region_min_max_cell_indices = region_min_max_cell_indices_full[0..board.extent];
+    var region_min_max_cell_indices: [board.extent]u32_2 = .{min_max_initial_value} ** board.extent;
 
     for (region, 0..) |cell_index, region_cell_index| {
         var mask = candidate_masks[cell_index];
 
-        for (counts, region_min_max_cell_indices) |*count, *region_min_max_cell_index| {
+        for (&counts, &region_min_max_cell_indices) |*count, *region_min_max_cell_index| {
             if ((mask & 1) != 0) {
                 count.* += 1;
                 region_min_max_cell_index.* = u32_2{
@@ -343,13 +335,13 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
                                 .number = @intCast(first_number),
                                 .cell_index = cell_index_a,
                                 .deletion_mask = deletion_mask_a,
-                                .region = region,
+                                .region_index = region_index,
                             },
                             .b = HiddenSingle{
                                 .number = @intCast(second_number),
                                 .cell_index = cell_index_b,
                                 .deletion_mask = deletion_mask_b,
-                                .region = region,
+                                .region_index = region_index,
                             },
                         };
                     }
@@ -363,15 +355,17 @@ fn find_hidden_pair_region(board: BoardState, candidate_masks: []const u16, regi
 
 pub const PointingLine = struct {
     number: u4,
-    line_region: []u32,
+    line_region_index: RegionIndex,
     line_region_deletion_mask: u16,
-    box_region: []u32,
+    box_region_index: RegionIndex,
     box_region_mask: u16,
 };
 
-pub fn apply_pointing_line(board: BoardState, candidate_masks: []u16, pointing_line: PointingLine) void {
+pub fn apply_pointing_line(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, pointing_line: PointingLine) void {
+    const line_region = board.regions.get(pointing_line.line_region_index);
     const number_mask = board.mask_for_number(pointing_line.number);
-    for (pointing_line.line_region, 0..) |cell_index, region_cell_index| {
+
+    for (line_region, 0..) |cell_index, region_cell_index| {
         // FIXME super confusing
         if (board.mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
@@ -381,24 +375,22 @@ pub fn apply_pointing_line(board: BoardState, candidate_masks: []u16, pointing_l
 
 // If candidates in a box are arranged in a line, remove them from other boxes on that line.
 // Also called pointing pairs or triples in 9x9 sudoku.
-pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?PointingLine {
+pub fn find_pointing_line(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?PointingLine {
     const AABB_u32 = struct {
         min: u32_2,
         max: u32_2,
     };
 
     for (0..board.extent) |box_index| {
-        const box_region = board.box_regions[box_index];
+        const box_region_index = board.regions.get_region_index(.Box, box_index);
+        const box_region = board.regions.get(box_region_index);
 
-        var box_aabbs_full: [MaxSudokuExtent]AABB_u32 = undefined;
-        const box_aabbs = box_aabbs_full[0..board.extent];
-
-        var candidate_counts_full = std.mem.zeroes([MaxSudokuExtent]u32);
-        const candidate_counts = candidate_counts_full[0..board.extent];
+        var box_aabbs: [board.extent]AABB_u32 = undefined;
+        var candidate_counts = std.mem.zeroes([board.extent]u32);
 
         // Compute AABB of candidates for each number
         // FIXME cache remaining candidates per box and only iterate on this?
-        for (box_aabbs, candidate_counts, 0..) |*aabb, *candidate_count, number_usize| {
+        for (&box_aabbs, &candidate_counts, 0..) |*aabb, *candidate_count, number_usize| {
             const number: u4 = @intCast(number_usize);
             const number_mask = board.mask_for_number(number);
 
@@ -426,12 +418,17 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
                 assert(!all(aabb_extent == u32_2{ 0, 0 })); // This should be handled by naked singles already
 
                 if (aabb_extent[0] == 0 or aabb_extent[1] == 0) {
-                    const line_region = if (aabb_extent[0] == 0) board.col_regions[aabb.min[0]] else board.row_regions[aabb.min[1]];
+                    const line_region_index: RegionIndex = if (aabb_extent[0] == 0)
+                        .{ .set = .Col, .sub_index = aabb.min[0] }
+                    else
+                        .{ .set = .Row, .sub_index = aabb.min[1] };
+
+                    const line_region = board.regions.get(line_region_index);
 
                     var deletion_mask: u16 = 0;
                     for (line_region, 0..) |cell_index, region_cell_index_usize| {
                         const region_cell_index: u4 = @intCast(region_cell_index_usize);
-                        const line_cell_box_index = board.box_indices[cell_index];
+                        const line_cell_box_index = board.regions.box_indices[cell_index];
 
                         if (line_cell_box_index != box_index) {
                             if (candidate_masks[cell_index] & number_mask != 0) {
@@ -443,9 +440,9 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
                     if (deletion_mask != 0) {
                         return PointingLine{
                             .number = number,
-                            .line_region = line_region,
+                            .line_region_index = line_region_index,
                             .line_region_deletion_mask = deletion_mask,
-                            .box_region = box_region,
+                            .box_region_index = box_region_index,
                             .box_region_mask = box_region_mask,
                         };
                     }
@@ -459,15 +456,17 @@ pub fn find_pointing_line(board: BoardState, candidate_masks: []const u16) ?Poin
 
 pub const BoxLineReduction = struct {
     number: u4,
-    box_region: []u32,
+    box_region_index: RegionIndex,
     box_region_deletion_mask: u16,
-    line_region: []u32,
+    line_region_index: RegionIndex,
     line_region_mask: u16,
 };
 
-pub fn apply_box_line_reduction(board: BoardState, candidate_masks: []u16, box_line_reduction: BoxLineReduction) void {
+pub fn apply_box_line_reduction(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, box_line_reduction: BoxLineReduction) void {
+    const box_region = board.regions.get(box_line_reduction.box_region_index);
     const number_mask = board.mask_for_number(box_line_reduction.number);
-    for (box_line_reduction.box_region, 0..) |cell_index, region_cell_index| {
+
+    for (box_region, 0..) |cell_index, region_cell_index| {
         // FIXME super confusing
         if (board.mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
@@ -475,15 +474,15 @@ pub fn apply_box_line_reduction(board: BoardState, candidate_masks: []u16, box_l
     }
 }
 
-pub fn find_box_line_reduction(board: BoardState, candidate_masks: []const u16) ?BoxLineReduction {
-    for (board.col_regions, 0..) |col_region, col_index| {
-        if (find_box_line_reduction_for_line(board, candidate_masks, col_region, u32_2{ @intCast(col_index), board.extent })) |event| {
+pub fn find_box_line_reduction(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?BoxLineReduction {
+    for (0..extent) |region_index| {
+        const col_region_index = board.regions.get_region_index(.Col, region_index);
+        if (find_box_line_reduction_for_line(extent, board, candidate_masks, col_region_index, u32_2{ @intCast(region_index), board.extent })) |event| {
             return event;
         }
-    }
 
-    for (board.row_regions, 0..) |row_region, row_index| {
-        if (find_box_line_reduction_for_line(board, candidate_masks, row_region, u32_2{ board.extent, @intCast(row_index) })) |event| {
+        const row_region_index = board.regions.get_region_index(.Row, region_index);
+        if (find_box_line_reduction_for_line(extent, board, candidate_masks, row_region_index, u32_2{ board.extent, @intCast(region_index) })) |event| {
             return event;
         }
     }
@@ -491,7 +490,7 @@ pub fn find_box_line_reduction(board: BoardState, candidate_masks: []const u16) 
     return null;
 }
 
-pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []const u16, line_region: []u32, line_coord: u32_2) ?BoxLineReduction {
+pub fn find_box_line_reduction_for_line(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, line_region_index: RegionIndex, line_coord: u32_2) ?BoxLineReduction {
     for (0..board.extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
         const number_mask = board.mask_for_number(number);
@@ -499,20 +498,21 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
         var line_region_mask: u16 = 0;
         var box_index_mask: u16 = 0;
 
-        for (line_region, 0..) |cell_index, region_cell_index_usize| {
+        for (board.regions.get(line_region_index), 0..) |cell_index, region_cell_index_usize| {
             const region_cell_index: u4 = @intCast(region_cell_index_usize);
 
             if (candidate_masks[cell_index] & number_mask != 0) {
                 line_region_mask |= @as(u16, 1) << region_cell_index;
 
-                const box_index = board.box_indices[cell_index];
+                const box_index = board.regions.box_indices[cell_index];
                 box_index_mask |= board.mask_for_number(@intCast(box_index));
             }
         }
 
         if (@popCount(box_index_mask) == 1) {
             const box_index = @ctz(box_index_mask);
-            const box_region = board.box_regions[box_index];
+            const box_region_index = board.regions.get_region_index(.Box, box_index);
+            const box_region = board.regions.get(box_region_index);
 
             var deletion_mask: u16 = 0;
             for (box_region, 0..) |cell_index, region_cell_index| {
@@ -528,9 +528,9 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
             if (deletion_mask != 0) {
                 return BoxLineReduction{
                     .number = number,
-                    .box_region = box_region,
+                    .box_region_index = box_region_index,
                     .box_region_deletion_mask = deletion_mask,
-                    .line_region = line_region,
+                    .line_region_index = line_region_index,
                     .line_region_mask = line_region_mask,
                 };
             }
@@ -538,6 +538,63 @@ pub fn find_box_line_reduction_for_line(board: BoardState, candidate_masks: []co
     }
 
     return null;
+}
+
+test "Box-line removal" {
+    const board_type = board_generic.BoardType{ .regular = .{
+        .box_extent = .{ 3, 3 },
+    } };
+    const extent = comptime board_type.extent();
+
+    var board = board_generic.State(extent).init(board_type);
+
+    const full_mask = board.full_candidate_mask();
+    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{full_mask} ** board.extent_sqr;
+
+    // Make sure that there's no hit for the initial board
+    if (find_box_line_reduction(extent, board, &candidate_masks)) |_| {
+        try std.testing.expect(false);
+    }
+
+    const number: u4 = 0;
+
+    // Remove candidates until we can apply the box-line solver
+    for (3..9) |row_index| {
+        const mask = board.mask_for_number(number);
+        const cell_index = board.cell_index_from_coord(.{ 0, @intCast(row_index) });
+        candidate_masks[cell_index] &= ~mask;
+    }
+
+    // Make sure we get a hit
+    if (find_box_line_reduction(extent, board, &candidate_masks)) |box_line_reduction| {
+        try std.testing.expectEqual(number, box_line_reduction.number);
+
+        // Apply the solver event
+        apply_technique(extent, &board, &candidate_masks, .{ .box_line_reduction = box_line_reduction });
+
+        // Make sure we don't hit again after applying the solver event
+        if (find_box_line_reduction(extent, board, &candidate_masks)) |_| {
+            try std.testing.expect(false);
+        }
+    } else {
+        try std.testing.expect(false);
+    }
+
+    // Re-Fill candidate masks fully
+    candidate_masks = .{full_mask} ** board.extent_sqr;
+
+    // Remove candidates until we can apply the box-line solver
+    for (3..9) |col_index| {
+        const mask = board.mask_for_number(number);
+        const cell_index = board.cell_index_from_coord(.{ @intCast(col_index), 0 });
+        candidate_masks[cell_index] &= ~mask;
+    }
+
+    if (find_box_line_reduction(extent, board, &candidate_masks)) |box_line_reduction| {
+        try std.testing.expectEqual(number, box_line_reduction.number);
+    } else {
+        try std.testing.expect(false);
+    }
 }
 
 pub const Technique = union(enum(u4)) {
@@ -549,43 +606,43 @@ pub const Technique = union(enum(u4)) {
     box_line_reduction: BoxLineReduction,
 };
 
-pub fn find_easiest_known_technique(board: BoardState, candidate_masks: []const u16) ?Technique {
-    if (find_naked_single(board, candidate_masks)) |naked_single| {
+pub fn find_easiest_known_technique(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?Technique {
+    if (find_naked_single(extent, board, candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
-    } else if (find_hidden_single(board, candidate_masks)) |hidden_single| {
+    } else if (find_hidden_single(extent, board, candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
-    } else if (find_naked_pair(board, candidate_masks)) |naked_pair| {
+    } else if (find_naked_pair(extent, board, candidate_masks)) |naked_pair| {
         return .{ .naked_pair = naked_pair };
-    } else if (find_hidden_pair(board, candidate_masks)) |hidden_pair| {
+    } else if (find_hidden_pair(extent, board, candidate_masks)) |hidden_pair| {
         return .{ .hidden_pair = hidden_pair };
-    } else if (find_pointing_line(board, candidate_masks)) |pointing_line| {
+    } else if (find_pointing_line(extent, board, candidate_masks)) |pointing_line| {
         return .{ .pointing_line = pointing_line };
-    } else if (find_box_line_reduction(board, candidate_masks)) |box_line_reduction| {
+    } else if (find_box_line_reduction(extent, board, candidate_masks)) |box_line_reduction| {
         return .{ .box_line_reduction = box_line_reduction };
     } else {
         return null;
     }
 }
 
-pub fn apply_technique(board: *BoardState, candidate_masks: []u16, solver_event: Technique) void {
+pub fn apply_technique(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, solver_event: Technique) void {
     switch (solver_event) {
         .naked_single => |naked_single| {
-            apply_naked_single(board, candidate_masks, naked_single);
+            apply_naked_single(extent, board, candidate_masks, naked_single);
         },
         .naked_pair => |naked_pair| {
-            apply_naked_pair(candidate_masks, naked_pair);
+            apply_naked_pair(extent, board.*, candidate_masks, naked_pair);
         },
         .hidden_single => |hidden_single| {
-            apply_hidden_single(board, candidate_masks, hidden_single);
+            apply_hidden_single(extent, board, candidate_masks, hidden_single);
         },
         .hidden_pair => |hidden_pair| {
-            apply_hidden_pair(candidate_masks, hidden_pair);
+            apply_hidden_pair(extent, candidate_masks, hidden_pair);
         },
         .pointing_line => |pointing_line| {
-            apply_pointing_line(board.*, candidate_masks, pointing_line);
+            apply_pointing_line(extent, board.*, candidate_masks, pointing_line);
         },
         .box_line_reduction => |box_line_reduction| {
-            apply_box_line_reduction(board.*, candidate_masks, box_line_reduction);
+            apply_box_line_reduction(extent, board.*, candidate_masks, box_line_reduction);
         },
     }
 }

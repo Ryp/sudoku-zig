@@ -8,39 +8,85 @@ pub const RegularSudoku = struct {
 };
 
 pub const JigsawSudoku = struct {
-    size: u32,
+    extent: u32,
     box_indices_string: []const u8,
 };
 
 pub const BoardType = union(enum) {
     regular: RegularSudoku,
     jigsaw: JigsawSudoku,
+
+    pub fn extent(self: @This()) u32 {
+        return switch (self) {
+            .regular => |regular| regular.box_extent[0] * regular.box_extent[1],
+            .jigsaw => |jigsaw| jigsaw.extent,
+        };
+    }
 };
 
-const MinExtent: comptime_int = 2; // Minimum extent we support
-const MaxExtent: comptime_int = 16; // Maximum extent we support
+pub const MinExtent: comptime_int = 2; // Minimum extent we support
+pub const MaxExtent: comptime_int = 16; // Maximum extent we support
+pub const MaxNumbersString = [MaxExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
 
-pub fn board_state(extent: comptime_int) type {
+pub const RegionIndex = struct {
+    set: RegionSet,
+    sub_index: usize,
+};
+
+pub const RegionSet = enum(usize) {
+    Col = 0,
+    Row = 1,
+    Box = 2,
+
+    Count = 3,
+};
+
+pub fn State(extent: comptime_int) type {
     return struct {
         const Self = @This();
         const NumberType = u4;
-
-        const Extent: comptime_int = extent; // Boards are always square, extent is the length of one side
-        const ExtentSqr: comptime_int = Extent * Extent; // Total amount of elements in a board
+        const ExtentSqr = extent * extent;
 
         // This struct is used as a helper to iterate over regions of the board without doing index math everywhere.
         const Regions = struct {
-            col: [Extent][Extent]u32,
-            row: [Extent][Extent]u32,
-            box: [Extent][Extent]u32,
+            all: [@intFromEnum(RegionSet.Count)][extent][extent]u32,
             box_indices: [ExtentSqr]NumberType,
+
+            pub fn get_region_index(self: Regions, set: RegionSet, region_index: usize) RegionIndex {
+                _ = self; // Unused
+                return .{
+                    .set = set,
+                    .sub_index = region_index,
+                };
+            }
+
+            pub fn get(self: Regions, region_index: RegionIndex) [extent]u32 {
+                return self.all[@intFromEnum(region_index.set)][region_index.sub_index];
+            }
+
+            pub fn get_set(self: Regions, set: RegionSet) [extent][extent]u32 {
+                return self.all[@intFromEnum(set)];
+            }
+
+            // Get single region
+            pub fn col(self: Regions, sub_index: usize) [extent]u32 {
+                return self.get(.{ .set = .Col, .sub_index = sub_index });
+            }
+
+            pub fn row(self: Regions, sub_index: usize) [extent]u32 {
+                return self.get(.{ .set = .Row, .sub_index = sub_index });
+            }
+
+            pub fn box(self: Regions, sub_index: usize) [extent]u32 {
+                return self.get(.{ .set = .Box, .sub_index = sub_index });
+            }
 
             pub fn init(board_type: BoardType) Regions {
                 var regions: Regions = undefined;
 
                 switch (board_type) {
                     .regular => |regular| {
-                        if (Extent != regular.box_extent[0] * regular.box_extent[1]) {
+                        if (extent != regular.box_extent[0] * regular.box_extent[1]) {
                             @panic("Board extent mismatch with box extents");
                         }
 
@@ -51,31 +97,22 @@ pub fn board_state(extent: comptime_int) type {
                     },
                 }
 
-                for (0..Extent) |region_index_usize| {
-                    const col_region = &regions.col[region_index_usize];
-                    const row_region = &regions.row[region_index_usize];
+                var box_region_slots: [extent]u32 = .{0} ** extent;
 
-                    const region_index: u32 = @intCast(region_index_usize);
+                for (regions.box_indices, 0..) |box_index, cell_index_usize| {
+                    const cell_index: u32 = @intCast(cell_index_usize);
+                    const cell_coords = _cell_coord_from_index(cell_index);
+                    const box_slot = box_region_slots[box_index];
 
-                    for (col_region, row_region, 0..) |*col_cell, *row_cell, cell_index_usize| {
-                        const cell_index: u32 = @intCast(cell_index_usize);
-                        col_cell.* = cell_index_from_coord(.{ region_index, cell_index });
-                        row_cell.* = cell_index_from_coord(.{ cell_index, region_index });
-                    }
-                }
-
-                var box_region_slots: [Extent]u32 = .{0} ** Extent;
-
-                for (regions.box_indices, 0..) |box_index, cell_index| {
-                    const slot = box_region_slots[box_index];
-
-                    regions.box[box_index][slot] = @intCast(cell_index);
+                    regions.all[@intFromEnum(RegionSet.Col)][cell_coords[0]][cell_coords[1]] = cell_index;
+                    regions.all[@intFromEnum(RegionSet.Row)][cell_coords[1]][cell_coords[0]] = cell_index;
+                    regions.all[@intFromEnum(RegionSet.Box)][box_index][box_slot] = cell_index;
 
                     box_region_slots[box_index] += 1;
                 }
 
                 for (box_region_slots) |box_slot| {
-                    if (box_slot != Extent) {
+                    if (box_slot != extent) {
                         @panic("A box region has an invalid number of elements");
                     }
                 }
@@ -87,7 +124,7 @@ pub fn board_state(extent: comptime_int) type {
                 var box_indices: [ExtentSqr]NumberType = undefined;
 
                 for (&box_indices, 0..) |*box_index, cell_index| {
-                    const cell_coord = cell_coord_from_index(cell_index);
+                    const cell_coord = _cell_coord_from_index(cell_index);
                     const box_coord_x = (cell_coord[0] / box_extent[0]);
                     const box_coord_y = (cell_coord[1] / box_extent[1]);
 
@@ -106,7 +143,7 @@ pub fn board_state(extent: comptime_int) type {
                     @panic("Invalid box indices: string too long");
                 }
 
-                var region_sizes: [Extent]u32 = .{0} ** Extent;
+                var region_sizes: [extent]u32 = .{0} ** extent;
 
                 for (&box_indices, box_indices_string) |*box_index, char| {
                     var number: u8 = undefined;
@@ -121,7 +158,7 @@ pub fn board_state(extent: comptime_int) type {
                         @panic("Invalid character in box indices string");
                     }
 
-                    if (number >= Extent) {
+                    if (number >= extent) {
                         @panic("Index out of bounds in box indices string");
                     }
 
@@ -134,44 +171,155 @@ pub fn board_state(extent: comptime_int) type {
             }
         };
 
+        comptime extent: comptime_int = extent,
+        comptime extent_sqr: comptime_int = extent * extent, // Total amount of elements in a board
+        comptime numbers_string: [extent]u8 = MaxNumbersString[0..extent].*,
+        comptime mask_type: type = MaskType(extent),
+
         numbers: [ExtentSqr]?NumberType,
         regions: Regions,
+        board_type: BoardType,
 
         // Creates an empty sudoku board
         pub fn init(board_type: BoardType) Self {
             return .{
                 .numbers = .{null} ** ExtentSqr,
                 .regions = Regions.init(board_type),
+                .board_type = board_type,
             };
         }
 
-        pub fn cell_coord_from_index(cell_index: usize) u32_2 {
+        fn _cell_coord_from_index(cell_index: usize) u32_2 {
+            const x: u32 = @intCast(cell_index % extent);
+            const y: u32 = @intCast(cell_index / extent);
+
             std.debug.assert(cell_index < ExtentSqr);
-
-            const x: u32 = @intCast(cell_index % Extent);
-            const y: u32 = @intCast(cell_index / Extent);
-
-            std.debug.assert(x < Extent and y < Extent);
+            std.debug.assert(x < extent and y < extent);
 
             return .{ x, y };
         }
 
-        pub fn cell_index_from_coord(position: u32_2) u32 {
-            std.debug.assert(position[0] < Extent);
-            std.debug.assert(position[1] < Extent);
+        fn _cell_index_from_coord(position: u32_2) u32 {
+            std.debug.assert(position[0] < extent);
+            std.debug.assert(position[1] < extent);
 
-            return position[0] + Extent * position[1];
+            return position[0] + extent * position[1];
+        }
+
+        // FIXME Giant hack! This seems like a Zig limitation
+        pub fn cell_coord_from_index(_: Self, cell_index: usize) u32_2 {
+            return _cell_coord_from_index(cell_index);
+        }
+
+        pub fn cell_index_from_coord(_: Self, position: u32_2) u32 {
+            return _cell_index_from_coord(position);
+        }
+
+        pub fn mask_for_number(self: Self, number: NumberType) self.mask_type {
+            return @as(self.mask_type, 1) << number;
+        }
+
+        pub fn full_candidate_mask(self: Self) self.mask_type {
+            return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
+        }
+
+        pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) void {
+            std.debug.assert(sudoku_string.len == self.extent * self.extent);
+
+            for (&self.numbers, sudoku_string) |*board_number_opt, char| {
+                var number_opt: ?NumberType = null;
+
+                if (char >= '1' and char <= '9') {
+                    number_opt = @intCast(char - '1');
+                } else if (char >= 'A' and char <= 'G') {
+                    number_opt = @intCast(char - 'A' + 9);
+                } else if (char >= 'a' and char <= 'g') {
+                    number_opt = @intCast(char - 'a' + 9);
+                }
+
+                if (number_opt) |number| {
+                    std.debug.assert(number < self.extent);
+                }
+
+                board_number_opt.* = number_opt;
+            }
+        }
+
+        pub fn string_from_board(self: Self) [self.extent_sqr]u8 {
+            var string: [self.extent_sqr]u8 = undefined;
+
+            for (self.numbers, &string) |number_opt, *char| {
+                char.* = if (number_opt) |number| self.numbers_string[number] else '.';
+            }
+
+            return string;
+        }
+
+        pub fn fill_candidate_mask(self: Self, candidate_masks: []self.mask_type) void {
+            const full_mask = self.full_candidate_mask();
+
+            var col_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
+            var row_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
+            var box_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
+
+            for (self.numbers, 0..) |number_opt, cell_index| {
+                if (number_opt) |number| {
+                    const cell_coord = self.cell_coord_from_index(cell_index);
+
+                    const col = cell_coord[0];
+                    const row = cell_coord[1];
+                    const box = self.regions.box_indices[cell_index];
+
+                    const mask = ~self.mask_for_number(number);
+
+                    col_region_candidate_masks[col] &= mask;
+                    row_region_candidate_masks[row] &= mask;
+                    box_region_candidate_masks[box] &= mask;
+                }
+            }
+
+            for (self.numbers, candidate_masks, 0..) |number_opt, *cell_candidate_mask, cell_index| {
+                if (number_opt) |_| {
+                    // It should already be zero for set numbers
+                    std.debug.assert(cell_candidate_mask.* == 0);
+                } else {
+                    const cell_coord = self.cell_coord_from_index(cell_index);
+
+                    const col = cell_coord[0];
+                    const row = cell_coord[1];
+                    const box = self.regions.box_indices[cell_index];
+
+                    const col_candidate_mask = col_region_candidate_masks[col];
+                    const row_candidate_mask = row_region_candidate_masks[row];
+                    const box_candidate_mask = box_region_candidate_masks[box];
+
+                    cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
+                }
+            }
         }
 
         comptime {
-            std.debug.assert(Extent >= MinExtent);
-            std.debug.assert(Extent <= MaxExtent);
+            std.debug.assert(extent >= MinExtent);
+            std.debug.assert(extent <= MaxExtent);
         }
     };
 }
 
+pub fn MaskType(extent: comptime_int) type {
+    if (false) {
+        return @Type(.{
+            .int = .{
+                .signedness = .unsigned,
+                .bits = extent,
+            },
+        });
+    } else {
+        return u16; // FIXME!!!!
+    }
+}
+
 test "Basic" {
-    const board = board_state(16).init(.{ .regular = .{ .box_extent = .{ 4, 4 } } });
+    const board = State(16).init(.{ .regular = .{ .box_extent = .{ 4, 4 } } });
     _ = board;
 }
 
@@ -185,13 +333,13 @@ test "Ergonomics" {
 
     const box_w: u32 = if (rng.random().uintLessThan(u32, 2) == 1) 3 else 4;
     const box_h: u32 = if (rng.random().uintLessThan(u32, 2) == 1) 3 else 4;
-    const extent = box_w * box_h;
     const board_type = BoardType{ .regular = .{ .box_extent = .{ box_w, box_h } } };
+    const extent = board_type.extent();
 
     // Scalarize extent
     inline for (.{ 9, 12, 16 }) |comptime_extent| {
         if (extent == comptime_extent) {
-            const board = board_state(comptime_extent).init(board_type);
+            const board = State(comptime_extent).init(board_type);
             _ = board;
 
             break;

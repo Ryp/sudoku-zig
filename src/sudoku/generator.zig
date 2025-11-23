@@ -1,4 +1,4 @@
-const board_state = @import("board_legacy.zig");
+const board_generic = @import("board_generic.zig");
 const dancing_links = @import("generator_dancing_links.zig");
 const naive = @import("generator_naive.zig");
 
@@ -9,13 +9,13 @@ pub const Algorithm = union(enum) {
     naive,
 };
 
-pub fn generate(board: *board_state.BoardState, algorithm: Algorithm, seed: u64) void {
+pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed: u64, algorithm: Algorithm) board_generic.State(extent) {
     switch (algorithm) {
         .dancing_links => |options| {
-            dancing_links.generate(board, seed, options.difficulty);
+            return dancing_links.generate(extent, board_type, seed, options.difficulty);
         },
         .naive => {
-            naive.generate(board, seed);
+            return naive.generate(extent, board_type, seed);
         },
     }
 }

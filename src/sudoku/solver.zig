@@ -1,22 +1,19 @@
-const board_state = @import("board_legacy.zig");
-
+const board_generic = @import("board_generic.zig");
 const dancing_links = @import("solver_dancing_links.zig");
 const backtracking = @import("solver_backtracking.zig");
 
-pub const Algorithm = union(enum) {
+pub const Options = union(enum) {
     dancing_links: dancing_links.Options,
-    sorted_backtracking: struct {
-        recursive: bool = true,
-    },
+    sorted_backtracking: backtracking.Options,
 };
 
-pub fn solve(board: *board_state.BoardState, algorithm: Algorithm) bool {
-    switch (algorithm) {
+pub fn solve(extent: comptime_int, board: *board_generic.State(extent), generic_options: Options) bool {
+    switch (generic_options) {
         .dancing_links => |options| {
-            return dancing_links.solve(board, options);
+            return dancing_links.solve(extent, board, options);
         },
-        .sorted_backtracking => |sorted_backtracking| {
-            return backtracking.solve(board, sorted_backtracking.recursive);
+        .sorted_backtracking => |options| {
+            return backtracking.solve(extent, board, options);
         },
     }
 }

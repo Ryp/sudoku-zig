@@ -1,14 +1,14 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const board_state = @import("board_legacy.zig");
-const BoardState = board_state.BoardState;
+const board_generic = @import("board_generic.zig");
+const known_boards = @import("known_boards.zig");
 
 pub const Options = struct {
     check_if_unique: bool = false,
 };
 
-const DoublyLink = struct {
+pub const DoublyLink = struct {
     prev: u32,
     next: u32,
 };
@@ -22,7 +22,7 @@ const DoublyLink = struct {
 // choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
-pub fn solve(board: *BoardState, options: Options) bool {
+pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
@@ -48,19 +48,19 @@ pub fn solve(board: *BoardState, options: Options) bool {
     const choice_link_offset = header_link_offset + header_link_count;
 
     // Allocate an array indexed by row giving containing the header link indices for the 4 satisfied contraints
-    const choices_count = board.extent * board.extent * board.extent;
+    const choices_count = board.extent * board.extent_sqr;
     const choices_constraint_link_indices = allocator.alloc(ChoiceConstraintsIndices, choices_count) catch unreachable; // FIXME
     defer allocator.free(choices_constraint_link_indices);
 
     // This changes between runs only if the size of the sudoku or the box layout changes
-    fill_choices_constraint_link_indices(choices_constraint_link_indices, board.*, header_link_offset);
+    fill_choices_constraint_link_indices(extent, board.*, choices_constraint_link_indices, header_link_offset);
 
     link_matrix(choices_constraint_link_indices, links_h, links_v, choice_link_offset);
 
-    cover_columns_for_given_clues(board.*, choices_constraint_link_indices, links_h, links_v);
+    cover_columns_for_given_clues(extent, board.*, choices_constraint_link_indices, links_h, links_v);
 
     if (options.check_if_unique) {
-        const solution_count = solve_dancing_links_recursive_count_solutions(DancingLinkContext{
+        const solution_count = solve_dancing_links_recursive_count_solutions(extent, DancingLinkContext(extent){
             .board = board,
             .links_h = links_h,
             .links_v = links_v,
@@ -70,7 +70,7 @@ pub fn solve(board: *BoardState, options: Options) bool {
 
         return solution_count == 1;
     } else {
-        return solve_dancing_links_recursive(DancingLinkContext{
+        return solve_dancing_links_recursive(extent, DancingLinkContext(extent){
             .board = board,
             .links_h = links_h,
             .links_v = links_v,
@@ -80,15 +80,17 @@ pub fn solve(board: *BoardState, options: Options) bool {
     }
 }
 
-const DancingLinkContext = struct {
-    board: *BoardState,
-    links_h: []DoublyLink,
-    links_v: []DoublyLink,
-    choice_link_offset: u32,
-    choices_constraint_link_indices: []ChoiceConstraintsIndices,
-};
+fn DancingLinkContext(extent: comptime_int) type {
+    return struct {
+        board: *board_generic.State(extent),
+        links_h: []DoublyLink,
+        links_v: []DoublyLink,
+        choice_link_offset: u32,
+        choices_constraint_link_indices: []ChoiceConstraintsIndices,
+    };
+}
 
-fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
+fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(extent)) bool {
     if (ctx.links_h[0].next == 0) {
         return true;
     } else {
@@ -104,7 +106,7 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            if (solve_dancing_links_recursive(ctx)) {
+            if (solve_dancing_links_recursive(extent, ctx)) {
                 const cell_index = row_index / ctx.board.extent;
                 const number = row_index % ctx.board.extent;
 
@@ -122,7 +124,7 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
     }
 }
 
-fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
+fn solve_dancing_links_recursive_count_solutions(extent: comptime_int, ctx: DancingLinkContext(extent)) u32 {
     if (ctx.links_h[0].next == 0) {
         return 1;
     } else {
@@ -141,7 +143,7 @@ fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            solution_count += solve_dancing_links_recursive_count_solutions(ctx);
+            solution_count += solve_dancing_links_recursive_count_solutions(extent, ctx);
 
             inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
                 uncover_column(ctx.links_h, ctx.links_v, constraint_index);
@@ -152,19 +154,19 @@ fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
     }
 }
 
-fn get_choice_index(cell_index: u32, number: u32, extent: u32) u32 {
+pub fn get_choice_index(cell_index: usize, number: usize, extent: comptime_int) usize {
     return cell_index * extent + number;
 }
 
 // Gives us an index to the header link of the constraints of that choice
-const ChoiceConstraintsIndices = struct {
+pub const ChoiceConstraintsIndices = struct {
     exs_index: u32,
     row_index: u32,
     col_index: u32,
     box_index: u32,
 };
 
-fn fill_choices_constraint_link_indices(choices_constraint_link_indices: []ChoiceConstraintsIndices, board: BoardState, header_link_offset: u32) void {
+pub fn fill_choices_constraint_link_indices(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []ChoiceConstraintsIndices, header_link_offset: u32) void {
     const constraints_per_type_count = board.extent * board.extent;
 
     const constraint_exs_headers_offset = header_link_offset + 0 * constraints_per_type_count;
@@ -172,32 +174,28 @@ fn fill_choices_constraint_link_indices(choices_constraint_link_indices: []Choic
     const constraint_col_headers_offset = header_link_offset + 2 * constraints_per_type_count;
     const constraint_box_headers_offset = header_link_offset + 3 * constraints_per_type_count;
 
-    for (0..board.extent) |cell_row_usize| {
-        const cell_row: u32 = @intCast(cell_row_usize);
+    for (0..board.extent_sqr) |cell_index| {
+        const cell_coord = board.cell_coord_from_index(cell_index);
+        const cell_col = cell_coord[0];
+        const cell_row = cell_coord[1];
+        const cell_box = board.regions.box_indices[cell_index];
 
-        for (0..board.extent) |cell_col_usize| {
-            const cell_col: u32 = @intCast(cell_col_usize);
+        for (0..board.extent) |number_usize| {
+            const number: u32 = @intCast(number_usize);
+            const choice_index = get_choice_index(cell_index, number, board.extent);
 
-            const cell_index = cell_row * board.extent + cell_col;
-            const cell_box = board.box_indices[cell_index];
-
-            for (0..board.extent) |number_usize| {
-                const number: u32 = @intCast(number_usize);
-                const choice_index = get_choice_index(cell_index, number, board.extent);
-
-                // Get indices for each four constraints we satisfy
-                choices_constraint_link_indices[choice_index] = ChoiceConstraintsIndices{
-                    .exs_index = constraint_exs_headers_offset + cell_index,
-                    .row_index = constraint_row_headers_offset + cell_row * board.extent + number,
-                    .col_index = constraint_col_headers_offset + cell_col * board.extent + number,
-                    .box_index = constraint_box_headers_offset + cell_box * board.extent + number,
-                };
-            }
+            // Get indices for each four constraints we satisfy
+            choices_constraint_link_indices[choice_index] = ChoiceConstraintsIndices{
+                .exs_index = constraint_exs_headers_offset + @as(u32, @intCast(cell_index)),
+                .row_index = constraint_row_headers_offset + cell_row * @as(u32, board.extent) + number,
+                .col_index = constraint_col_headers_offset + cell_col * @as(u32, board.extent) + number,
+                .box_index = constraint_box_headers_offset + cell_box * @as(u32, board.extent) + number,
+            };
         }
     }
 }
 
-fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink, choice_link_offset: u32) void {
+pub fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink, choice_link_offset: u32) void {
     // Chain all horizontal header and root link together
     link_together(links_h, 0, choice_link_offset);
 
@@ -223,7 +221,7 @@ fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsIndices
     }
 }
 
-fn cover_columns_for_given_clues(board: BoardState, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
+fn cover_columns_for_given_clues(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
     // We now have the initial fully connected matrix
     // Let's remove the rows we already have a clue for
     for (board.numbers, 0..) |number_opt, cell_index| {
@@ -240,7 +238,7 @@ fn cover_columns_for_given_clues(board: BoardState, choices_constraint_link_indi
 }
 
 // NOTE: only feed a header index to this function!
-fn cover_column(links_h: []DoublyLink, links_v: []DoublyLink, column_index: u32) void {
+pub fn cover_column(links_h: []DoublyLink, links_v: []DoublyLink, column_index: u32) void {
     assert(links_h[column_index].next != column_index); // Covering an empty column
 
     remove_link_from_list(links_h, column_index);
@@ -258,7 +256,7 @@ fn cover_column(links_h: []DoublyLink, links_v: []DoublyLink, column_index: u32)
 }
 
 // NOTE: only feed a header index to this function!
-fn uncover_column(links_h: []DoublyLink, links_v: []DoublyLink, column_index: u32) void {
+pub fn uncover_column(links_h: []DoublyLink, links_v: []DoublyLink, column_index: u32) void {
     assert(links_h[column_index].prev != column_index); // Covering an empty column
 
     relink_prev_and_next_to_us(links_h, column_index);
@@ -308,4 +306,25 @@ fn link_together(links: []DoublyLink, start_index: u32, count: u32) void {
 
     links[start_index].prev = end_index - 1;
     links[end_index - 1].next = start_index;
+}
+
+test {
+    const board_type = board_generic.BoardType{ .regular = .{
+        .box_extent = .{ 3, 3 },
+    } };
+
+    var solver_board = board_generic.State(board_type.extent()).init(board_type);
+
+    const known_board = known_boards.easy_000;
+
+    solver_board.fill_board_from_string(known_board.board);
+
+    const solved = solve(solver_board.extent, &solver_board, .{});
+    try std.testing.expect(solved);
+
+    var solution_board = board_generic.State(9).init(solver_board.board_type);
+
+    solution_board.fill_board_from_string(known_board.solution);
+
+    try std.testing.expect(std.mem.eql(?u4, &solver_board.numbers, &solution_board.numbers));
 }

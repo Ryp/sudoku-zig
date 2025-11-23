@@ -1,12 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const generator = @import("generator.zig");
+const board_generic = @import("board_generic.zig");
+const RegionSet = board_generic.RegionSet;
+
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
-
-const board_legacy = @import("board_legacy.zig");
-const BoardState = board_legacy.BoardState;
+const generator = @import("generator.zig");
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
@@ -20,124 +20,324 @@ const GameFlow = enum {
     WaitingForHintValidation,
 };
 
-pub const GameState = struct {
-    board: BoardState,
-    candidate_masks: []u16, // Should be set to zero when setting number
-    selected_cells_full: []u32, // Full allocated array, we usually don't use it directly
-    selected_cells: []u32, // Code handles this as a list but only a single cell is supported
-    flow: GameFlow,
-    board_history: []?u4,
-    candidate_masks_history: []u16,
-    history_index: u32 = 0,
-    max_history_index: u32 = 0,
-    validation_error: ?ValidationError,
-    solver_event: ?SolverEvent,
-};
+pub fn State(extent: comptime_int) type {
+    return struct {
+        const Self = @This();
+        const MaskType = board_generic.MaskType(extent);
+        pub const SolverEvent = union(enum) {
+            found_technique: solver_logical.Technique,
+            found_nothing,
+        };
 
-pub fn create_game_state(allocator: std.mem.Allocator, game_type: board_legacy.GameType, sudoku_string: []const u8) !GameState {
-    var board = try BoardState.create(allocator, game_type);
+        board: board_generic.State(extent),
+        candidate_masks: []MaskType, // Should be set to zero when setting number
+        selected_cells_full: []u32, // Full allocated array, we usually don't use it directly
+        selected_cells: []u32, // Code handles this as a list but only a single cell is supported
+        flow: GameFlow,
+        board_history: []?u4,
+        candidate_masks_history: []MaskType,
+        history_index: u32 = 0,
+        max_history_index: u32 = 0,
+        validation_error: ?ValidationError,
+        solver_event: ?SolverEvent,
 
-    if (sudoku_string.len == 0) {
-        var random_buffer: [8]u8 = undefined;
-        std.crypto.random.bytes(&random_buffer);
+        pub fn init(allocator: std.mem.Allocator, board_type: board_generic.BoardType, sudoku_string: []const u8) !Self {
+            var board = board_generic.State(extent).init(board_type);
 
-        const seed = std.mem.readInt(u64, &random_buffer, .little);
+            if (sudoku_string.len == 0) {
+                var random_buffer: [8]u8 = undefined;
+                std.crypto.random.bytes(&random_buffer);
 
-        generator.generate(&board, .{ .dancing_links = .{ .difficulty = 200 } }, seed);
-    } else {
-        board.fill_board_from_string(sudoku_string);
-    }
+                const seed = std.mem.readInt(u64, &random_buffer, .little);
 
-    {
-        const string = try allocator.alloc(u8, board.numbers.len);
-        defer allocator.free(string);
+                board = generator.generate(extent, board_type, seed, .{ .dancing_links =.{.difficulty = 200} });
+            } else {
+                board.fill_board_from_string(sudoku_string);
+            }
 
-        board.fill_string_from_board(string);
+            std.debug.print("Board: {s}\n", .{&board.string_from_board()});
 
-        std.debug.print("Board: {s}\n", .{string});
-    }
+            const candidate_masks = try allocator.alloc(MaskType, board.numbers.len);
+            errdefer allocator.free(candidate_masks);
 
-    const candidate_masks = try allocator.alloc(u16, board.numbers.len);
-    errdefer allocator.free(candidate_masks);
+            for (candidate_masks) |*candidate_mask| {
+                candidate_mask.* = 0;
+            }
 
-    for (candidate_masks) |*candidate_mask| {
-        candidate_mask.* = 0;
-    }
+            const selected_cells_full = try allocator.alloc(u32, board.extent_sqr);
+            errdefer allocator.free(selected_cells_full);
 
-    const selected_cells_full = try allocator.alloc(u32, board.numbers.len);
-    errdefer allocator.free(selected_cells_full);
+            // Allocate history stack
+            const board_history = try allocator.alloc(?u4, board.extent_sqr * MaxHistorySize);
+            errdefer allocator.free(board_history);
 
-    // Allocate history stack
-    const board_history = try allocator.alloc(?u4, board.numbers.len * MaxHistorySize);
-    errdefer allocator.free(board_history);
+            const candidate_masks_history = try allocator.alloc(MaskType, board.numbers.len * MaxHistorySize);
+            errdefer allocator.free(candidate_masks_history);
 
-    const candidate_masks_history = try allocator.alloc(u16, board.numbers.len * MaxHistorySize);
-    errdefer allocator.free(candidate_masks_history);
+            var game = Self{
+                .board = board,
+                .candidate_masks = candidate_masks,
+                .selected_cells_full = selected_cells_full,
+                .selected_cells = selected_cells_full[0..0],
+                .flow = .Normal,
+                .board_history = board_history,
+                .candidate_masks_history = candidate_masks_history,
+                .validation_error = null,
+                .solver_event = null,
+            };
 
-    var game = GameState{
-        .board = board,
-        .candidate_masks = candidate_masks,
-        .selected_cells_full = selected_cells_full,
-        .selected_cells = selected_cells_full[0..0],
-        .flow = .Normal,
-        .board_history = board_history,
-        .candidate_masks_history = candidate_masks_history,
-        .validation_error = null,
-        .solver_event = null,
+            game.save_state_to_history(0);
+
+            return game;
+        }
+
+        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.board_history);
+            allocator.free(self.candidate_masks_history);
+            allocator.free(self.selected_cells_full);
+            allocator.free(self.candidate_masks);
+        }
+
+        fn get_board_history_slice(self: Self, history_index: u32) []?u4 {
+            const cell_count = self.board.numbers.len;
+            const start = cell_count * history_index;
+            const stop = start + cell_count;
+
+            return self.board_history[start..stop];
+        }
+
+        fn get_candidate_masks_history_slice(self: Self, history_index: u32) []MaskType {
+            const cell_count = self.board.numbers.len;
+            const start = cell_count * history_index;
+            const stop = start + cell_count;
+
+            return self.candidate_masks_history[start..stop];
+        }
+
+        fn push_state_to_history(self: *Self) void {
+            if (self.history_index + 1 < MaxHistorySize) {
+                self.history_index += 1;
+                self.max_history_index = self.history_index;
+
+                self.save_state_to_history(self.history_index);
+            }
+        }
+
+        fn save_state_to_history(self: *Self, index: u32) void {
+            @memcpy(self.get_board_history_slice(index), &self.board.numbers);
+            @memcpy(self.get_candidate_masks_history_slice(index), self.candidate_masks);
+        }
+
+        fn load_state_from_history(self: *Self, index: u32) void {
+            @memcpy(&self.board.numbers, self.get_board_history_slice(index));
+            @memcpy(self.candidate_masks, self.get_candidate_masks_history_slice(index));
+        }
+
+        pub fn apply_player_event(self: *Self, action: PlayerAction) void {
+            switch (self.flow) {
+                .Normal => {
+                    self.apply_player_event_normal_flow(action);
+                },
+                .WaitingForHintValidation => {
+                    switch (action) {
+                        .get_hint => |_| {
+                            self.player_apply_hint();
+                        },
+                        else => {},
+                    }
+                },
+            }
+
+            self.validation_error = check_board_for_validation_errors(extent, &self.board, self.candidate_masks);
+        }
+
+        fn apply_player_event_normal_flow(self: *Self, action: PlayerAction) void {
+            switch (action) {
+                .toggle_select => |toggle_select| {
+                    self.player_toggle_select(toggle_select.coord);
+                },
+                .move_selection => |move_selection| {
+                    self.player_move_selection(move_selection);
+                },
+                .set_number => |set_number| {
+                    self.player_set_number(set_number.number);
+                },
+                .toggle_candidate => |toggle_candidate| {
+                    self.player_toggle_candidate(toggle_candidate.number);
+                },
+                .clear_selected_cell => |_| {
+                    self.player_clear_selected_cell();
+                },
+                .undo => |_| {
+                    self.player_undo();
+                },
+                .redo => |_| {
+                    self.player_redo();
+                },
+                .fill_candidates => |_| {
+                    self.player_fill_candidates();
+                },
+                .fill_all_candidates => |_| {
+                    self.player_fill_candidates_all();
+                },
+                .clear_all_candidates => |_| {
+                    self.player_clear_candidates();
+                },
+                .get_hint => |_| {
+                    self.player_get_hint();
+                },
+                .solve_board => |_| {
+                    self.player_solve_board();
+                },
+            }
+        }
+
+        fn player_toggle_select(self: *Self, toggle_coord: u32_2) void {
+            const toggle_index = self.board.cell_index_from_coord(toggle_coord);
+
+            if (self.selected_cells.len > 0 and toggle_index == self.selected_cells[0]) {
+                self.selected_cells = self.selected_cells_full[0..0];
+            } else {
+                self.selected_cells = self.selected_cells_full[0..1];
+                self.selected_cells[0] = toggle_index;
+            }
+        }
+
+        fn player_move_selection(self: *Self, event: PlayerMoveSelection) void {
+            if (self.selected_cells.len > 0) {
+                var current_pos: i32_2 = @intCast(self.board.cell_coord_from_index(self.selected_cells[0]));
+
+                assert(all(current_pos < i32_2{ extent, extent }));
+
+                current_pos += .{ event.x_offset, event.y_offset };
+
+                inline for (.{ &current_pos[0], &current_pos[1] }) |coord| {
+                    if (coord.* < 0) {
+                        coord.* += extent;
+                    } else if (coord.* >= extent) {
+                        coord.* -= extent;
+                    }
+                }
+
+                self.selected_cells[0] = self.board.cell_index_from_coord(@intCast(current_pos));
+            }
+        }
+
+        fn player_set_number(self: *Self, number: u4) void {
+            if (number < self.board.extent and self.selected_cells.len > 0) {
+                solver_logical.place_number_remove_trivial_candidates(extent, &self.board, self.candidate_masks, self.selected_cells[0], number);
+                self.push_state_to_history();
+            }
+        }
+
+        fn player_toggle_candidate(self: *Self, number: u4) void {
+            if (number < self.board.extent and self.selected_cells.len > 0) {
+                const cell_index = self.selected_cells[0];
+
+                if (self.board.numbers[cell_index] == null) {
+                    self.candidate_masks[cell_index] ^= self.board.mask_for_number(number);
+                }
+
+                self.push_state_to_history();
+            }
+        }
+
+        fn player_clear_selected_cell(self: *Self) void {
+            if (self.selected_cells.len > 0) {
+                const cell_index = self.selected_cells[0];
+
+                self.board.numbers[cell_index] = null;
+                self.candidate_masks[cell_index] = 0;
+
+                self.push_state_to_history();
+            }
+        }
+
+        fn player_undo(self: *Self) void {
+            if (self.history_index > 0) {
+                self.history_index -= 1;
+
+                self.load_state_from_history(self.history_index);
+            }
+        }
+
+        fn player_redo(self: *Self) void {
+            if (self.history_index < self.max_history_index) {
+                self.history_index += 1;
+
+                self.load_state_from_history(self.history_index);
+            }
+        }
+
+        fn player_fill_candidates(self: *Self) void {
+            self.board.fill_candidate_mask(self.candidate_masks);
+
+            self.push_state_to_history();
+        }
+
+        fn player_fill_candidates_all(self: *Self) void {
+            const full_mask = self.board.full_candidate_mask();
+
+            for (self.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
+                if (self.board.numbers[cell_index] == null) {
+                    cell_candidate_mask.* = full_mask;
+                }
+            }
+
+            self.push_state_to_history();
+        }
+
+        fn player_clear_candidates(self: *Self) void {
+            for (self.candidate_masks) |*candidate_mask| {
+                candidate_mask.* = 0;
+            }
+
+            self.push_state_to_history();
+        }
+
+        fn player_get_hint(self: *Self) void {
+            solver_logical.solve_trivial_candidates(extent, &self.board, self.candidate_masks);
+
+            if (solver_logical.find_easiest_known_technique(extent, self.board, self.candidate_masks)) |solver_technique| {
+                self.flow = .WaitingForHintValidation;
+                self.solver_event = .{ .found_technique = solver_technique };
+            } else {
+                self.solver_event = .{ .found_nothing = undefined }; // FIXME clear this at one point
+            }
+        }
+
+        fn player_apply_hint(self: *Self) void {
+            if (self.solver_event) |solver_event| {
+                switch (solver_event) {
+                    .found_technique => |technique| {
+                        solver_logical.apply_technique(extent, &self.board, self.candidate_masks, technique);
+
+                        self.solver_event = null;
+
+                        self.push_state_to_history();
+
+                        self.flow = .Normal;
+                    },
+                    .found_nothing => {
+                        @panic("Solver event found nothing!");
+                    },
+                }
+            } else {
+                @panic("Solver event not found!");
+            }
+        }
+
+        fn player_solve_board(self: *Self) void {
+            if (solver.solve(extent, &self.board, .{ .dancing_links = .{} })) {
+                self.player_clear_candidates();
+                // NOTE: Already done in the body of clear_candidates.
+                // push_state_to_history(game);
+            } else {
+                // We didn't manage to solve the puzzle
+                // FIXME tell the player somehow
+            }
+        }
     };
-
-    save_state_to_history(&game, 0);
-
-    return game;
-}
-
-pub fn destroy_game_state(allocator: std.mem.Allocator, game: *GameState) void {
-    allocator.free(game.board_history);
-    allocator.free(game.candidate_masks_history);
-    allocator.free(game.selected_cells_full);
-    allocator.free(game.candidate_masks);
-
-    game.board.destroy(allocator);
-}
-
-pub const SolverEvent = union(enum) {
-    found_technique: solver_logical.Technique,
-    found_nothing,
-};
-
-fn get_board_history_slice(game: *GameState, history_index: u32) []?u4 {
-    const cell_count = game.board.numbers.len;
-    const start = cell_count * history_index;
-    const stop = start + cell_count;
-
-    return game.board_history[start..stop];
-}
-
-fn get_candidate_masks_history_slice(game: *GameState, history_index: u32) []u16 {
-    const cell_count = game.board.numbers.len;
-    const start = cell_count * history_index;
-    const stop = start + cell_count;
-
-    return game.candidate_masks_history[start..stop];
-}
-
-fn push_state_to_history(game: *GameState) void {
-    if (game.history_index + 1 < MaxHistorySize) {
-        game.history_index += 1;
-        game.max_history_index = game.history_index;
-
-        save_state_to_history(game, game.history_index);
-    }
-}
-
-fn save_state_to_history(game: *GameState, index: u32) void {
-    @memcpy(get_board_history_slice(game, index), game.board.numbers);
-    @memcpy(get_candidate_masks_history_slice(game, index), game.candidate_masks);
-}
-
-fn load_state_from_history(game: *GameState, index: u32) void {
-    @memcpy(game.board.numbers, get_board_history_slice(game, index));
-    @memcpy(game.candidate_masks, get_candidate_masks_history_slice(game, index));
 }
 
 pub const PlayerAction = union(enum) {
@@ -155,272 +355,68 @@ pub const PlayerAction = union(enum) {
     solve_board,
 };
 
-pub fn apply_player_event(game: *GameState, action: PlayerAction) void {
-    switch (game.flow) {
-        .Normal => {
-            apply_player_event_normal_flow(game, action);
-        },
-        .WaitingForHintValidation => {
-            switch (action) {
-                .get_hint => |_| {
-                    player_apply_hint(game);
-                },
-                else => {},
-            }
-        },
-    }
-
-    game.validation_error = check_board_for_validation_errors(game.board, game.candidate_masks);
-}
-
-fn apply_player_event_normal_flow(game: *GameState, action: PlayerAction) void {
-    switch (action) {
-        .toggle_select => |toggle_select| {
-            player_toggle_select(game, toggle_select.coord);
-        },
-        .move_selection => |move_selection| {
-            player_move_selection(game, move_selection);
-        },
-        .set_number => |set_number| {
-            player_set_number(game, set_number.number);
-        },
-        .toggle_candidate => |toggle_candidate| {
-            player_toggle_candidate(game, toggle_candidate.number);
-        },
-        .clear_selected_cell => |_| {
-            player_clear_selected_cell(game);
-        },
-        .undo => |_| {
-            player_undo(game);
-        },
-        .redo => |_| {
-            player_redo(game);
-        },
-        .fill_candidates => |_| {
-            player_fill_candidates(game);
-        },
-        .fill_all_candidates => |_| {
-            player_fill_candidates_all(game);
-        },
-        .clear_all_candidates => |_| {
-            player_clear_candidates(game);
-        },
-        .get_hint => |_| {
-            player_get_hint(game);
-        },
-        .solve_board => |_| {
-            player_solve_board(game);
-        },
-    }
-}
-
 const PlayerToggleSelect = struct {
     coord: u32_2,
 };
-
-fn player_toggle_select(game: *GameState, toggle_coord: u32_2) void {
-    const toggle_index = game.board.cell_index_from_coord(toggle_coord);
-
-    if (game.selected_cells.len > 0 and toggle_index == game.selected_cells[0]) {
-        game.selected_cells = game.selected_cells_full[0..0];
-    } else {
-        game.selected_cells = game.selected_cells_full[0..1];
-        game.selected_cells[0] = toggle_index;
-    }
-}
-
 const PlayerMoveSelection = struct {
     x_offset: i32,
     y_offset: i32,
 };
 
-fn player_move_selection(game: *GameState, event: PlayerMoveSelection) void {
-    if (game.selected_cells.len > 0) {
-        var current_pos: i32_2 = @intCast(game.board.cell_coord_from_index(game.selected_cells[0]));
-
-        const extent: i32 = @intCast(game.board.extent);
-        assert(all(current_pos < i32_2{ extent, extent }));
-
-        current_pos += .{ event.x_offset, event.y_offset };
-
-        inline for (.{ &current_pos[0], &current_pos[1] }) |coord| {
-            if (coord.* < 0) {
-                coord.* += extent;
-            } else if (coord.* >= extent) {
-                coord.* -= extent;
-            }
-        }
-
-        game.selected_cells[0] = game.board.cell_index_from_coord(@intCast(current_pos));
-    }
-}
-
 const PlayerSetNumberAtSelection = struct {
     number: u4,
 };
 
-fn player_set_number(game: *GameState, number: u4) void {
-    const extent = game.board.extent;
-    if (number < extent and game.selected_cells.len > 0) {
-        solver_logical.place_number_remove_trivial_candidates(&game.board, game.candidate_masks, game.selected_cells[0], number);
-        push_state_to_history(game);
-    }
-}
-
 const PlayerToggleCandidateAtSelection = struct {
     number: u4,
 };
-
-fn player_toggle_candidate(game: *GameState, number: u4) void {
-    const extent = game.board.extent;
-    if (number < extent and game.selected_cells.len > 0) {
-        const cell_index = game.selected_cells[0];
-
-        if (game.board.numbers[cell_index] == null) {
-            game.candidate_masks[cell_index] ^= game.board.mask_for_number(number);
-        }
-
-        push_state_to_history(game);
-    }
-}
-
-fn player_clear_selected_cell(game: *GameState) void {
-    if (game.selected_cells.len > 0) {
-        const cell_index = game.selected_cells[0];
-
-        game.board.numbers[cell_index] = null;
-        game.candidate_masks[cell_index] = 0;
-
-        push_state_to_history(game);
-    }
-}
-
-fn player_undo(game: *GameState) void {
-    if (game.history_index > 0) {
-        game.history_index -= 1;
-
-        load_state_from_history(game, game.history_index);
-    }
-}
-
-fn player_redo(game: *GameState) void {
-    if (game.history_index < game.max_history_index) {
-        game.history_index += 1;
-
-        load_state_from_history(game, game.history_index);
-    }
-}
-
-fn player_fill_candidates(game: *GameState) void {
-    game.board.fill_candidate_mask(game.candidate_masks);
-
-    push_state_to_history(game);
-}
-
-fn player_fill_candidates_all(game: *GameState) void {
-    const full_mask = game.board.full_candidate_mask();
-
-    for (game.candidate_masks, 0..) |*cell_candidate_mask, cell_index| {
-        if (game.board.numbers[cell_index] == null) {
-            cell_candidate_mask.* = full_mask;
-        }
-    }
-
-    push_state_to_history(game);
-}
-
-fn player_clear_candidates(game: *GameState) void {
-    for (game.candidate_masks) |*candidate_mask| {
-        candidate_mask.* = 0;
-    }
-
-    push_state_to_history(game);
-}
-
-fn player_get_hint(game: *GameState) void {
-    solver_logical.solve_trivial_candidates(&game.board, game.candidate_masks);
-
-    if (solver_logical.find_easiest_known_technique(game.board, game.candidate_masks)) |solver_technique| {
-        game.flow = .WaitingForHintValidation;
-        game.solver_event = .{ .found_technique = solver_technique };
-    } else {
-        game.solver_event = .{ .found_nothing = undefined }; // FIXME clear this at one point
-    }
-}
-
-fn player_apply_hint(game: *GameState) void {
-    if (game.solver_event) |solver_event| {
-        switch (solver_event) {
-            .found_technique => |technique| {
-                solver_logical.apply_technique(&game.board, game.candidate_masks, technique);
-
-                game.solver_event = null;
-
-                push_state_to_history(game);
-
-                game.flow = .Normal;
-            },
-            .found_nothing => {
-                @panic("Solver event found nothing!");
-            },
-        }
-    } else {
-        @panic("Solver event not found!");
-    }
-}
-
-fn player_solve_board(game: *GameState) void {
-    if (solver.solve(&game.board, .{ .dancing_links = .{} })) {
-        player_clear_candidates(game);
-        // NOTE: Already done in the body of clear_candidates.
-        // push_state_to_history(game);
-    } else {
-        // We didn't manage to solve the puzzle
-        // FIXME tell the player somehow
-    }
-}
 
 pub const ValidationError = struct {
     number: u4,
     is_candidate: bool,
     invalid_cell_index: u32,
     reference_cell_index: u32,
-    region: []u32,
+    region_index: board_generic.RegionIndex,
 };
 
-pub fn check_board_for_validation_errors(board: BoardState, candidate_masks: []const u16) ?ValidationError {
+pub fn check_board_for_validation_errors(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []const board_generic.MaskType(extent)) ?ValidationError {
     for (0..board.extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
         const number_mask = board.mask_for_number(number);
 
-        for (board.all_regions) |region| {
-            var last_cell_index: u32 = undefined;
-            var found = false;
+        inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+            for (0..extent) |sub_index| {
+                const region_index = board.regions.get_region_index(set, sub_index);
+                const region = board.regions.get(region_index);
 
-            for (region) |cell_index| {
-                if (found and candidate_masks[cell_index] & number_mask != 0) {
-                    return .{
-                        .number = number,
-                        .is_candidate = true,
-                        .invalid_cell_index = cell_index,
-                        .reference_cell_index = last_cell_index,
-                        .region = region,
-                    };
-                }
+                var last_cell_index: u32 = undefined;
+                var found = false;
 
-                if (board.numbers[cell_index] == number) {
-                    if (found) {
+                for (region) |cell_index| {
+                    if (found and candidate_masks[cell_index] & number_mask != 0) {
                         return .{
                             .number = number,
-                            .is_candidate = false,
+                            .is_candidate = true,
                             .invalid_cell_index = cell_index,
                             .reference_cell_index = last_cell_index,
-                            .region = region,
+                            .region_index = region_index,
                         };
                     }
 
-                    found = true;
-                    last_cell_index = cell_index;
+                    if (board.numbers[cell_index] == number) {
+                        if (found) {
+                            return .{
+                                .number = number,
+                                .is_candidate = false,
+                                .invalid_cell_index = cell_index,
+                                .reference_cell_index = last_cell_index,
+                                .region_index = region_index,
+                            };
+                        }
+
+                        found = true;
+                        last_cell_index = cell_index;
+                    }
                 }
             }
         }

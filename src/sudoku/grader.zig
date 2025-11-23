@@ -1,42 +1,34 @@
 const std = @import("std");
 
 const solver_logical = @import("solver_logical.zig");
-const board_legacy = @import("board_legacy.zig");
-const BoardState = board_legacy.BoardState;
+const board_generic = @import("board_generic.zig");
 
-const check_board_for_validation_errors = @import("game.zig").check_board_for_validation_errors;
+const game = @import("game.zig");
 
-pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: BoardState) !void {
+pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.State(extent)) void {
     // Create a dummy board we can modify
-    var board = try BoardState.create(allocator, const_board.game_type);
-    defer board.destroy(allocator);
+    var board = board_generic.State(extent).init(const_board.board_type);
 
-    @memcpy(board.numbers, const_board.numbers);
+    @memcpy(&board.numbers, &const_board.numbers);
 
-    const candidate_masks = try allocator.alloc(u16, board.numbers.len);
-    defer allocator.free(candidate_masks);
-
-    for (candidate_masks) |*candidate_mask| {
-        candidate_mask.* = 0;
-    }
-
+    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
     var technique_histogram = [_]u32{0} ** 8;
 
-    board.fill_candidate_mask(candidate_masks);
+    board.fill_candidate_mask(&candidate_masks);
 
     while (true) {
-        solver_logical.solve_trivial_candidates(&board, candidate_masks);
+        solver_logical.solve_trivial_candidates(extent, &board, &candidate_masks);
 
-        if (solver_logical.find_easiest_known_technique(board, candidate_masks)) |technique| {
+        if (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {
             const technique_index = @intFromEnum(technique);
             technique_histogram[technique_index] += 1;
 
-            solver_logical.apply_technique(&board, candidate_masks, technique);
+            solver_logical.apply_technique(extent, &board, &candidate_masks, technique);
         } else {
             break;
         }
 
-        if (check_board_for_validation_errors(board, candidate_masks)) |validation_error| {
+        if (game.check_board_for_validation_errors(extent, &board, &candidate_masks)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});
             return;
         }
