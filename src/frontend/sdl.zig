@@ -23,9 +23,6 @@ const u32_2 = common.u32_2;
 const ui_palette = @import("color_palette.zig");
 const ColorRGBA8 = ui_palette.ColorRGBA8;
 
-const CandidateBoxExtent = 33;
-const CellExtentBasePx = 2 + 3 * CandidateBoxExtent;
-
 const BlackColor = ui_palette.Lucky_Point;
 const BgColor = ui_palette.Swan_White;
 const BoxBgColor = ui_palette.Crocodile_Tooth;
@@ -43,25 +40,51 @@ const JigsawRegionSaturation = 0.32;
 const JigsawRegionValue = 1.0;
 
 const SdlContext = struct {
-    cell_extent: f32,
+    const CandidateBoxExtent = 25;
+    const CellExtentBasePx = 3 * CandidateBoxExtent;
+    const ThinLineWidthBasePx = 1;
+    const ThickLineExtraWidth = 1;
+    const ThickLineWidthBasePx = 2 * ThickLineExtraWidth + ThinLineWidthBasePx;
+
+    board_extent: u32,
     window: *c.SDL_Window,
     renderer: *c.SDL_Renderer,
     fonts: FontResources,
 
+    display_scaling: f32,
+    thin_line_px: f32,
+    thick_line_px: f32,
+    cell_offset_px: f32,
+    cell_extent_px: f32,
+    cell_stride_px: f32,
+
+    pub fn get_default_window_extent(board_extent: u32) u32 {
+        return ThickLineWidthBasePx * 2 + (CellExtentBasePx) * board_extent + ThinLineWidthBasePx * (board_extent - 1);
+    }
+
     pub fn cell_rectangle(self: @This(), cell_coord: u32_2) c.SDL_FRect {
         const rect = c.SDL_FRect{
-            .x = @as(f32, @floatFromInt(cell_coord[0])) * self.cell_extent + 1.0,
-            .y = @as(f32, @floatFromInt(cell_coord[1])) * self.cell_extent + 1.0,
-            .w = self.cell_extent,
-            .h = self.cell_extent,
+            .x = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[0])) * self.cell_stride_px,
+            .y = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[1])) * self.cell_stride_px,
+            .w = self.cell_extent_px,
+            .h = self.cell_extent_px,
         };
 
         return rect;
     }
 
-    pub fn resize_fonts(self: *@This(), allocator: std.mem.Allocator, board_extent: u32) !void {
+    pub fn set_display_scaling(self: *@This(), display_scale: f32) void {
+        self.display_scaling = display_scale;
+        self.thin_line_px = @as(f32, @floatFromInt(ThinLineWidthBasePx)) * display_scale;
+        self.thick_line_px = @as(f32, @floatFromInt(ThickLineWidthBasePx)) * display_scale;
+        self.cell_offset_px = self.thick_line_px;
+        self.cell_extent_px = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
+        self.cell_stride_px = self.cell_extent_px + self.thin_line_px;
+    }
+
+    pub fn resize_fonts(self: *@This(), allocator: std.mem.Allocator) !void {
         self.fonts.destroy(allocator);
-        self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent, board_extent);
+        self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent_px, self.board_extent);
     }
 };
 
@@ -72,8 +95,8 @@ fn create_sdl_context(allocator: std.mem.Allocator, board_extent: u32) !SdlConte
     }
     errdefer c.SDL_Quit();
 
-    const window_width = board_extent * CellExtentBasePx;
-    const window_height = board_extent * CellExtentBasePx;
+    const window_width = SdlContext.get_default_window_extent(board_extent);
+    const window_height = SdlContext.get_default_window_extent(board_extent);
 
     const window = c.SDL_CreateWindow("Sudoku", @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
@@ -93,17 +116,27 @@ fn create_sdl_context(allocator: std.mem.Allocator, board_extent: u32) !SdlConte
     errdefer c.SDL_DestroyRenderer(renderer);
 
     const display_scale = c.SDL_GetWindowDisplayScale(window);
-    const cell_extent = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
 
-    const fonts = try FontResources.create(allocator, renderer, cell_extent, board_extent);
-    errdefer fonts.destroy(allocator);
-
-    return .{
-        .cell_extent = cell_extent,
+    var context = SdlContext{
+        .board_extent = board_extent,
         .window = window,
         .renderer = renderer,
-        .fonts = fonts,
+        .fonts = undefined,
+
+        .display_scaling = undefined,
+        .thin_line_px = undefined,
+        .thick_line_px = undefined,
+        .cell_offset_px = undefined,
+        .cell_extent_px = undefined,
+        .cell_stride_px = undefined,
     };
+
+    context.set_display_scaling(display_scale);
+
+    context.fonts = try FontResources.create(allocator, renderer, context.cell_extent_px, board_extent);
+    errdefer context.fonts.destroy(allocator);
+
+    return context;
 }
 
 fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) void {
@@ -122,7 +155,7 @@ const FontResources = struct {
     small_text_textures: []*c.SDL_Texture,
     small_text_aabbs: []c.SDL_FRect,
 
-    pub fn create(allocator: std.mem.Allocator, renderer: *c.SDL_Renderer, cell_extent: f32, board_extent: u32) !Self {
+    pub fn create(allocator: std.mem.Allocator, renderer: *c.SDL_Renderer, cell_extent_px: f32, board_extent: u32) !Self {
         const text_palette = c.SDL_CreatePalette(256) orelse {
             c.SDL_Log("Unable to create palette: %s", c.SDL_GetError());
             return error.SDLInitializationFailed;
@@ -142,12 +175,12 @@ const FontResources = struct {
         _ = c.SDL_SetPaletteColors(text_palette, &palette_colors_full, 0, 256);
 
         const regular_ttf = try TrueType.load(@embedFile("font_regular"));
-        const regular_ttf_scale = regular_ttf.scaleForPixelHeight(cell_extent);
+        const regular_ttf_scale = regular_ttf.scaleForPixelHeight(cell_extent_px);
 
         const regular_ttf_textures, const regular_ttf_aabbs = try create_font_textures_and_aabbs(allocator, regular_ttf, regular_ttf_scale, renderer, text_palette, board_extent);
 
         const small_ttf = try TrueType.load(@embedFile("font_small"));
-        const small_ttf_scale = small_ttf.scaleForPixelHeight(cell_extent / 3.0);
+        const small_ttf_scale = small_ttf.scaleForPixelHeight(cell_extent_px / 3.0);
 
         const small_ttf_textures, const small_ttf_aabbs = try create_font_textures_and_aabbs(allocator, small_ttf, small_ttf_scale, renderer, text_palette, board_extent);
 
@@ -262,8 +295,8 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
 
     const candidate_layout = get_candidate_layout(board_extent);
     const candidate_box_extent = .{
-        sdl_context.cell_extent / @as(f32, @floatFromInt(candidate_layout[0])),
-        sdl_context.cell_extent / @as(f32, @floatFromInt(candidate_layout[1])),
+        sdl_context.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[0])),
+        sdl_context.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[1])),
     };
 
     var candidate_local_rects_full: [MaxSudokuExtent]c.SDL_FRect = undefined;
@@ -292,15 +325,15 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
                 },
                 c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
                     const display_scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
-                    sdl_context.cell_extent = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
 
-                    try sdl_context.resize_fonts(allocator, board_extent);
+                    sdl_context.set_display_scaling(display_scale);
+                    try sdl_context.resize_fonts(allocator);
                 },
                 c.SDL_EVENT_MOUSE_BUTTON_UP => {
                     _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
 
-                    const x: u32 = @intFromFloat(sdl_event.button.x / sdl_context.cell_extent);
-                    const y: u32 = @intFromFloat(sdl_event.button.y / sdl_context.cell_extent);
+                    const x: u32 = @intFromFloat(sdl_event.button.x / sdl_context.cell_extent_px);
+                    const y: u32 = @intFromFloat(sdl_event.button.y / sdl_context.cell_extent_px);
                     if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
                         sudoku.apply_player_event(game, .{ .toggle_select = .{ .coord = .{ x, y } } });
                     }
@@ -371,7 +404,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
         }
 
         // Render game
-        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, BgColor);
+        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
         _ = c.SDL_RenderClear(sdl_context.renderer);
 
         for (game.board.numbers, 0..) |number_opt, cell_index| {
@@ -465,7 +498,7 @@ pub fn execute_main_loop(allocator: std.mem.Allocator, game: *GameState) !void {
             }
         }
 
-        draw_sudoku_grid(sdl_context, game.board);
+        draw_sudoku_box_regions(sdl_context, game.board);
 
         set_window_title(sdl_context.window, game, title_string);
 
@@ -734,13 +767,14 @@ fn draw_validation_error(sdl_context: SdlContext, candidate_local_rects: []c.SDL
     }
 }
 
-fn draw_sudoku_grid(sdl_context: SdlContext, board: BoardState) void {
+fn draw_sudoku_box_regions(sdl_context: SdlContext, board: BoardState) void {
     _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
+
+    const thickness_large_half_offset = (sdl_context.thick_line_px - sdl_context.thin_line_px) / 2.0;
 
     for (0..board.numbers.len) |cell_index| {
         const box_index = board.box_indices[cell_index];
         const cell_coord = board.cell_coord_from_index(cell_index);
-        const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
         var thick_vertical = true;
 
@@ -748,6 +782,8 @@ fn draw_sudoku_grid(sdl_context: SdlContext, board: BoardState) void {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 1, 0 });
             const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_vertical = box_index != neighbor_box_index;
+        } else {
+            thick_vertical = false;
         }
 
         var thick_horizontal = true;
@@ -756,14 +792,16 @@ fn draw_sudoku_grid(sdl_context: SdlContext, board: BoardState) void {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 0, 1 });
             const neighbor_box_index = board.box_indices[neighbor_cell_index];
             thick_horizontal = box_index != neighbor_box_index;
+        } else {
+            thick_horizontal = false;
         }
 
         if (thick_vertical) {
             const rect = c.SDL_FRect{
-                .x = cell_rect.w * @as(f32, @floatFromInt(cell_coord[0] + 1)) - 2.0,
-                .y = cell_rect.h * @as(f32, @floatFromInt(cell_coord[1])) - 2.0,
-                .w = 5.0,
-                .h = cell_rect.h + 5.0,
+                .x = sdl_context.cell_offset_px - sdl_context.thin_line_px + sdl_context.cell_stride_px * @as(f32, @floatFromInt(cell_coord[0] + 1)) - thickness_large_half_offset,
+                .y = sdl_context.cell_offset_px - sdl_context.thin_line_px + sdl_context.cell_stride_px * @as(f32, @floatFromInt(cell_coord[1])) - thickness_large_half_offset,
+                .w = sdl_context.thick_line_px,
+                .h = sdl_context.cell_stride_px + sdl_context.thick_line_px,
             };
 
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &rect);
@@ -771,34 +809,14 @@ fn draw_sudoku_grid(sdl_context: SdlContext, board: BoardState) void {
 
         if (thick_horizontal) {
             const rect = c.SDL_FRect{
-                .x = cell_rect.w * @as(f32, @floatFromInt(cell_coord[0])) - 2.0,
-                .y = cell_rect.h * @as(f32, @floatFromInt(cell_coord[1] + 1)) - 2.0,
-                .w = cell_rect.w + 5.0,
-                .h = 5.0,
+                .x = sdl_context.cell_offset_px - sdl_context.thin_line_px + sdl_context.cell_stride_px * @as(f32, @floatFromInt(cell_coord[0])) - thickness_large_half_offset,
+                .y = sdl_context.cell_offset_px - sdl_context.thin_line_px + sdl_context.cell_stride_px * @as(f32, @floatFromInt(cell_coord[1] + 1)) - thickness_large_half_offset,
+                .w = sdl_context.cell_stride_px + sdl_context.thick_line_px,
+                .h = sdl_context.thick_line_px,
             };
 
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &rect);
         }
-    }
-
-    // Draw thin grid
-    for (0..board.extent + 1) |index| {
-        const horizontal_rect = c.SDL_FRect{
-            .x = @as(f32, @floatFromInt(index)) * sdl_context.cell_extent,
-            .y = 0.0,
-            .w = 1.0,
-            .h = @as(f32, @floatFromInt(board.extent)) * sdl_context.cell_extent,
-        };
-
-        const vertical_rect = c.SDL_FRect{
-            .x = 0.0,
-            .y = @as(f32, @floatFromInt(index)) * sdl_context.cell_extent,
-            .w = @as(f32, @floatFromInt(board.extent)) * sdl_context.cell_extent,
-            .h = 1.0,
-        };
-
-        _ = c.SDL_RenderFillRect(sdl_context.renderer, &vertical_rect);
-        _ = c.SDL_RenderFillRect(sdl_context.renderer, &horizontal_rect);
     }
 }
 
@@ -820,8 +838,8 @@ fn get_candidate_layout(game_extent: u32) @Vector(2, u32) {
 
 fn center_rect_inside_rect(rect: c.SDL_FRect, reference_rect: c.SDL_FRect) c.SDL_FRect {
     return .{
-        .x = reference_rect.x + @divTrunc((reference_rect.w - rect.w), 2),
-        .y = reference_rect.y + @divTrunc((reference_rect.h - rect.h), 2),
+        .x = @round(reference_rect.x + (reference_rect.w - rect.w) / 2.0),
+        .y = @round(reference_rect.y + (reference_rect.h - rect.h) / 2.0),
         .w = rect.w,
         .h = rect.h,
     };
