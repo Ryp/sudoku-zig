@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 const c = @cImport({
     @cInclude("SDL3/SDL.h");
@@ -37,112 +36,138 @@ const GridColor = BlackColor;
 const JigsawRegionSaturation = 0.32;
 const JigsawRegionValue = 1.0;
 
-const SdlContext = struct {
-    const CandidateBoxExtent = 25;
-    const CellExtentBasePx = 3 * CandidateBoxExtent;
-    const ThinLineWidthBasePx = 1;
-    const ThickLineExtraWidth = 1;
-    const ThickLineWidthBasePx = 2 * ThickLineExtraWidth + ThinLineWidthBasePx;
+fn SdlContext(board_extent: comptime_int) type {
+    return struct {
+        const Self = @This();
+        const CandidateBoxExtent = 25;
+        const CellExtentBasePx = 3 * CandidateBoxExtent;
+        const ThinLineWidthBasePx = 1;
+        const ThickLineExtraWidth = 1;
+        const ThickLineWidthBasePx = 2 * ThickLineExtraWidth + ThinLineWidthBasePx;
 
-    board_extent: u32,
-    window: *c.SDL_Window,
-    renderer: *c.SDL_Renderer,
-    fonts: FontResources,
+        comptime board_extent: comptime_int = board_extent,
+        window: *c.SDL_Window,
+        renderer: *c.SDL_Renderer,
+        candidate_local_rects: [board_extent]c.SDL_FRect,
+        fonts: FontResources,
 
-    display_scaling: f32,
-    thin_line_px: f32,
-    thick_line_px: f32,
-    cell_offset_px: f32,
-    cell_extent_px: f32,
-    cell_stride_px: f32,
+        // About DPI scaling: https://wiki.libsdl.org/SDL3/README-highdpi
+        window_display_scale: f32,
+        thin_line_px: f32,
+        thick_line_px: f32,
+        cell_offset_px: f32,
+        cell_extent_px: f32,
+        cell_stride_px: f32,
 
-    pub fn get_default_window_extent(board_extent: u32) u32 {
-        return ThickLineWidthBasePx * 2 + (CellExtentBasePx) * board_extent + ThinLineWidthBasePx * (board_extent - 1);
-    }
+        fn init(allocator: std.mem.Allocator) !Self {
+            if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
+                c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
+                return error.SDLInitializationFailed;
+            }
+            errdefer c.SDL_Quit();
 
-    pub fn cell_rectangle(self: @This(), cell_coord: u32_2) c.SDL_FRect {
-        const rect = c.SDL_FRect{
-            .x = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[0])) * self.cell_stride_px,
-            .y = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[1])) * self.cell_stride_px,
-            .w = self.cell_extent_px,
-            .h = self.cell_extent_px,
-        };
+            const primary_display = c.SDL_GetPrimaryDisplay();
+            const display_content_scale = c.SDL_GetDisplayContentScale(primary_display);
+            const scaled_window_extent: c_int = @intCast(get_default_window_extent(display_content_scale));
 
-        return rect;
-    }
+            const window = c.SDL_CreateWindow(DefaultWindowTitle, scaled_window_extent, scaled_window_extent, c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
+                c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
+                return error.SDLInitializationFailed;
+            };
+            errdefer c.SDL_DestroyWindow(window);
 
-    pub fn set_display_scaling(self: *@This(), display_scale: f32) void {
-        self.display_scaling = display_scale;
-        self.thin_line_px = @as(f32, @floatFromInt(ThinLineWidthBasePx)) * display_scale;
-        self.thick_line_px = @as(f32, @floatFromInt(ThickLineWidthBasePx)) * display_scale;
-        self.cell_offset_px = self.thick_line_px;
-        self.cell_extent_px = @as(f32, @floatFromInt(CellExtentBasePx)) * display_scale;
-        self.cell_stride_px = self.cell_extent_px + self.thin_line_px;
-    }
+            if (!c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1")) {
+                c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
+                return error.SDLInitializationFailed;
+            }
 
-    pub fn resize_fonts(self: *@This(), allocator: std.mem.Allocator) !void {
-        self.fonts.destroy(allocator);
-        self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent_px, self.board_extent);
-    }
-};
+            const renderer = c.SDL_CreateRenderer(window, null) orelse {
+                c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
+                return error.SDLInitializationFailed;
+            };
+            errdefer c.SDL_DestroyRenderer(renderer);
 
-fn create_sdl_context(allocator: std.mem.Allocator, board_extent: u32) !SdlContext {
-    if (!c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_EVENTS)) {
-        c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    }
-    errdefer c.SDL_Quit();
+            const window_display_scale = c.SDL_GetWindowDisplayScale(window);
 
-    const window_width = SdlContext.get_default_window_extent(board_extent);
-    const window_height = SdlContext.get_default_window_extent(board_extent);
+            var context = Self{
+                .window = window,
+                .renderer = renderer,
+                .candidate_local_rects = undefined,
+                .fonts = undefined,
 
-    const window = c.SDL_CreateWindow(DefaultWindowTitle, @intCast(window_width), @intCast(window_height), c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
-        c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
+                .window_display_scale = undefined,
+                .thin_line_px = undefined,
+                .thick_line_px = undefined,
+                .cell_offset_px = undefined,
+                .cell_extent_px = undefined,
+                .cell_stride_px = undefined,
+            };
+
+            context.set_window_display_scale(window_display_scale);
+
+            context.fonts = try FontResources.create(allocator, renderer, context.cell_extent_px, board_extent);
+            errdefer context.fonts.destroy(allocator);
+
+            return context;
+        }
+
+        fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            self.fonts.destroy(allocator);
+
+            c.SDL_DestroyRenderer(self.renderer);
+            c.SDL_DestroyWindow(self.window);
+            c.SDL_Quit();
+        }
+
+        pub fn get_default_window_extent(display_scale: f32) u32 {
+            const base_extent = ThickLineWidthBasePx * 2 + (CellExtentBasePx) * board_extent + ThinLineWidthBasePx * (board_extent - 1);
+            return @intFromFloat(display_scale * @as(f32, @floatFromInt(base_extent)));
+        }
+
+        pub fn cell_rectangle(self: Self, cell_coord: u32_2) c.SDL_FRect {
+            const rect = c.SDL_FRect{
+                .x = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[0])) * self.cell_stride_px,
+                .y = self.cell_offset_px + @as(f32, @floatFromInt(cell_coord[1])) * self.cell_stride_px,
+                .w = self.cell_extent_px,
+                .h = self.cell_extent_px,
+            };
+
+            return rect;
+        }
+
+        pub fn set_window_display_scale(self: *Self, window_display_scale: f32) void {
+            self.window_display_scale = window_display_scale;
+            self.thin_line_px = @as(f32, @floatFromInt(ThinLineWidthBasePx)) * window_display_scale;
+            self.thick_line_px = @as(f32, @floatFromInt(ThickLineWidthBasePx)) * window_display_scale;
+            self.cell_offset_px = self.thick_line_px;
+            self.cell_extent_px = @as(f32, @floatFromInt(CellExtentBasePx)) * window_display_scale;
+            self.cell_stride_px = self.cell_extent_px + self.thin_line_px;
+
+            self.compute_candidate_local_rects();
+        }
+
+        pub fn resize_fonts(self: *Self, allocator: std.mem.Allocator) !void {
+            self.fonts.destroy(allocator);
+            self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent_px, self.board_extent);
+        }
+
+        pub fn compute_candidate_local_rects(self: *Self) void {
+            const candidate_layout = get_candidate_layout(self.board_extent);
+            const candidate_box_extent = .{
+                self.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[0])),
+                self.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[1])),
+            };
+
+            for (&self.candidate_local_rects, 0..) |*candidate_local_rect, number| {
+                candidate_local_rect.* = .{
+                    .x = candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
+                    .y = candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
+                    .w = candidate_box_extent[0],
+                    .h = candidate_box_extent[1],
+                };
+            }
+        }
     };
-    errdefer c.SDL_DestroyWindow(window);
-
-    if (!c.SDL_SetHint(c.SDL_HINT_RENDER_VSYNC, "1")) {
-        c.SDL_Log("Unable to set hint: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    }
-
-    const renderer = c.SDL_CreateRenderer(window, null) orelse {
-        c.SDL_Log("Unable to create renderer: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    errdefer c.SDL_DestroyRenderer(renderer);
-
-    const display_scale = c.SDL_GetWindowDisplayScale(window);
-
-    var context = SdlContext{
-        .board_extent = board_extent,
-        .window = window,
-        .renderer = renderer,
-        .fonts = undefined,
-
-        .display_scaling = undefined,
-        .thin_line_px = undefined,
-        .thick_line_px = undefined,
-        .cell_offset_px = undefined,
-        .cell_extent_px = undefined,
-        .cell_stride_px = undefined,
-    };
-
-    context.set_display_scaling(display_scale);
-
-    context.fonts = try FontResources.create(allocator, renderer, context.cell_extent_px, board_extent);
-    errdefer context.fonts.destroy(allocator);
-
-    return context;
-}
-
-fn destroy_sdl_context(allocator: std.mem.Allocator, sdl_context: SdlContext) void {
-    sdl_context.fonts.destroy(allocator);
-
-    c.SDL_DestroyRenderer(sdl_context.renderer);
-    c.SDL_DestroyWindow(sdl_context.window);
-    c.SDL_Quit();
 }
 
 const FontResources = struct {
@@ -282,30 +307,13 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
     const board_extent = game.board.extent;
 
     var box_region_colors: [extent]ColorRGBA8 = undefined;
-
     fill_box_regions_colors(game.board.board_type, &box_region_colors);
 
-    var sdl_context = try create_sdl_context(allocator, board_extent);
+    var sdl_context = try SdlContext(extent).init(allocator);
+    defer sdl_context.deinit(allocator);
 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
-
-    const candidate_layout = get_candidate_layout(board_extent);
-    const candidate_box_extent = .{
-        sdl_context.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[0])),
-        sdl_context.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[1])),
-    };
-
-    var candidate_local_rects: [extent]c.SDL_FRect = undefined;
-
-    for (&candidate_local_rects, 0..) |*candidate_local_rect, number| {
-        candidate_local_rect.* = .{
-            .x = candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
-            .y = candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
-            .w = candidate_box_extent[0],
-            .h = candidate_box_extent[1],
-        };
-    }
 
     main_loop: while (true) {
         // Poll events
@@ -319,19 +327,33 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                 c.SDL_EVENT_QUIT => {
                     break :main_loop;
                 },
-                c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
-                    const display_scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
+                c.SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED => {
+                    const window_display_index = c.SDL_GetDisplayForWindow(sdl_context.window);
+                    const display_content_scale = c.SDL_GetDisplayContentScale(window_display_index);
 
-                    sdl_context.set_display_scaling(display_scale);
+                    const scaled_window_extent: c_int = @intCast(SdlContext(extent).get_default_window_extent(display_content_scale));
+
+                    _ = c.SDL_SetWindowSize(sdl_context.window, scaled_window_extent, scaled_window_extent);
+                },
+                c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
+                    const window_display_scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
+
+                    sdl_context.set_window_display_scale(window_display_scale);
                     try sdl_context.resize_fonts(allocator);
                 },
                 c.SDL_EVENT_MOUSE_BUTTON_UP => {
                     _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
 
-                    const x: u32 = @intFromFloat(sdl_event.button.x / sdl_context.cell_extent_px);
-                    const y: u32 = @intFromFloat(sdl_event.button.y / sdl_context.cell_extent_px);
+                    var selected_cell_coord = u32_2{
+                        @as(u32, @intFromFloat(sdl_event.button.x / sdl_context.cell_extent_px)),
+                        @as(u32, @intFromFloat(sdl_event.button.y / sdl_context.cell_extent_px)),
+                    };
+
+                    // Clamp to board extent
+                    selected_cell_coord = @min(selected_cell_coord, u32_2{ board_extent - 1, board_extent - 1 });
+
                     if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
-                        game.apply_player_event(.{ .toggle_select = .{ .coord = .{ x, y } } });
+                        game.apply_player_event(.{ .toggle_select = .{ .coord = selected_cell_coord } });
                     }
                 },
                 c.SDL_EVENT_KEY_DOWN => {
@@ -468,14 +490,14 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
         if (game.solver_event) |solver_event| {
             switch (solver_event) {
                 .found_technique => |technique| {
-                    draw_solver_technique_overlay(extent, game.board, sdl_context, candidate_local_rects, technique);
+                    draw_solver_technique_overlay(extent, game.board, sdl_context, technique);
                 },
                 .found_nothing => {}, // Do nothing
             }
         }
 
         if (game.validation_error) |validation_error| {
-            draw_validation_error(extent, game.board, sdl_context, candidate_local_rects, validation_error);
+            draw_validation_error(extent, game.board, sdl_context, validation_error);
         }
 
         for (game.board.numbers, 0..) |number_opt, cell_index| {
@@ -496,7 +518,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
             const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw candidates
-            for (candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
+            for (sdl_context.candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
                 const number: u4 = @intCast(number_usize);
                 if (((cell_candidate_mask >> number) & 1) != 0) {
                     var candidate_rect = candidate_local_rect;
@@ -516,12 +538,10 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
             }
         }
 
-        draw_sudoku_box_regions(sdl_context, extent, game.board);
+        draw_sudoku_box_regions(extent, game.board, sdl_context);
 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
-
-    destroy_sdl_context(allocator, sdl_context);
 }
 
 fn fill_box_regions_colors(board_type: board_generic.BoardType, box_region_colors: []ColorRGBA8) void {
@@ -549,7 +569,7 @@ fn fill_box_regions_colors(board_type: board_generic.BoardType, box_region_color
     }
 }
 
-fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext, candidate_local_rects: [extent]c.SDL_FRect, technique: solver_logical.Technique) void {
+fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext(extent), technique: solver_logical.Technique) void {
     switch (technique) {
         .naked_single => |naked_single| {
             const cell_coord = board.cell_coord_from_index(naked_single.cell_index);
@@ -558,7 +578,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
-            var candidate_rect = candidate_local_rects[naked_single.number];
+            var candidate_rect = sdl_context.candidate_local_rects[naked_single.number];
             candidate_rect.x += cell_rect.x;
             candidate_rect.y += cell_rect.y;
 
@@ -577,7 +597,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 // Draw naked pair
                 if (cell_index == naked_pair.cell_index_u or cell_index == naked_pair.cell_index_v) {
                     inline for (.{ naked_pair.number_a, naked_pair.number_b }) |number| {
-                        var candidate_rect = candidate_local_rects[number];
+                        var candidate_rect = sdl_context.candidate_local_rects[number];
 
                         candidate_rect.x += cell_rect.x;
                         candidate_rect.y += cell_rect.y;
@@ -590,7 +610,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
 
                 // Draw candidates to remove
                 if (region_mask & naked_pair.deletion_mask_b != 0) {
-                    var candidate_rect = candidate_local_rects[naked_pair.number_b];
+                    var candidate_rect = sdl_context.candidate_local_rects[naked_pair.number_b];
 
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
@@ -600,7 +620,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 }
 
                 if (region_mask & naked_pair.deletion_mask_a != 0) {
-                    var candidate_rect = candidate_local_rects[naked_pair.number_a];
+                    var candidate_rect = sdl_context.candidate_local_rects[naked_pair.number_a];
 
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
@@ -633,7 +653,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 const is_single = hidden_single.number == number;
 
                 if (is_single or is_deleted) {
-                    var candidate_rect = candidate_local_rects[number];
+                    var candidate_rect = sdl_context.candidate_local_rects[number];
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
@@ -666,7 +686,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                     const is_single = hidden_pair.a.number == number or hidden_pair.b.number == number;
 
                     if (is_single or is_deleted) {
-                        var candidate_rect = candidate_local_rects[number];
+                        var candidate_rect = sdl_context.candidate_local_rects[number];
                         candidate_rect.x += cell_rect.x;
                         candidate_rect.y += cell_rect.y;
 
@@ -688,7 +708,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 const region_index_mask = board.mask_for_number(@intCast(line_region_cell_index));
 
                 if (pointing_line.line_region_deletion_mask & region_index_mask != 0) {
-                    var candidate_rect = candidate_local_rects[pointing_line.number];
+                    var candidate_rect = sdl_context.candidate_local_rects[pointing_line.number];
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
@@ -707,7 +727,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
 
                 const region_index_mask = board.mask_for_number(@intCast(box_region_index));
                 if (pointing_line.box_region_mask & region_index_mask != 0) {
-                    var candidate_rect = candidate_local_rects[pointing_line.number];
+                    var candidate_rect = sdl_context.candidate_local_rects[pointing_line.number];
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
@@ -728,7 +748,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 const region_index_mask = board.mask_for_number(@intCast(line_region_cell_index));
 
                 if (box_line_reduction.box_region_deletion_mask & region_index_mask != 0) {
-                    var candidate_rect = candidate_local_rects[box_line_reduction.number];
+                    var candidate_rect = sdl_context.candidate_local_rects[box_line_reduction.number];
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
@@ -747,7 +767,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
 
                 const region_index_mask = board.mask_for_number(@intCast(box_region_index));
                 if (box_line_reduction.line_region_mask & region_index_mask != 0) {
-                    var candidate_rect = candidate_local_rects[box_line_reduction.number];
+                    var candidate_rect = sdl_context.candidate_local_rects[box_line_reduction.number];
                     candidate_rect.x += cell_rect.x;
                     candidate_rect.y += cell_rect.y;
 
@@ -759,7 +779,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
     }
 }
 
-fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext, candidate_local_rects: [extent]c.SDL_FRect, validation_error: game_state.ValidationError) void {
+fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext(extent), validation_error: game_state.ValidationError) void {
     const region = board.regions.get(validation_error.region_index);
 
     for (region) |cell_index| {
@@ -774,7 +794,7 @@ fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent
         _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
         if (validation_error.invalid_cell_index == cell_index and validation_error.is_candidate) {
-            var candidate_rect = candidate_local_rects[validation_error.number];
+            var candidate_rect = sdl_context.candidate_local_rects[validation_error.number];
             candidate_rect.x += cell_rect.x;
             candidate_rect.y += cell_rect.y;
 
@@ -784,7 +804,7 @@ fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent
     }
 }
 
-fn draw_sudoku_box_regions(sdl_context: SdlContext, extent: comptime_int, board: board_generic.State(extent)) void {
+fn draw_sudoku_box_regions(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext(extent)) void {
     _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
 
     const thickness_large_half_offset = (sdl_context.thick_line_px - sdl_context.thin_line_px) / 2.0;
