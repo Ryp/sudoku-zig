@@ -43,7 +43,7 @@ fn SdlContext(board_extent: comptime_int) type {
         const CellExtentBasePx = 3 * CandidateBoxExtent;
         const ThinLineWidthBasePx = 1;
         const ThickLineExtraWidth = 1;
-        const ThickLineWidthBasePx = 2 * ThickLineExtraWidth + ThinLineWidthBasePx;
+        const ThickLineWidthBasePx = 3 * ThickLineExtraWidth + ThinLineWidthBasePx;
 
         comptime board_extent: comptime_int = board_extent,
         window: *c.SDL_Window,
@@ -153,15 +153,19 @@ fn SdlContext(board_extent: comptime_int) type {
 
         pub fn compute_candidate_local_rects(self: *Self) void {
             const candidate_layout = get_candidate_layout(self.board_extent);
+
+            const fill_ratio = self.cell_extent_px * 0.85;
+            const offset = (self.cell_extent_px - fill_ratio) / 2.0;
+
             const candidate_box_extent = .{
-                self.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[0])),
-                self.cell_extent_px / @as(f32, @floatFromInt(candidate_layout[1])),
+                fill_ratio / @as(f32, @floatFromInt(candidate_layout[0])),
+                fill_ratio / @as(f32, @floatFromInt(candidate_layout[1])),
             };
 
             for (&self.candidate_local_rects, 0..) |*candidate_local_rect, number| {
                 candidate_local_rect.* = .{
-                    .x = candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
-                    .y = candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
+                    .x = offset + candidate_box_extent[0] * @as(f32, @floatFromInt(@rem(number, candidate_layout[0]))),
+                    .y = offset + candidate_box_extent[1] * @as(f32, @floatFromInt(@divTrunc(number, candidate_layout[0]))),
                     .w = candidate_box_extent[0],
                     .h = candidate_box_extent[1],
                 };
