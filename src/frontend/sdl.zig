@@ -36,23 +36,29 @@ const GridColor = BlackColor;
 const JigsawRegionSaturation = 0.32;
 const JigsawRegionValue = 1.0;
 
+const CellExtentBasePx = 75;
+const CellExtentBasePxMin = 16;
+const CellExtentBasePxMax = 160;
+
 fn SdlContext(board_extent: comptime_int) type {
     return struct {
         const Self = @This();
-        const CandidateBoxExtent = 25;
-        const CellExtentBasePx = 3 * CandidateBoxExtent;
+
         const ThinLineWidthBasePx = 1;
         const ThickLineExtraWidth = 1;
         const ThickLineWidthBasePx = 3 * ThickLineExtraWidth + ThinLineWidthBasePx;
 
         comptime board_extent: comptime_int = board_extent,
+
         window: *c.SDL_Window,
         renderer: *c.SDL_Renderer,
+        display_content_scale: f32,
+        window_display_scale: f32,
         candidate_local_rects: [board_extent]c.SDL_FRect,
         fonts: FontResources,
 
         // About DPI scaling: https://wiki.libsdl.org/SDL3/README-highdpi
-        window_display_scale: f32,
+        base_cell_extent: u32, // Doesn't change with DPI
         thin_line_px: f32,
         thick_line_px: f32,
         cell_offset_px: f32,
@@ -68,7 +74,9 @@ fn SdlContext(board_extent: comptime_int) type {
 
             const primary_display = c.SDL_GetPrimaryDisplay();
             const display_content_scale = c.SDL_GetDisplayContentScale(primary_display);
-            const scaled_window_extent: c_int = @intCast(get_default_window_extent(display_content_scale));
+
+            const base_cell_extent = CellExtentBasePx;
+            const scaled_window_extent: c_int = @intCast(get_default_window_extent(base_cell_extent, display_content_scale));
 
             const window = c.SDL_CreateWindow(DefaultWindowTitle, scaled_window_extent, scaled_window_extent, c.SDL_WINDOW_HIGH_PIXEL_DENSITY) orelse {
                 c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
@@ -92,10 +100,12 @@ fn SdlContext(board_extent: comptime_int) type {
             var context = Self{
                 .window = window,
                 .renderer = renderer,
+                .display_content_scale = display_content_scale,
+                .window_display_scale = window_display_scale,
                 .candidate_local_rects = undefined,
                 .fonts = undefined,
 
-                .window_display_scale = undefined,
+                .base_cell_extent = base_cell_extent,
                 .thin_line_px = undefined,
                 .thick_line_px = undefined,
                 .cell_offset_px = undefined,
@@ -103,7 +113,7 @@ fn SdlContext(board_extent: comptime_int) type {
                 .cell_stride_px = undefined,
             };
 
-            context.set_window_display_scale(window_display_scale);
+            context.update_content_metrics();
 
             context.fonts = try FontResources.create(allocator, renderer, context.cell_extent_px, board_extent);
             errdefer context.fonts.destroy(allocator);
@@ -119,8 +129,8 @@ fn SdlContext(board_extent: comptime_int) type {
             c.SDL_Quit();
         }
 
-        pub fn get_default_window_extent(display_scale: f32) u32 {
-            const base_extent = ThickLineWidthBasePx * 2 + (CellExtentBasePx) * board_extent + ThinLineWidthBasePx * (board_extent - 1);
+        pub fn get_default_window_extent(base_cell_extent: u32, display_scale: f32) u32 {
+            const base_extent = ThickLineWidthBasePx * 2 + base_cell_extent * board_extent + ThinLineWidthBasePx * (board_extent - 1);
             return @intFromFloat(display_scale * @as(f32, @floatFromInt(base_extent)));
         }
 
@@ -135,15 +145,20 @@ fn SdlContext(board_extent: comptime_int) type {
             return rect;
         }
 
-        pub fn set_window_display_scale(self: *Self, window_display_scale: f32) void {
-            self.window_display_scale = window_display_scale;
-            self.thin_line_px = @as(f32, @floatFromInt(ThinLineWidthBasePx)) * window_display_scale;
-            self.thick_line_px = @as(f32, @floatFromInt(ThickLineWidthBasePx)) * window_display_scale;
+        pub fn update_content_metrics(self: *Self) void {
+            self.thin_line_px = @as(f32, @floatFromInt(ThinLineWidthBasePx)) * self.window_display_scale;
+            self.thick_line_px = @as(f32, @floatFromInt(ThickLineWidthBasePx)) * self.window_display_scale;
             self.cell_offset_px = self.thick_line_px;
-            self.cell_extent_px = @as(f32, @floatFromInt(CellExtentBasePx)) * window_display_scale;
+            self.cell_extent_px = @as(f32, @floatFromInt(self.base_cell_extent)) * self.window_display_scale;
             self.cell_stride_px = self.cell_extent_px + self.thin_line_px;
 
             self.compute_candidate_local_rects();
+        }
+
+        pub fn resize_window(self: Self) void {
+            const scaled_window_extent: c_int = @intCast(get_default_window_extent(self.base_cell_extent, self.display_content_scale));
+
+            _ = c.SDL_SetWindowSize(self.window, scaled_window_extent, scaled_window_extent);
         }
 
         pub fn resize_fonts(self: *Self, allocator: std.mem.Allocator) !void {
@@ -296,6 +311,7 @@ fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, s
 fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
     return switch (key_code) {
         c.SDLK_1...c.SDLK_9 => @intCast(key_code - c.SDLK_1),
+        c.SDLK_KP_1...c.SDLK_KP_9 => @intCast(key_code - c.SDLK_KP_1),
         c.SDLK_A => 9,
         c.SDLK_B => 10,
         c.SDLK_C => 11,
@@ -335,22 +351,24 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                     const window_display_index = c.SDL_GetDisplayForWindow(sdl_context.window);
                     const display_content_scale = c.SDL_GetDisplayContentScale(window_display_index);
 
-                    const scaled_window_extent: c_int = @intCast(SdlContext(extent).get_default_window_extent(display_content_scale));
-
-                    _ = c.SDL_SetWindowSize(sdl_context.window, scaled_window_extent, scaled_window_extent);
+                    sdl_context.display_content_scale = display_content_scale;
+                    sdl_context.resize_window();
+                    sdl_context.update_content_metrics();
+                    try sdl_context.resize_fonts(allocator);
                 },
                 c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
                     const window_display_scale = c.SDL_GetWindowDisplayScale(sdl_context.window);
 
-                    sdl_context.set_window_display_scale(window_display_scale);
+                    sdl_context.window_display_scale = window_display_scale;
+                    sdl_context.update_content_metrics();
                     try sdl_context.resize_fonts(allocator);
                 },
                 c.SDL_EVENT_MOUSE_BUTTON_UP => {
                     _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
 
                     var selected_cell_coord = u32_2{
-                        @as(u32, @intFromFloat(sdl_event.button.x / sdl_context.cell_extent_px)),
-                        @as(u32, @intFromFloat(sdl_event.button.y / sdl_context.cell_extent_px)),
+                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.x - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
+                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.y - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
                     };
 
                     // Clamp to board extent
@@ -366,6 +384,18 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                         c.SDLK_ESCAPE => {
                             break :main_loop;
                         },
+                        c.SDLK_MINUS, c.SDLK_KP_MINUS => {
+                            sdl_context.base_cell_extent = @max(sdl_context.base_cell_extent - 5, CellExtentBasePxMin);
+                            sdl_context.resize_window();
+                            sdl_context.update_content_metrics();
+                            try sdl_context.resize_fonts(allocator);
+                        },
+                        c.SDLK_EQUALS, c.SDLK_KP_PLUS => {
+                            sdl_context.base_cell_extent = @min(sdl_context.base_cell_extent + 5, CellExtentBasePxMax);
+                            sdl_context.resize_window();
+                            sdl_context.update_content_metrics();
+                            try sdl_context.resize_fonts(allocator);
+                        },
                         else => switch (game.flow) {
                             .Normal => {
                                 const player_event =
@@ -374,11 +404,11 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                                         c.SDLK_RIGHT => PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
                                         c.SDLK_UP => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
                                         c.SDLK_DOWN => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
-                                        c.SDLK_1...c.SDLK_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
+                                        c.SDLK_1...c.SDLK_9, c.SDLK_KP_1...c.SDLK_KP_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
                                             PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
                                         else
                                             PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-                                        c.SDLK_DELETE, c.SDLK_0 => PlayerAction{ .clear_selected_cell = undefined },
+                                        c.SDLK_DELETE, c.SDLK_0, c.SDLK_KP_0 => PlayerAction{ .clear_selected_cell = undefined },
                                         c.SDLK_Z => if (is_any_ctrl_pressed)
                                             if (is_any_shift_pressed)
                                                 PlayerAction{ .redo = undefined }

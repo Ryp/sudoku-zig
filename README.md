@@ -1,6 +1,6 @@
 # Sudoku
 
-A Sudoku game that doesn't come with puzzles in the box, bring your own!
+A Sudoku game that works!
 Supports all box sizes as long as they hold between 2 and 16 numbers, and has a solver included.
 Lets you pencil out the candidates as well, which is necessary for advanced techniques.
 Jigsaw (squiggly) puzzles are also supported, but manually entering them in CLI is tedious.
@@ -16,6 +16,12 @@ zig build run -- 3 3 72..96..3...2.5....8...4.2........6.1.65.38.7.4........3.8.
 > **NOTE:** The sudoku string has to contain valid clue characters, anything else is considered as an empty cell.
 
 ![image](https://github.com/Ryp/sudoku-zig/assets/1625198/1e333afa-67a0-49b1-876a-8b180dd0b525)
+
+If you're in for a challenge, let the program generate a puzzle for you!
+A basic grader will run at startup letting you know how difficult the puzzle is.
+```sh
+zig build run -- 3 3
+```
 
 ## Controls
 
@@ -34,6 +40,7 @@ zig build run -- 3 3 72..96..3...2.5....8...4.2........6.1.65.38.7.4........3.8.
 | Clear candidates      | Shift + H          |
 | Solve                 | Enter              |
 | Get/apply a hint      | Shift + Enter      |
+| Change window size    | +/-                |
 
 > **NOTE:** Getting a hint only works if you already placed candidates on the board and assumes they are correct.
 > A preview will be shown to you with what the solver found and the game will wait for you to press the key again to apply it.
