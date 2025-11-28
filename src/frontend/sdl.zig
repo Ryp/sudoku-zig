@@ -25,10 +25,10 @@ const BgColor = ui_palette.Swan_White;
 const BoxBgColor = ui_palette.Crocodile_Tooth;
 const HighlightColor = ui_palette.Spiced_Butternut;
 const HighlightRegionColor = ColorRGBA8{ .r = 160, .g = 208, .b = 232, .a = 80 };
-const SameNumberHighlightColor = ui_palette.C64_Purple;
+const SameNumberHighlightColor = ui_palette.Mandarin_Sorbet;
 const SolverRed = ui_palette.Fluorescent_Red;
 const SolverGreen = ui_palette.Celestial_Green;
-const SolverOrange = ui_palette.Mandarin_Sorbet;
+const SolverOrange = HighlightColor;
 const SolverYellow = ui_palette.Spiced_Butternut;
 const TextColor = BlackColor;
 const GridColor = BlackColor;
@@ -451,14 +451,14 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
         _ = SDL_SetRenderDrawColor2(sdl_context.renderer, GridColor);
         _ = c.SDL_RenderClear(sdl_context.renderer);
 
-        for (game.board.numbers, 0..) |number_opt, cell_index| {
+        // Draw backgrounds
+        for (game.board.numbers, game.candidate_masks, 0..) |number_opt, cell_candidate_mask, cell_index| {
             const box_index = game.board.regions.box_indices[cell_index];
             const box_region_color = box_region_colors[box_index];
 
             const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
-            // Draw box background
             _ = SDL_SetRenderDrawColor2(sdl_context.renderer, box_region_color);
             _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
 
@@ -489,6 +489,22 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                     }
                 }
             }
+
+            // Draw highlighted candidates
+            for (sdl_context.candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
+                const number: u4 = @intCast(number_usize);
+
+                if (cell_candidate_mask & game.board.mask_for_number(number) != 0) {
+                    var candidate_rect = candidate_local_rect;
+                    candidate_rect.x += cell_rect.x;
+                    candidate_rect.y += cell_rect.y;
+
+                    if (highlight_mask & game.board.mask_for_number(number) != 0) {
+                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
+                        _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                    }
+                }
+            }
         }
 
         if (game.solver_event) |solver_event| {
@@ -504,45 +520,36 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
             draw_validation_error(extent, game.board, sdl_context, validation_error);
         }
 
-        for (game.board.numbers, 0..) |number_opt, cell_index| {
+        draw_sudoku_box_regions(extent, game.board, sdl_context);
+
+        // Draw numbers
+        for (game.board.numbers, game.candidate_masks, 0..) |number_opt, cell_candidate_mask, cell_index| {
             const cell_coord = game.board.cell_coord_from_index(cell_index);
             const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
-            // Draw placed numbers
             if (number_opt) |number| {
                 const glyph_rect = sdl_context.fonts.regular_text_aabbs[number];
                 const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
 
+                // Draw placed numbers
                 _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.fonts.regular_text_textures[number], &glyph_rect, &centered_glyph_rect);
-            }
-        }
+            } else {
+                // Draw candidate numbers
+                for (sdl_context.candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
+                    const number: u4 = @intCast(number_usize);
+                    if (cell_candidate_mask & game.board.mask_for_number(number) != 0) {
+                        var candidate_rect = candidate_local_rect;
+                        candidate_rect.x += cell_rect.x;
+                        candidate_rect.y += cell_rect.y;
 
-        for (game.candidate_masks, 0..) |cell_candidate_mask, cell_index| {
-            const cell_coord = game.board.cell_coord_from_index(cell_index);
-            const cell_rect = sdl_context.cell_rectangle(cell_coord);
+                        const glyph_rect = sdl_context.fonts.small_text_aabbs[number];
+                        const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
 
-            // Draw candidates
-            for (sdl_context.candidate_local_rects, 0..) |candidate_local_rect, number_usize| {
-                const number: u4 = @intCast(number_usize);
-                if (((cell_candidate_mask >> number) & 1) != 0) {
-                    var candidate_rect = candidate_local_rect;
-                    candidate_rect.x += cell_rect.x;
-                    candidate_rect.y += cell_rect.y;
-
-                    if (highlight_mask & game.board.mask_for_number(number) != 0) {
-                        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SameNumberHighlightColor);
-                        _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+                        _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.fonts.small_text_textures[number], &glyph_rect, &centered_glyph_rect);
                     }
-
-                    const glyph_rect = sdl_context.fonts.small_text_aabbs[number];
-                    const centered_glyph_rect = center_rect_inside_rect(glyph_rect, candidate_rect);
-
-                    _ = c.SDL_RenderTexture(sdl_context.renderer, sdl_context.fonts.small_text_textures[number], &glyph_rect, &centered_glyph_rect);
                 }
             }
         }
-
-        draw_sudoku_box_regions(extent, game.board, sdl_context);
 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
