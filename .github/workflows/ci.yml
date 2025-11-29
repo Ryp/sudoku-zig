@@ -5,17 +5,55 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{matrix.os}}
+        os:
+          - {
+            gha: ubuntu-latest,
+            zig: linux,
+          }
+          # - {
+          #   gha: windows-latest,
+          #   zig: windows,
+          # }
+          - {
+            gha: macos-latest,
+            zig: macos,
+          }
+    runs-on: ${{matrix.os.gha}}
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
-      - run: zig build
-      - run: zig build test
-      - run: zig build bench
-      - uses: actions/upload-artifact@v4
+      - name: Compile
+        run: zig build
+      - name: Test
+        run: zig build test
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: binary-${{matrix.os}}
+          name: binary-x86_64-${{matrix.os.zig}}
+          path: zig-out/bin/*
+      - name: Remove build folder
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force zig-out/bin
+      - name: Cross compile for aarch64 (non-MacOS)
+        if: ${{ matrix.os.zig != 'macos' }}
+        run: zig build -Dtarget=aarch64-${{matrix.os.zig}}
+      - name: Setup XCode
+        if: ${{ matrix.os.zig == 'macos' }}
+        uses : maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 16.4
+      - name: Cross compile for aarch64 (MacOS)
+        if: ${{ matrix.os.zig == 'macos' }}
+        run: |
+            sysroot_path=$(xcrun --sdk macosx --show-sdk-path)
+            echo $sysroot_path
+            echo $MD_APPLE_SDK_ROOT
+            zig build -Dtarget=aarch64-${{matrix.os.zig}} --sysroot "$sysroot_path"
+      - name: Upload cross compiled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-aarch64-${{matrix.os.zig}}
           path: zig-out/bin/*
 
   lint:
