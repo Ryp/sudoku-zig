@@ -5,6 +5,8 @@ const board_generic = @import("board_generic.zig");
 const RegionIndex = board_generic.RegionIndex;
 const RegionSet = board_generic.RegionSet;
 
+const known_boards = @import("known_boards.zig");
+
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
 const all = common.all;
@@ -644,5 +646,44 @@ pub fn apply_technique(extent: comptime_int, board: *board_generic.State(extent)
         .box_line_reduction => |box_line_reduction| {
             apply_box_line_reduction(extent, board.*, candidate_masks, box_line_reduction);
         },
+    }
+}
+
+pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
+    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
+    board.fill_candidate_mask(&candidate_masks);
+
+    while (true) {
+        solve_trivial_candidates(extent, board, &candidate_masks);
+
+        if (find_easiest_known_technique(extent, board.*, &candidate_masks)) |technique| {
+            apply_technique(extent, board, &candidate_masks, technique);
+        } else {
+            break;
+        }
+    }
+
+    for (board.numbers) |number_opt| {
+        if (number_opt == null) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+test {
+    inline for (known_boards.TestLogicalSolver) |known_board| {
+        const board_extent = comptime known_board.board_type.extent();
+
+        var board = board_generic.State(board_extent).init(known_board.board_type);
+        board.fill_board_from_string(known_board.start_string);
+
+        try std.testing.expect(solve(board_extent, &board));
+
+        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        solution_board.fill_board_from_string(known_board.solution_string);
+
+        try std.testing.expectEqual(solution_board.numbers, board.numbers);
     }
 }

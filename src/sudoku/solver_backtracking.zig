@@ -171,22 +171,17 @@ fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo,
 }
 
 test {
-    const board_type = board_generic.BoardType{ .regular = .{
-        .box_extent = .{ 3, 3 },
-    } };
+    inline for (known_boards.TestBacktrackingSolver) |known_board| {
+        const board_extent = comptime known_board.board_type.extent();
 
-    var solver_board = board_generic.State(board_type.extent()).init(board_type);
+        var board = board_generic.State(board_extent).init(known_board.board_type);
+        board.fill_board_from_string(known_board.start_string);
 
-    const known_board = known_boards.easy_000;
+        try std.testing.expect(solve(board_extent, &board, .{}));
 
-    solver_board.fill_board_from_string(known_board.board);
+        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        solution_board.fill_board_from_string(known_board.solution_string);
 
-    const solved = solve(solver_board.extent, &solver_board, .{});
-    try std.testing.expect(solved);
-
-    var solution_board = board_generic.State(9).init(solver_board.board_type);
-
-    solution_board.fill_board_from_string(known_board.solution);
-
-    try std.testing.expect(std.mem.eql(?u4, &solver_board.numbers, &solution_board.numbers));
+        try std.testing.expectEqual(solution_board.numbers, board.numbers);
+    }
 }

@@ -167,12 +167,10 @@ pub const ChoiceConstraintsIndices = struct {
 };
 
 pub fn fill_choices_constraint_link_indices(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []ChoiceConstraintsIndices, header_link_offset: u32) void {
-    const constraints_per_type_count = board.extent * board.extent;
-
-    const constraint_exs_headers_offset = header_link_offset + 0 * constraints_per_type_count;
-    const constraint_row_headers_offset = header_link_offset + 1 * constraints_per_type_count;
-    const constraint_col_headers_offset = header_link_offset + 2 * constraints_per_type_count;
-    const constraint_box_headers_offset = header_link_offset + 3 * constraints_per_type_count;
+    const constraint_exs_headers_offset = header_link_offset + 0 * board.extent_sqr;
+    const constraint_row_headers_offset = header_link_offset + 1 * board.extent_sqr;
+    const constraint_col_headers_offset = header_link_offset + 2 * board.extent_sqr;
+    const constraint_box_headers_offset = header_link_offset + 3 * board.extent_sqr;
 
     for (0..board.extent_sqr) |cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);
@@ -309,22 +307,17 @@ fn link_together(links: []DoublyLink, start_index: u32, count: u32) void {
 }
 
 test {
-    const board_type = board_generic.BoardType{ .regular = .{
-        .box_extent = .{ 3, 3 },
-    } };
+    inline for (known_boards.TestDancingLinksSolver) |known_board| {
+        const board_extent = comptime known_board.board_type.extent();
 
-    var solver_board = board_generic.State(board_type.extent()).init(board_type);
+        var board = board_generic.State(board_extent).init(known_board.board_type);
+        board.fill_board_from_string(known_board.start_string);
 
-    const known_board = known_boards.easy_000;
+        try std.testing.expect(solve(board_extent, &board, .{}));
 
-    solver_board.fill_board_from_string(known_board.board);
+        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        solution_board.fill_board_from_string(known_board.solution_string);
 
-    const solved = solve(solver_board.extent, &solver_board, .{});
-    try std.testing.expect(solved);
-
-    var solution_board = board_generic.State(9).init(solver_board.board_type);
-
-    solution_board.fill_board_from_string(known_board.solution);
-
-    try std.testing.expect(std.mem.eql(?u4, &solver_board.numbers, &solution_board.numbers));
+        try std.testing.expectEqual(solution_board.numbers, board.numbers);
+    }
 }
