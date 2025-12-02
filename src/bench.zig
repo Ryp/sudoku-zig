@@ -12,11 +12,14 @@ pub fn main() !void {
         var board = board_generic.State(board_extent).init(known_board.board_type);
         board.fill_board_from_string(known_board.start_string);
 
-        std.debug.assert(solver.solve(board_extent, &board, .{ .dancing_links = .{} }));
+        try std.testing.expect(solver.solve(board_extent, &board, .{ .dancing_links = .{} }));
 
         var solution_board = board_generic.State(board_extent).init(known_board.board_type);
         solution_board.fill_board_from_string(known_board.solution_string);
 
-        std.debug.assert(std.mem.eql(?u4, &board.numbers, &solution_board.numbers));
+        std.debug.print("Solver: {s}\n", .{board.string_from_board()});
+        std.debug.print("Actual: {s}\n", .{solution_board.string_from_board()});
+
+        try std.testing.expectEqual(board.numbers, solution_board.numbers);
     }
 }

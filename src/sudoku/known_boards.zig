@@ -9,9 +9,10 @@ pub const KnownBoard = struct {
 pub const TestLogicalSolver = .{
     easy,
     hidden_pair,
-    // with_pointing_line, // Too hard for logical solver alone
-    // box_line_reduction, // Too hard for logical solver alone
-    // skyscraper, // Too hard for logical solver alone
+    pointing_line,
+    // box_line_reduction, // Too hard for logical solver to finish
+    // skyscraper, // Too hard for logical solver to finish
+    easy4x3,
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
@@ -25,7 +26,8 @@ pub const TestDancingLinksSolver = .{
     pointing_line,
     box_line_reduction,
     skyscraper,
-    // jigsaw9 FIXME!
+    easy4x3,
+    // jigsaw9, FIXME Only solves after having a few clues!
     backtracking_killer,
     naive_backtracking_killer_1,
     naive_backtracking_killer_2,
@@ -38,6 +40,7 @@ pub const TestBacktrackingSolver = .{
     pointing_line,
     box_line_reduction,
     skyscraper,
+    easy4x3,
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
@@ -59,8 +62,8 @@ pub const hidden_pair = KnownBoard{
 
 pub const pointing_line = KnownBoard{
     .board_type = .{ .regular = .{ .box_extent = .{ 3, 3 } } },
-    .start_string = ".179.36......8....9.....5.7.72.1.43....4.2.7..6437.25.7.1....65....3......56.172.",
-    .solution_string = "417953682256187943983246517872519436539462871164378259791824365628735194345691728",
+    .start_string = "..47...5.1.3..9.7............5.4.8..3.......2..8215.4....67..8..5.......9...834..",
+    .solution_string = "684732159123459678579168234215346897346897512798215346432671985851924763967583421",
 };
 
 pub const box_line_reduction = KnownBoard{
@@ -73,6 +76,12 @@ pub const skyscraper = KnownBoard{
     .board_type = .{ .regular = .{ .box_extent = .{ 3, 3 } } },
     .start_string = "...7...5.1.4...6......4.2.8..3..5.964........7..2.6......5......7.9..58..8..2.74.",
     .solution_string = "839762154124358679567149238213475896456891327798236415341587962672914583985623741",
+};
+
+pub const easy4x3 = KnownBoard{
+    .board_type = .{ .regular = .{ .box_extent = .{ 4, 3 } } },
+    .start_string = "8.9....B.4C.C......3.B9...B5..A8.2...2.4..5........9........7...1B69...32...C47A...B........5........1..A.7...5.87..13...8A.3......2.14.5....8.C",
+    .solution_string = "839A721B64C5C72165438B9A64B59CA872311234A85C96B75B694327CA187AC81B6925432516C47A398BAC73B9865124498B2135AC76B65287C413A998AC36B1475231475A92B86C",
 };
 
 pub const jigsaw9 = KnownBoard{
