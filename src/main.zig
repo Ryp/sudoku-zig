@@ -3,49 +3,90 @@ const assert = std.debug.assert;
 
 const game = @import("sudoku/game.zig");
 const board_generic = @import("sudoku/board_generic.zig");
-const grader = @import("sudoku/grader.zig");
 
+const clap = @import("clap.zig");
 const sdl = @import("frontend/sdl.zig");
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help              Display this help and exit.
+        \\-W, --box_width <u32>   Box width for regular sudokus (default: 3)
+        \\-H, --box_height <u32>  Box height for regular sudokus (default: 3)
+        \\-j, --jigsaw <str>      Region indices string for jigsaw sudokus
+        \\<str>                   Sudoku string (you can use '.' for empty cells).
+        \\                        Unset this if you want to have a sudoku board generated for you.
+    );
 
-    const gpa_allocator = gpa.allocator();
-    // const allocator = std.heap.page_allocator;
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+    }) catch |err| {
+        // Report useful error and exit.
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    };
+    defer res.deinit();
 
-    // Parse arguments
-    const args = try std.process.argsAlloc(gpa_allocator);
-    defer std.process.argsFree(gpa_allocator, args);
+    if (res.args.help != 0) {
+        return clap.helpToFile(.stderr(), clap.Help, &params, .{});
+    }
 
-    assert(args.len >= 3);
+    var board_type: board_generic.BoardType = undefined;
 
-    // FIXME use different format for jigsaw (like 3x3 for regular)
-    const box_w = try std.fmt.parseUnsigned(u32, args[1], 0);
-    const box_h = try std.fmt.parseUnsigned(u32, args[2], 0);
+    if (res.args.jigsaw) |jigsaw_string| {
+        const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
 
-    const sudoku_string = if (args.len > 3) args[3] else "";
+        board_type = .{
+            .jigsaw = .{
+                .extent = jigsaw_extent,
+                .box_indices_string = jigsaw_string,
+            },
+        };
+    } else {
+        const box_w = res.args.box_width orelse 3;
+        const box_h = res.args.box_height orelse 3;
 
-    const board_type: board_generic.BoardType = if (args.len < 5)
-        .{ .regular = .{ .box_extent = .{ box_w, box_h } } }
-    else
-        .{ .jigsaw = .{ .extent = box_w * box_h, .box_indices_string = args[4] } };
+        board_type = .{ .regular = .{
+            .box_extent = .{ box_w, box_h },
+        } };
+    }
 
     const board_extent = board_type.extent();
 
     // Scalarize extent
-    inline for (board_generic.MinExtent..board_generic.MaxExtent) |comptime_extent| {
+    inline for (board_generic.MinExtent..board_generic.MaxExtent + 1) |comptime_extent| {
         if (board_extent == comptime_extent) {
-            var game_state = try game.State(comptime_extent).init(gpa_allocator, board_type, sudoku_string);
-            defer game_state.deinit(gpa_allocator);
+            var game_state = try game.State(comptime_extent).init(allocator, board_type, res.positionals[0]);
+            defer game_state.deinit(allocator);
 
-            grader.grade_and_print_summary(comptime_extent, game_state.board);
-
-            try sdl.execute_main_loop(comptime_extent, &game_state, gpa_allocator);
+            try sdl.execute_main_loop(comptime_extent, &game_state, allocator);
 
             break;
         }
     } else {
         @panic("Invalid sudoku extent!");
     }
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const allocator = gpa.allocator();
+    // const allocator = std.heap.page_allocator;
+
+    try main_with_allocator(allocator);
+}
+
+fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {
+    const string_len = jigsaw_string.len;
+
+    for (board_generic.MinExtent..board_generic.MaxExtent + 1) |extent| {
+        if (string_len == extent * extent) {
+            return @intCast(extent);
+        }
+    }
+
+    return error.InvalidJigsawStringLength;
 }

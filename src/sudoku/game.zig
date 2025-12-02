@@ -41,18 +41,18 @@ pub fn State(extent: comptime_int) type {
         validation_error: ?ValidationError,
         solver_event: ?SolverEvent,
 
-        pub fn init(allocator: std.mem.Allocator, board_type: board_generic.BoardType, sudoku_string: []const u8) !Self {
+        pub fn init(allocator: std.mem.Allocator, board_type: board_generic.BoardType, sudoku_string_opt: ?[]const u8) !Self {
             var board = board_generic.State(extent).init(board_type);
 
-            if (sudoku_string.len == 0) {
+            if (sudoku_string_opt) |sudoku_string| {
+                board.fill_board_from_string(sudoku_string);
+            } else {
                 var random_buffer: [8]u8 = undefined;
                 std.crypto.random.bytes(&random_buffer);
 
                 const seed = std.mem.readInt(u64, &random_buffer, .little);
 
                 board = generator.generate(extent, board_type, seed, .{ .dancing_links = .{ .difficulty = 200 } });
-            } else {
-                board.fill_board_from_string(sudoku_string);
             }
 
             std.debug.print("Board: {s}\n", .{&board.string_from_board()});

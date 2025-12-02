@@ -47,9 +47,11 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.linkLibrary(sdl_lib);
 
-    const true_type_dep = b.dependency("TrueType", .{}).module("TrueType");
+    const true_type = b.dependency("TrueType", .{});
+    exe.root_module.addImport("TrueType.zig", true_type.module("TrueType"));
 
-    exe.root_module.addImport("TrueType.zig", true_type_dep);
+    const clap = b.dependency("clap", .{});
+    exe.root_module.addImport("clap.zig", clap.module("clap"));
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

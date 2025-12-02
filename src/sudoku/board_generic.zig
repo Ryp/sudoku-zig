@@ -224,7 +224,7 @@ pub fn State(extent: comptime_int) type {
         }
 
         pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) void {
-            std.debug.assert(sudoku_string.len == self.Extent * self.Extent);
+            std.debug.assert(sudoku_string.len == self.ExtentSqr);
 
             for (&self.numbers, sudoku_string) |*board_number_opt, char| {
                 var number_opt: ?SelfNumberType = null;

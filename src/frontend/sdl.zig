@@ -12,6 +12,8 @@ const solver_logical = @import("../sudoku/solver_logical.zig");
 const game_state = @import("../sudoku/game.zig");
 const PlayerAction = game_state.PlayerAction;
 
+const grader = @import("../sudoku/grader.zig");
+
 const common = @import("../sudoku/common.zig");
 const u32_2 = common.u32_2;
 
@@ -334,6 +336,8 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
+
+    grader.grade_and_print_summary(extent, game.board);
 
     main_loop: while (true) {
         // Poll events

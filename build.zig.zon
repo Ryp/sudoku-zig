@@ -12,6 +12,10 @@
             .url = "git+https://codeberg.org/andrewrk/TrueType.git#7543e2dca70267e8f09e37be00fbc0385138581d",
             .hash = "TrueType-0.0.0-Ne-mWHIGAQBwHsiS9z_vbr1SkVZCkG01Vpzrs079dzIO",
         },
+        .clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.11.0.tar.gz",
+            .hash = "clap-0.11.0-oBajB-HnAQDPCKYzwF7rO3qDFwRcD39Q0DALlTSz5H7e",
+        },
     },
     .paths = .{
         "res",

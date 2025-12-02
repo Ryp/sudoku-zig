@@ -166,7 +166,7 @@ fn cover_columns_for_random_clues(extent: comptime_int, board: *board_generic.St
         var is_taken = true;
 
         while (is_taken) {
-            number = random.uintLessThan(u4, @intCast(board.Extent));
+            number = @intCast(random.uintLessThan(usize, board.Extent));
             is_taken = taken_numbers[number];
         }
 
