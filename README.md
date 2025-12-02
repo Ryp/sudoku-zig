@@ -8,7 +8,7 @@ Supports all box sizes as long as they hold between 2 and 16 numbers, and has a 
 
 Jigsaw (squiggly) puzzles are also supported, but manually entering them in CLI is tedious.
 
-![image](https://github.com/Ryp/sudoku-zig/assets/1625198/aeef8711-5366-4aad-886a-1e3bf295cd86)
+<img width="1390" height="1386" alt="image" src="https://github.com/user-attachments/assets/c0911d0f-f6b6-48f8-ac6f-fc7c0e8de0d3" />
 
 ## Running
 
@@ -19,8 +19,6 @@ zig build run -- 72..96..3...2.5....8...4.2........6.1.65.38.7.4........3.8...9.
 ```
 
 > **NOTE:** The sudoku string has to contain valid clue characters, anything else is considered as an empty cell.
-
-![image](https://github.com/Ryp/sudoku-zig/assets/1625198/1e333afa-67a0-49b1-876a-8b180dd0b525)
 
 If you're in for a challenge, let the program generate a puzzle for you!
 A basic grader will run at startup letting you know how difficult the puzzle is.
@@ -62,7 +60,7 @@ zig build -Doptimize=ReleaseFast run
 zig build run -- -W 4 -H 3 8.9....B.4C.C......3.B9...B5..A8.2...2.4..5........9........7...1B69...32...C47A...B........5........1..A.7...5.87..13...8A.3......2.14.5....8.C
 ```
 
-![image](https://github.com/Ryp/sudoku-zig/assets/1625198/4368f413-929f-46ea-a1fd-ce00478b7131)
+<img width="1846" height="1842" alt="image" src="https://github.com/user-attachments/assets/ace7e5ef-55b0-476e-99d5-dcde7182e885" />
 
 ### Jigsaw Sudoku
 
@@ -74,7 +72,7 @@ zig build run -- --jigsaw 111111222113444422133455442334455222366657777366559997
 > associated region, so it's like the sudoku string but instead of clues you write
 > the region index.
 
-![image](https://github.com/Ryp/sudoku-zig/assets/1625198/5982b7f8-c556-40ea-bc1b-68583388342f)
+<img width="1390" height="1386" alt="image" src="https://github.com/user-attachments/assets/d5d48f65-561d-4db4-a8b7-30d3b1f8a836" />
 
 ## Troubleshooting
 
