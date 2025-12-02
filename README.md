@@ -27,7 +27,8 @@ A basic grader will run at startup letting you know how difficult the puzzle is.
 zig build -Doptimize=ReleaseFast run
 ```
 
-> **NOTE:** The puzzle generation slow, so it's good to compile with optimizations enabled.
+> **NOTE:** The puzzle generation is slow, so it's good to compile with optimizations
+> enabled.
 
 ## Controls
 
