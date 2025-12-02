@@ -30,9 +30,9 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
 
     // All links are allocated sequentially, so we're doing some math to compute relative addresses.
     const constraint_type_count = 4;
-    const constraints_per_type_count = board.extent * board.extent;
+    const constraints_per_type_count = board.Extent * board.Extent;
     const constraint_count = constraints_per_type_count * constraint_type_count;
-    const node_per_constraint_count = board.extent;
+    const node_per_constraint_count = board.Extent;
     const choice_link_count = constraint_count * node_per_constraint_count;
     const link_count = 1 + constraint_count + choice_link_count;
 
@@ -48,7 +48,7 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     const choice_link_offset = header_link_offset + header_link_count;
 
     // Allocate an array indexed by row giving containing the header link indices for the 4 satisfied contraints
-    const choices_count = board.extent * board.extent_sqr;
+    const choices_count = board.Extent * board.ExtentSqr;
     const choices_constraint_link_indices = allocator.alloc(ChoiceConstraintsIndices, choices_count) catch unreachable; // FIXME
     defer allocator.free(choices_constraint_link_indices);
 
@@ -107,8 +107,8 @@ fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(e
             }
 
             if (solve_dancing_links_recursive(extent, ctx)) {
-                const cell_index = row_index / ctx.board.extent;
-                const number = row_index % ctx.board.extent;
+                const cell_index = row_index / ctx.board.Extent;
+                const number = row_index % ctx.board.Extent;
 
                 ctx.board.numbers[cell_index] = @intCast(number);
 
@@ -167,27 +167,27 @@ pub const ChoiceConstraintsIndices = struct {
 };
 
 pub fn fill_choices_constraint_link_indices(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []ChoiceConstraintsIndices, header_link_offset: u32) void {
-    const constraint_exs_headers_offset = header_link_offset + 0 * board.extent_sqr;
-    const constraint_row_headers_offset = header_link_offset + 1 * board.extent_sqr;
-    const constraint_col_headers_offset = header_link_offset + 2 * board.extent_sqr;
-    const constraint_box_headers_offset = header_link_offset + 3 * board.extent_sqr;
+    const constraint_exs_headers_offset = header_link_offset + 0 * board.ExtentSqr;
+    const constraint_row_headers_offset = header_link_offset + 1 * board.ExtentSqr;
+    const constraint_col_headers_offset = header_link_offset + 2 * board.ExtentSqr;
+    const constraint_box_headers_offset = header_link_offset + 3 * board.ExtentSqr;
 
-    for (0..board.extent_sqr) |cell_index| {
+    for (0..board.ExtentSqr) |cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);
         const cell_col = cell_coord[0];
         const cell_row = cell_coord[1];
         const cell_box = board.regions.box_indices[cell_index];
 
-        for (0..board.extent) |number_usize| {
+        for (0..board.Extent) |number_usize| {
             const number: u32 = @intCast(number_usize);
-            const choice_index = get_choice_index(cell_index, number, board.extent);
+            const choice_index = get_choice_index(cell_index, number, board.Extent);
 
             // Get indices for each four constraints we satisfy
             choices_constraint_link_indices[choice_index] = ChoiceConstraintsIndices{
                 .exs_index = constraint_exs_headers_offset + @as(u32, @intCast(cell_index)),
-                .row_index = constraint_row_headers_offset + cell_row * @as(u32, board.extent) + number,
-                .col_index = constraint_col_headers_offset + cell_col * @as(u32, board.extent) + number,
-                .box_index = constraint_box_headers_offset + cell_box * @as(u32, board.extent) + number,
+                .row_index = constraint_row_headers_offset + cell_row * @as(u32, board.Extent) + number,
+                .col_index = constraint_col_headers_offset + cell_col * @as(u32, board.Extent) + number,
+                .box_index = constraint_box_headers_offset + cell_box * @as(u32, board.Extent) + number,
             };
         }
     }
@@ -224,7 +224,7 @@ fn cover_columns_for_given_clues(extent: comptime_int, board: board_generic.Stat
     // Let's remove the rows we already have a clue for
     for (board.numbers, 0..) |number_opt, cell_index| {
         if (number_opt) |number| {
-            const choice_index = get_choice_index(@intCast(cell_index), number, board.extent);
+            const choice_index = get_choice_index(@intCast(cell_index), number, board.Extent);
             const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
 
             cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);

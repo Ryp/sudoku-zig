@@ -11,7 +11,7 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
 
     @memcpy(&board.numbers, &const_board.numbers);
 
-    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
+    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
     var technique_histogram = [_]u32{0} ** 8;
 
     board.fill_candidate_mask(&candidate_masks);

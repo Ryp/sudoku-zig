@@ -44,13 +44,13 @@ pub const RegionSet = enum(usize) {
 pub fn State(extent: comptime_int) type {
     return struct {
         const Self = @This();
-        const NumberType = u4;
-        const ExtentSqr = extent * extent;
+        const SelfExtentSqr = extent * extent;
+        const SelfNumberType = u4;
 
         // This struct is used as a helper to iterate over regions of the board without doing index math everywhere.
         const Regions = struct {
             all: [@intFromEnum(RegionSet.Count)][extent][extent]u32,
-            box_indices: [ExtentSqr]NumberType,
+            box_indices: [SelfExtentSqr]SelfNumberType,
 
             pub fn get_region_index(self: Regions, set: RegionSet, region_index: usize) RegionIndex {
                 _ = self; // Unused
@@ -120,8 +120,8 @@ pub fn State(extent: comptime_int) type {
                 return regions;
             }
 
-            fn regular_box_indices(box_extent: u32_2) [ExtentSqr]NumberType {
-                var box_indices: [ExtentSqr]NumberType = undefined;
+            fn regular_box_indices(box_extent: u32_2) [SelfExtentSqr]SelfNumberType {
+                var box_indices: [SelfExtentSqr]SelfNumberType = undefined;
 
                 for (&box_indices, 0..) |*box_index, cell_index| {
                     const cell_coord = _cell_coord_from_index(cell_index);
@@ -134,12 +134,12 @@ pub fn State(extent: comptime_int) type {
                 return box_indices;
             }
 
-            fn jigsaw_box_indices(box_indices_string: []const u8) [ExtentSqr]NumberType {
-                var box_indices: [ExtentSqr]NumberType = undefined;
+            fn jigsaw_box_indices(box_indices_string: []const u8) [SelfExtentSqr]SelfNumberType {
+                var box_indices: [SelfExtentSqr]SelfNumberType = undefined;
 
-                if (box_indices_string.len < ExtentSqr) {
+                if (box_indices_string.len < SelfExtentSqr) {
                     @panic("Invalid box indices: string too short");
-                } else if (box_indices_string.len > ExtentSqr) {
+                } else if (box_indices_string.len > SelfExtentSqr) {
                     @panic("Invalid box indices: string too long");
                 }
 
@@ -171,19 +171,19 @@ pub fn State(extent: comptime_int) type {
             }
         };
 
-        comptime extent: comptime_int = extent,
-        comptime extent_sqr: comptime_int = extent * extent, // Total amount of elements in a board
-        comptime numbers_string: [extent]u8 = MaxNumbersString[0..extent].*,
-        comptime mask_type: type = MaskType(extent),
+        comptime Extent: comptime_int = extent,
+        comptime ExtentSqr: comptime_int = extent * extent, // Total amount of elements in a board
+        comptime NumbersString: [extent]u8 = MaxNumbersString[0..extent].*,
+        comptime MaskType: type = MaskType(extent),
 
-        numbers: [ExtentSqr]?NumberType,
+        numbers: [SelfExtentSqr]?SelfNumberType,
         regions: Regions,
         board_type: BoardType,
 
         // Creates an empty sudoku board
         pub fn init(board_type: BoardType) Self {
             return .{
-                .numbers = .{null} ** ExtentSqr,
+                .numbers = .{null} ** SelfExtentSqr,
                 .regions = Regions.init(board_type),
                 .board_type = board_type,
             };
@@ -193,7 +193,7 @@ pub fn State(extent: comptime_int) type {
             const x: u32 = @intCast(cell_index % extent);
             const y: u32 = @intCast(cell_index / extent);
 
-            std.debug.assert(cell_index < ExtentSqr);
+            std.debug.assert(cell_index < SelfExtentSqr);
             std.debug.assert(x < extent and y < extent);
 
             return .{ x, y };
@@ -215,19 +215,19 @@ pub fn State(extent: comptime_int) type {
             return _cell_index_from_coord(position);
         }
 
-        pub fn mask_for_number(self: Self, number: NumberType) self.mask_type {
-            return @as(self.mask_type, 1) << number;
+        pub fn mask_for_number(_: Self, number: SelfNumberType) MaskType(extent) {
+            return @as(MaskType(extent), 1) << number;
         }
 
-        pub fn full_candidate_mask(self: Self) self.mask_type {
-            return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
+        pub fn full_candidate_mask(self: Self) MaskType(extent) {
+            return @intCast((@as(u32, 1) << @intCast(self.Extent)) - 1);
         }
 
         pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) void {
-            std.debug.assert(sudoku_string.len == self.extent * self.extent);
+            std.debug.assert(sudoku_string.len == self.Extent * self.Extent);
 
             for (&self.numbers, sudoku_string) |*board_number_opt, char| {
-                var number_opt: ?NumberType = null;
+                var number_opt: ?SelfNumberType = null;
 
                 if (char >= '1' and char <= '9') {
                     number_opt = @intCast(char - '1');
@@ -238,29 +238,29 @@ pub fn State(extent: comptime_int) type {
                 }
 
                 if (number_opt) |number| {
-                    std.debug.assert(number < self.extent);
+                    std.debug.assert(number < self.Extent);
                 }
 
                 board_number_opt.* = number_opt;
             }
         }
 
-        pub fn string_from_board(self: Self) [self.extent_sqr]u8 {
-            var string: [self.extent_sqr]u8 = undefined;
+        pub fn string_from_board(self: Self) [self.ExtentSqr]u8 {
+            var string: [self.ExtentSqr]u8 = undefined;
 
             for (self.numbers, &string) |number_opt, *char| {
-                char.* = if (number_opt) |number| self.numbers_string[number] else '.';
+                char.* = if (number_opt) |number| self.NumbersString[number] else '.';
             }
 
             return string;
         }
 
-        pub fn fill_candidate_mask(self: Self, candidate_masks: []self.mask_type) void {
+        pub fn fill_candidate_mask(self: Self, candidate_masks: []MaskType(extent)) void {
             const full_mask = self.full_candidate_mask();
 
-            var col_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
-            var row_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
-            var box_region_candidate_masks: [extent]self.mask_type = .{full_mask} ** extent;
+            var col_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
+            var row_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
+            var box_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
 
             for (self.numbers, 0..) |number_opt, cell_index| {
                 if (number_opt) |number| {

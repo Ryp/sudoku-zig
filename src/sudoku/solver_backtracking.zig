@@ -11,7 +11,7 @@ pub const Options = struct {
 };
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
-    var free_cell_list_full: [board.extent_sqr]CellInfo = undefined;
+    var free_cell_list_full: [board.ExtentSqr]CellInfo = undefined;
     const free_cell_list = populate_free_list(extent, board, &free_cell_list_full);
 
     sort_free_cell_list(extent, board, free_cell_list);
@@ -56,7 +56,7 @@ fn solve_backtracking_recursive(extent: comptime_int, board: *board_generic.Stat
 }
 
 fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.State(extent), free_cell_list: []CellInfo) bool {
-    var current_guess_full = std.mem.zeroes([board.extent_sqr]u4);
+    var current_guess_full = std.mem.zeroes([board.ExtentSqr]u4);
     var current_guess = current_guess_full[0..free_cell_list.len];
 
     var list_index: u32 = 0;
@@ -94,10 +94,10 @@ fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.Stat
     return true;
 }
 
-fn cell_valid_candidates(extent: comptime_int, board: *const board_generic.State(extent), cell_info: CellInfo) [board.extent]bool {
+fn cell_valid_candidates(extent: comptime_int, board: *const board_generic.State(extent), cell_info: CellInfo) [board.Extent]bool {
     const box = board.regions.box_indices[cell_info.index];
 
-    var valid_candidates: [board.extent]bool = .{true} ** board.extent;
+    var valid_candidates: [board.Extent]bool = .{true} ** board.Extent;
 
     inline for (.{ board.regions.col(cell_info.col), board.regions.row(cell_info.row), board.regions.box(box) }) |region| {
         for (region) |cell_index| {
@@ -131,8 +131,7 @@ fn populate_free_list(extent: comptime_int, board: *const board_generic.State(ex
 
 fn sort_free_cell_list(extent: comptime_int, board: *const board_generic.State(extent), free_cell_list: []CellInfo) void {
     const full_mask = board.full_candidate_mask();
-
-    var region_type_masks: [3][board.extent]u16 = undefined;
+    var region_type_masks: [3][board.Extent]board.MaskType = undefined;
 
     inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
         const set_index = @intFromEnum(set);
@@ -147,7 +146,7 @@ fn sort_free_cell_list(extent: comptime_int, board: *const board_generic.State(e
         }
     }
 
-    var candidate_counts: [board.extent_sqr]u8 = .{0} ** board.extent_sqr;
+    var candidate_counts: [board.ExtentSqr]u8 = .{0} ** board.ExtentSqr;
 
     for (&candidate_counts, 0..) |*candidate_count, cell_index| {
         const cell_coord = board.cell_coord_from_index(cell_index);

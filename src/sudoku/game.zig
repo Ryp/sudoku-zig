@@ -50,7 +50,7 @@ pub fn State(extent: comptime_int) type {
 
                 const seed = std.mem.readInt(u64, &random_buffer, .little);
 
-                board = generator.generate(extent, board_type, seed, .{ .dancing_links =.{.difficulty = 200} });
+                board = generator.generate(extent, board_type, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             } else {
                 board.fill_board_from_string(sudoku_string);
             }
@@ -64,11 +64,11 @@ pub fn State(extent: comptime_int) type {
                 candidate_mask.* = 0;
             }
 
-            const selected_cells_full = try allocator.alloc(u32, board.extent_sqr);
+            const selected_cells_full = try allocator.alloc(u32, board.ExtentSqr);
             errdefer allocator.free(selected_cells_full);
 
             // Allocate history stack
-            const board_history = try allocator.alloc(?u4, board.extent_sqr * MaxHistorySize);
+            const board_history = try allocator.alloc(?u4, board.ExtentSqr * MaxHistorySize);
             errdefer allocator.free(board_history);
 
             const candidate_masks_history = try allocator.alloc(MaskType, board.numbers.len * MaxHistorySize);
@@ -224,14 +224,14 @@ pub fn State(extent: comptime_int) type {
         }
 
         fn player_set_number(self: *Self, number: u4) void {
-            if (number < self.board.extent and self.selected_cells.len > 0) {
+            if (number < self.board.Extent and self.selected_cells.len > 0) {
                 solver_logical.place_number_remove_trivial_candidates(extent, &self.board, self.candidate_masks, self.selected_cells[0], number);
                 self.push_state_to_history();
             }
         }
 
         fn player_toggle_candidate(self: *Self, number: u4) void {
-            if (number < self.board.extent and self.selected_cells.len > 0) {
+            if (number < self.board.Extent and self.selected_cells.len > 0) {
                 const cell_index = self.selected_cells[0];
 
                 if (self.board.numbers[cell_index] == null) {
@@ -380,12 +380,12 @@ pub const ValidationError = struct {
 };
 
 pub fn check_board_for_validation_errors(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []const board_generic.MaskType(extent)) ?ValidationError {
-    for (0..board.extent) |number_usize| {
+    for (0..board.Extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
         const number_mask = board.mask_for_number(number);
 
         inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-            for (0..extent) |sub_index| {
+            for (0..board.Extent) |sub_index| {
                 const region_index = board.regions.get_region_index(set, sub_index);
                 const region = board.regions.get(region_index);
 

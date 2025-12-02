@@ -15,11 +15,11 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
 
     // Generate a full board by using an ordered sequence
     // that guarantees a valid output
-    for (0..board.extent) |region_index| {
+    for (0..board.Extent) |region_index| {
         for (board.regions.row(region_index), 0..) |cell_index, col| {
             const line_offset = region_index * regular_type.box_extent[0];
             const box_offset = region_index / regular_type.box_extent[1];
-            const number: u4 = @intCast(@as(u32, @intCast(col + line_offset + box_offset)) % board.extent);
+            const number: u4 = @intCast(@as(u32, @intCast(col + line_offset + box_offset)) % board.Extent);
 
             board.numbers[cell_index] = number;
         }
@@ -46,7 +46,7 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
     assert(numbers_to_remove < board.numbers.len);
 
     while (numbers_to_remove > 0) {
-        const cell_index = rng.random().uintLessThan(u32, board.extent_sqr);
+        const cell_index = rng.random().uintLessThan(u32, board.ExtentSqr);
 
         if (board.numbers[cell_index] != null) {
             board.numbers[cell_index] = null;

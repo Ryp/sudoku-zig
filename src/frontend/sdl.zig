@@ -48,7 +48,7 @@ fn SdlContext(board_extent: comptime_int) type {
         const ThickLineExtraWidth = 1;
         const ThickLineWidthBasePx = 3 * ThickLineExtraWidth + ThinLineWidthBasePx;
 
-        comptime board_extent: comptime_int = board_extent,
+        comptime BoardExtent: comptime_int = board_extent,
 
         window: *c.SDL_Window,
         renderer: *c.SDL_Renderer,
@@ -163,11 +163,11 @@ fn SdlContext(board_extent: comptime_int) type {
 
         pub fn resize_fonts(self: *Self, allocator: std.mem.Allocator) !void {
             self.fonts.destroy(allocator);
-            self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent_px, self.board_extent);
+            self.fonts = try FontResources.create(allocator, self.renderer, self.cell_extent_px, self.BoardExtent);
         }
 
         pub fn compute_candidate_local_rects(self: *Self) void {
-            const candidate_layout = get_candidate_layout(self.board_extent);
+            const candidate_layout = get_candidate_layout(self.BoardExtent);
 
             const fill_ratio = self.cell_extent_px * 0.85;
             const offset = (self.cell_extent_px - fill_ratio) / 2.0;
@@ -324,7 +324,7 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 }
 
 pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), allocator: std.mem.Allocator) !void {
-    const board_extent = game.board.extent;
+    const board_extent = game.board.Extent;
 
     var box_region_colors: [extent]ColorRGBA8 = undefined;
     fill_box_regions_colors(game.board.board_type, &box_region_colors);
@@ -450,7 +450,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
 
         // Set window title
         if (game.solver_event) |solver_event| {
-            const NumbersString = game.board.numbers_string;
+            const NumbersString = game.board.NumbersString;
 
             _ = switch (solver_event) {
                 .found_technique => |technique| switch (technique) {
@@ -470,7 +470,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
         _ = c.SDL_SetWindowTitle(sdl_context.window, title_string.ptr);
 
         // Compute hishlight mask
-        var highlight_mask: u16 = 0;
+        var highlight_mask: game.board.MaskType = 0;
         for (game.selected_cells) |selected_cell_index| {
             if (game.board.numbers[selected_cell_index]) |number| {
                 highlight_mask |= game.board.mask_for_number(number);
@@ -583,6 +583,8 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
+
+    std.debug.print("Board at exit: {s}\n", .{&game.board.string_from_board()});
 }
 
 fn fill_box_regions_colors(board_type: board_generic.BoardType, box_region_colors: []ColorRGBA8) void {
@@ -647,7 +649,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                     }
                 }
 
-                const region_mask = @as(u16, 1) << @as(u4, @intCast(region_cell_index));
+                const region_mask = board.mask_for_number(@intCast(region_cell_index));
 
                 // Draw candidates to remove
                 if (region_mask & naked_pair.deletion_mask_b != 0) {
@@ -686,7 +688,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
             const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
             // Draw candidates
-            for (0..board.extent) |number_usize| {
+            for (0..board.Extent) |number_usize| {
                 const number: u4 = @intCast(number_usize);
                 const number_mask = board.mask_for_number(number);
 
@@ -719,7 +721,7 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
                 const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
                 // Draw candidates
-                for (0..board.extent) |number_usize| {
+                for (0..board.Extent) |number_usize| {
                     const number: u4 = @intCast(number_usize);
                     const number_mask = board.mask_for_number(number);
 
@@ -856,7 +858,7 @@ fn draw_sudoku_box_regions(extent: comptime_int, board: board_generic.State(exte
 
         var thick_vertical = true;
 
-        if (cell_coord[0] + 1 < board.extent) {
+        if (cell_coord[0] + 1 < board.Extent) {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 1, 0 });
             const neighbor_box_index = board.regions.box_indices[neighbor_cell_index];
             thick_vertical = box_index != neighbor_box_index;
@@ -866,7 +868,7 @@ fn draw_sudoku_box_regions(extent: comptime_int, board: board_generic.State(exte
 
         var thick_horizontal = true;
 
-        if (cell_coord[1] + 1 < board.extent) {
+        if (cell_coord[1] + 1 < board.Extent) {
             const neighbor_cell_index = board.cell_index_from_coord(cell_coord + u32_2{ 0, 1 });
             const neighbor_box_index = board.regions.box_indices[neighbor_cell_index];
             thick_horizontal = box_index != neighbor_box_index;

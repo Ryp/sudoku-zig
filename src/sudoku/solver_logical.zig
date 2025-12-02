@@ -38,7 +38,7 @@ pub fn remove_trivial_candidates_at(extent: comptime_int, board: board_generic.S
 // Removes trivial candidates from basic sudoku rules
 pub fn solve_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16) void {
     inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        for (0..extent) |sub_index| {
+        for (0..board.Extent) |sub_index| {
             const region = board.regions.get(.{ .set = set, .sub_index = sub_index });
             solve_trivial_candidates_region(extent, board, candidate_masks, region);
         }
@@ -105,7 +105,7 @@ pub fn apply_naked_pair(extent: comptime_int, board: board_generic.State(extent)
 
 pub fn find_naked_pair(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?NakedPair {
     inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        for (0..extent) |sub_index| {
+        for (0..board.Extent) |sub_index| {
             if (find_naked_pair_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |naked_pair| {
                 return naked_pair;
             }
@@ -173,7 +173,7 @@ test "Naked pair" {
 
     var board = board_generic.State(extent).init(board_type);
 
-    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
+    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
 
     // Make sure that there's no hit for the initial board
     try std.testing.expect(find_naked_pair(extent, board, &candidate_masks) == null);
@@ -222,7 +222,7 @@ pub fn apply_hidden_single(extent: comptime_int, board: *board_generic.State(ext
 
 pub fn find_hidden_single(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?HiddenSingle {
     inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        for (0..extent) |sub_index| {
+        for (0..board.Extent) |sub_index| {
             if (find_hidden_single_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |solver_event| {
                 return solver_event;
             }
@@ -244,7 +244,7 @@ pub fn apply_hidden_pair(extent: comptime_int, candidate_masks: []board_generic.
 
 pub fn find_hidden_pair(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const board_generic.MaskType(extent)) ?HiddenPair {
     inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        for (0..extent) |sub_index| {
+        for (0..board.Extent) |sub_index| {
             if (find_hidden_pair_region(extent, board, candidate_masks, .{ .set = set, .sub_index = sub_index })) |hidden_pair| {
                 return hidden_pair;
             }
@@ -256,8 +256,8 @@ pub fn find_hidden_pair(extent: comptime_int, board: board_generic.State(extent)
 
 // If there's a region (col/row/box) where a possibility appears only once, put it down
 fn find_hidden_single_region(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, region_index: RegionIndex) ?HiddenSingle {
-    var counts = std.mem.zeroes([board.extent]u32);
-    var last_cell_indices: [board.extent]u32 = undefined;
+    var counts = std.mem.zeroes([board.Extent]u32);
+    var last_cell_indices: [board.Extent]u32 = undefined;
 
     for (board.regions.get(region_index)) |cell_index| {
         var mask = candidate_masks[cell_index];
@@ -294,11 +294,11 @@ fn find_hidden_single_region(extent: comptime_int, board: board_generic.State(ex
 fn find_hidden_pair_region(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, region_index: RegionIndex) ?HiddenPair {
     const region = board.regions.get(region_index);
 
-    var counts = std.mem.zeroes([board.extent]u32);
+    var counts = std.mem.zeroes([board.Extent]u32);
 
     // Contains first and last position
-    const min_max_initial_value = u32_2{ board.extent, 0 };
-    var region_min_max_cell_indices: [board.extent]u32_2 = .{min_max_initial_value} ** board.extent;
+    const min_max_initial_value = u32_2{ board.Extent, 0 };
+    var region_min_max_cell_indices: [board.Extent]u32_2 = .{min_max_initial_value} ** board.Extent;
 
     for (region, 0..) |cell_index, region_cell_index| {
         var mask = candidate_masks[cell_index];
@@ -315,12 +315,12 @@ fn find_hidden_pair_region(extent: comptime_int, board: board_generic.State(exte
         }
     }
 
-    for (counts[0 .. board.extent - 1], 0..) |first_number_count, first_number| {
+    for (counts[0 .. board.Extent - 1], 0..) |first_number_count, first_number| {
         if (first_number_count == 2) {
             const second_number_start = first_number + 1;
 
             for (counts[second_number_start..], second_number_start..) |second_number_count, second_number| {
-                assert(second_number < board.extent);
+                assert(second_number < board.Extent);
 
                 if (second_number_count == 2 and all(region_min_max_cell_indices[first_number] == region_min_max_cell_indices[second_number])) {
                     const mask = board.mask_for_number(@intCast(first_number)) | board.mask_for_number(@intCast(second_number));
@@ -383,12 +383,12 @@ pub fn find_pointing_line(extent: comptime_int, board: board_generic.State(exten
         max: u32_2,
     };
 
-    for (0..board.extent) |box_index| {
+    for (0..board.Extent) |box_index| {
         const box_region_index = board.regions.get_region_index(.Box, box_index);
         const box_region = board.regions.get(box_region_index);
 
-        var box_aabbs: [board.extent]AABB_u32 = undefined;
-        var candidate_counts = std.mem.zeroes([board.extent]u32);
+        var box_aabbs: [board.Extent]AABB_u32 = undefined;
+        var candidate_counts = std.mem.zeroes([board.Extent]u32);
 
         // Compute AABB of candidates for each number
         // FIXME cache remaining candidates per box and only iterate on this?
@@ -397,7 +397,7 @@ pub fn find_pointing_line(extent: comptime_int, board: board_generic.State(exten
             const number_mask = board.mask_for_number(number);
 
             aabb.max = u32_2{ 0, 0 };
-            aabb.min = u32_2{ board.extent, board.extent };
+            aabb.min = u32_2{ board.Extent, board.Extent };
 
             var box_region_mask: u16 = 0;
 
@@ -477,14 +477,14 @@ pub fn apply_box_line_reduction(extent: comptime_int, board: board_generic.State
 }
 
 pub fn find_box_line_reduction(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16) ?BoxLineReduction {
-    for (0..extent) |region_index| {
+    for (0..board.Extent) |region_index| {
         const col_region_index = board.regions.get_region_index(.Col, region_index);
-        if (find_box_line_reduction_for_line(extent, board, candidate_masks, col_region_index, u32_2{ @intCast(region_index), board.extent })) |event| {
+        if (find_box_line_reduction_for_line(extent, board, candidate_masks, col_region_index, u32_2{ @intCast(region_index), board.Extent })) |event| {
             return event;
         }
 
         const row_region_index = board.regions.get_region_index(.Row, region_index);
-        if (find_box_line_reduction_for_line(extent, board, candidate_masks, row_region_index, u32_2{ board.extent, @intCast(region_index) })) |event| {
+        if (find_box_line_reduction_for_line(extent, board, candidate_masks, row_region_index, u32_2{ board.Extent, @intCast(region_index) })) |event| {
             return event;
         }
     }
@@ -493,7 +493,7 @@ pub fn find_box_line_reduction(extent: comptime_int, board: board_generic.State(
 }
 
 pub fn find_box_line_reduction_for_line(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []const u16, line_region_index: RegionIndex, line_coord: u32_2) ?BoxLineReduction {
-    for (0..board.extent) |number_usize| {
+    for (0..board.Extent) |number_usize| {
         const number: u4 = @intCast(number_usize);
         const number_mask = board.mask_for_number(number);
 
@@ -551,7 +551,7 @@ test "Box-line removal" {
     var board = board_generic.State(extent).init(board_type);
 
     const full_mask = board.full_candidate_mask();
-    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{full_mask} ** board.extent_sqr;
+    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{full_mask} ** board.ExtentSqr;
 
     // Make sure that there's no hit for the initial board
     if (find_box_line_reduction(extent, board, &candidate_masks)) |_| {
@@ -583,7 +583,7 @@ test "Box-line removal" {
     }
 
     // Re-Fill candidate masks fully
-    candidate_masks = .{full_mask} ** board.extent_sqr;
+    candidate_masks = .{full_mask} ** board.ExtentSqr;
 
     // Remove candidates until we can apply the box-line solver
     for (3..9) |col_index| {
@@ -650,7 +650,7 @@ pub fn apply_technique(extent: comptime_int, board: *board_generic.State(extent)
 }
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
-    var candidate_masks: [board.extent_sqr]board_generic.MaskType(extent) = .{0} ** board.extent_sqr;
+    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
     board.fill_candidate_mask(&candidate_masks);
 
     while (true) {

@@ -17,9 +17,9 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
 
     // All links are allocated sequentially, so we're doing some math to compute relative addresses.
     const constraint_type_count = 4;
-    const constraints_per_type_count = board.extent * board.extent;
+    const constraints_per_type_count = board.Extent * board.Extent;
     const constraint_count = constraints_per_type_count * constraint_type_count;
-    const node_per_constraint_count = board.extent;
+    const node_per_constraint_count = board.Extent;
     const choice_link_count = constraint_count * node_per_constraint_count;
     const link_count = 1 + constraint_count + choice_link_count;
 
@@ -35,11 +35,11 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
     const choice_link_offset = header_link_offset + header_link_count;
 
     // Allocate an array indexed by row giving containing the header link indices for the 4 satisfied contraints
-    const choices_count = board.extent * board.extent * board.extent;
+    const choices_count = board.Extent * board.Extent * board.Extent;
     const choices_constraint_link_indices = allocator.alloc(ChoiceConstraintsIndices, choices_count) catch unreachable; // FIXME
     defer allocator.free(choices_constraint_link_indices);
 
-    const solution = allocator.alloc(SolutionClue, board.extent * board.extent) catch unreachable; // FIXME
+    const solution = allocator.alloc(SolutionClue, board.Extent * board.Extent) catch unreachable; // FIXME
     defer allocator.free(solution);
 
     // This changes between runs only if the size of the sudoku or the box layout changes
@@ -49,8 +49,8 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
 
     var rng = std.Random.Xoshiro256.init(seed);
 
-    const clue_count = board.extent;
-    const unknown_count = board.extent * board.extent - clue_count;
+    const clue_count = board.Extent;
+    const unknown_count = board.Extent * board.Extent - clue_count;
     cover_columns_for_random_clues(extent, &board, &rng.random(), choices_constraint_link_indices, links_h, links_v);
 
     const found_solution = solve_dancing_links_recursive(extent, DancingLinkContext(extent){
@@ -63,7 +63,10 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
         .random = &rng.random(),
     }, 0);
 
-    std.debug.assert(found_solution);
+    if (!found_solution) {
+        std.debug.print("Current solution: {s}\n", .{board.string_from_board()});
+        @panic("Failed to find solution for generated sudoku!");
+    }
 
     for (solution[0..unknown_count]) |clue| {
         board.numbers[clue.cell_index] = clue.number;
@@ -73,7 +76,7 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
     var try_harder_count = difficulty;
 
     while (is_unique) {
-        const random_index = rng.random().uintLessThan(u32, board.extent * board.extent);
+        const random_index = rng.random().uintLessThan(u32, board.Extent * board.Extent);
         const number_at_random_index = board.numbers[random_index];
 
         board.numbers[random_index] = null;
@@ -132,8 +135,8 @@ fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(e
             }
 
             if (solve_dancing_links_recursive(extent, ctx, depth + 1)) {
-                const cell_index = row_index / ctx.board.extent;
-                const number = row_index % ctx.board.extent;
+                const cell_index = row_index / ctx.board.Extent;
+                const number = row_index % ctx.board.Extent;
 
                 ctx.solution[depth] = SolutionClue{
                     .cell_index = cell_index,
@@ -163,7 +166,7 @@ fn cover_columns_for_random_clues(extent: comptime_int, board: *board_generic.St
         var is_taken = true;
 
         while (is_taken) {
-            number = random.uintLessThan(u4, @intCast(board.extent));
+            number = random.uintLessThan(u4, @intCast(board.Extent));
             is_taken = taken_numbers[number];
         }
 
@@ -171,7 +174,7 @@ fn cover_columns_for_random_clues(extent: comptime_int, board: *board_generic.St
 
         board.numbers[cell_index] = number;
 
-        const choice_index = dancing_links_solver.get_choice_index(@intCast(cell_index), number, board.extent);
+        const choice_index = dancing_links_solver.get_choice_index(@intCast(cell_index), number, board.Extent);
         const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
 
         dancing_links_solver.cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);
