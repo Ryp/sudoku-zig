@@ -11,22 +11,14 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
 
     @memcpy(&board.numbers, &const_board.numbers);
 
-    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
+    var candidate_masks = board.fill_trivial_candidate_masks();
     var technique_histogram = [_]u32{0} ** 8;
 
-    board.fill_candidate_mask(&candidate_masks);
+    while (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {
+        const technique_index = @intFromEnum(technique);
+        technique_histogram[technique_index] += 1;
 
-    while (true) {
-        solver_logical.solve_trivial_candidates(extent, &board, &candidate_masks);
-
-        if (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {
-            const technique_index = @intFromEnum(technique);
-            technique_histogram[technique_index] += 1;
-
-            solver_logical.apply_technique(extent, &board, &candidate_masks, technique);
-        } else {
-            break;
-        }
+        solver_logical.apply_technique(extent, &board, &candidate_masks, technique);
 
         if (game.check_board_for_validation_errors(extent, &board, &candidate_masks)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});

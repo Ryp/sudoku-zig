@@ -270,7 +270,7 @@ pub fn State(extent: comptime_int) type {
         }
 
         fn player_fill_candidates(self: *Self) void {
-            self.board.fill_candidate_mask(self.candidate_masks);
+            self.candidate_masks[0..self.board.ExtentSqr].* = self.board.fill_trivial_candidate_masks();
 
             self.push_state_to_history();
         }
@@ -296,8 +296,6 @@ pub fn State(extent: comptime_int) type {
         }
 
         fn player_get_hint(self: *Self) void {
-            solver_logical.solve_trivial_candidates(extent, &self.board, self.candidate_masks);
-
             if (solver_logical.find_easiest_known_technique(extent, self.board, self.candidate_masks)) |solver_technique| {
                 self.flow = .WaitingForHintValidation;
                 self.solver_event = .{ .found_technique = solver_technique };

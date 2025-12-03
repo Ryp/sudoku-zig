@@ -15,10 +15,10 @@ pub fn place_number_remove_trivial_candidates(extent: comptime_int, board: *boar
     board.numbers[cell_index] = number;
     candidate_masks[cell_index] = 0;
 
-    remove_trivial_candidates_at(extent, board.*, candidate_masks, cell_index, number);
+    remove_trivial_candidates_for_number_at(extent, board.*, candidate_masks, cell_index, number);
 }
 
-pub fn remove_trivial_candidates_at(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
+pub fn remove_trivial_candidates_for_number_at(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     const cell_coord = board.cell_coord_from_index(cell_index);
     const box_index = board.regions.box_indices[cell_index];
 
@@ -32,32 +32,6 @@ pub fn remove_trivial_candidates_at(extent: comptime_int, board: board_generic.S
         candidate_masks[col_cell] &= ~mask;
         candidate_masks[row_cell] &= ~mask;
         candidate_masks[box_cell] &= ~mask;
-    }
-}
-
-// Removes trivial candidates from basic sudoku rules
-pub fn solve_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16) void {
-    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        for (0..board.Extent) |sub_index| {
-            const region = board.regions.get(.{ .set = set, .sub_index = sub_index });
-            solve_trivial_candidates_region(extent, board, candidate_masks, region);
-        }
-    }
-}
-
-fn solve_trivial_candidates_region(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, region: [extent]u32) void {
-    var used_mask: u16 = 0;
-
-    for (region) |cell_index| {
-        if (board.numbers[cell_index]) |number| {
-            used_mask |= board.mask_for_number(number);
-        }
-    }
-
-    for (region) |cell_index| {
-        if (board.numbers[cell_index] == null) {
-            candidate_masks[cell_index] &= ~used_mask;
-        }
     }
 }
 
@@ -650,17 +624,10 @@ pub fn apply_technique(extent: comptime_int, board: *board_generic.State(extent)
 }
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
-    var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
-    board.fill_candidate_mask(&candidate_masks);
+    var candidate_masks = board.fill_trivial_candidate_masks();
 
-    while (true) {
-        solve_trivial_candidates(extent, board, &candidate_masks);
-
-        if (find_easiest_known_technique(extent, board.*, &candidate_masks)) |technique| {
-            apply_technique(extent, board, &candidate_masks, technique);
-        } else {
-            break;
-        }
+    while (find_easiest_known_technique(extent, board.*, &candidate_masks)) |technique| {
+        apply_technique(extent, board, &candidate_masks, technique);
     }
 
     for (board.numbers) |number_opt| {

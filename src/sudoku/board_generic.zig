@@ -255,7 +255,8 @@ pub fn State(extent: comptime_int) type {
             return string;
         }
 
-        pub fn fill_candidate_mask(self: Self, candidate_masks: []MaskType(extent)) void {
+        pub fn fill_trivial_candidate_masks(self: Self) [self.ExtentSqr]MaskType(extent) {
+            var candidate_masks: [self.ExtentSqr]MaskType(extent) = undefined;
             const full_mask = self.full_candidate_mask();
 
             var col_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
@@ -278,10 +279,9 @@ pub fn State(extent: comptime_int) type {
                 }
             }
 
-            for (self.numbers, candidate_masks, 0..) |number_opt, *cell_candidate_mask, cell_index| {
+            for (self.numbers, &candidate_masks, 0..) |number_opt, *cell_candidate_mask, cell_index| {
                 if (number_opt) |_| {
-                    // It should already be zero for set numbers
-                    std.debug.assert(cell_candidate_mask.* == 0);
+                    cell_candidate_mask.* = 0;
                 } else {
                     const cell_coord = self.cell_coord_from_index(cell_index);
 
@@ -296,6 +296,8 @@ pub fn State(extent: comptime_int) type {
                     cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
                 }
             }
+
+            return candidate_masks;
         }
 
         comptime {
