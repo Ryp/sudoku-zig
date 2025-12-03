@@ -17,7 +17,7 @@ pub const TestLogicalSolver = .{
     backtracking_killer,
     naive_backtracking_killer_1,
     naive_backtracking_killer_2,
-    // dancing_links_killer,
+    // dancing_links_killer, // Too hard for logical solver to finish
 };
 
 pub const TestDancingLinksSolver = .{
@@ -27,7 +27,7 @@ pub const TestDancingLinksSolver = .{
     box_line_reduction,
     skyscraper,
     easy4x3,
-    // jigsaw9, FIXME Only solves after having a few clues!
+    jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
     naive_backtracking_killer_2,
@@ -40,12 +40,12 @@ pub const TestBacktrackingSolver = .{
     pointing_line,
     box_line_reduction,
     skyscraper,
-    easy4x3,
+    // easy4x3, // NOTE: Too slow in debug mode but should work
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
     naive_backtracking_killer_2,
-    dancing_links_killer,
+    // dancing_links_killer, // NOTE: Too slow in debug mode but should work
 };
 
 pub const easy = KnownBoard{

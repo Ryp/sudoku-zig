@@ -24,11 +24,8 @@ If you're in for a challenge, let the program generate a puzzle for you!
 A basic grader will run at startup letting you know how difficult the puzzle is.
 
 ```sh
-zig build -Doptimize=ReleaseFast run
+zig build run
 ```
-
-> **NOTE:** The puzzle generation is slow, so it's good to compile with optimizations
-> enabled.
 
 ## Controls
 

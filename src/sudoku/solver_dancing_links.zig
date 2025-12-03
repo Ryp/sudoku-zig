@@ -59,30 +59,28 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
 
     cover_columns_for_given_clues(extent, board.*, choices_constraint_link_indices, links_h, links_v);
 
-    if (options.check_if_unique) {
-        const solution_count = solve_dancing_links_recursive_count_solutions(extent, DancingLinkContext(extent){
-            .board = board,
-            .links_h = links_h,
-            .links_v = links_v,
-            .choice_link_offset = choice_link_offset,
-            .choices_constraint_link_indices = choices_constraint_link_indices,
-        });
+    // FIXME sort header links by size
 
+    const context = DancingLinkContext(extent){
+        .board = board,
+        .links_h = links_h,
+        .links_v = links_v,
+        .choice_link_offset = choice_link_offset,
+        .choices_constraint_link_indices = choices_constraint_link_indices,
+    };
+
+    if (options.check_if_unique) {
+        const solution_count = solve_dancing_links_recursive_count_solutions(extent, context);
         return solution_count == 1;
     } else {
-        return solve_dancing_links_recursive(extent, DancingLinkContext(extent){
-            .board = board,
-            .links_h = links_h,
-            .links_v = links_v,
-            .choice_link_offset = choice_link_offset,
-            .choices_constraint_link_indices = choices_constraint_link_indices,
-        });
+        return solve_dancing_links_recursive(extent, context);
     }
 }
 
 fn DancingLinkContext(extent: comptime_int) type {
     return struct {
         board: *board_generic.State(extent),
+        // FIXME use SoAoS?
         links_h: []DoublyLink,
         links_v: []DoublyLink,
         choice_link_offset: u32,
@@ -90,11 +88,37 @@ fn DancingLinkContext(extent: comptime_int) type {
     };
 }
 
+pub fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const DoublyLink) u32 {
+    const root_index: u32 = 0;
+
+    // Pick column with smallest row count (Algorithm X heuristic)
+    var best_col = links_h[root_index].next;
+    var best_count: u32 = std.math.maxInt(u32);
+
+    // NOTE: Care when walking header links, the root link is in the same list
+    var col = links_h[root_index].next;
+    while (col != root_index) : (col = links_h[col].next) {
+        // Count rows in this column
+        const count = list_size_inclusive(links_v, col);
+
+        if (count < best_count) {
+            best_col = col;
+            best_count = count;
+
+            if (best_count <= 1) {
+                break;
+            }
+        }
+    }
+
+    return best_col;
+}
+
 fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(extent)) bool {
     if (ctx.links_h[0].next == 0) {
         return true;
     } else {
-        const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
+        const chosen_column_index = choose_best_column_index(ctx.links_h, ctx.links_v);
 
         // Iterate over choices (rows)
         var vertical_index = ctx.links_v[chosen_column_index].next;
@@ -129,8 +153,7 @@ fn solve_dancing_links_recursive_count_solutions(extent: comptime_int, ctx: Danc
         return 1;
     } else {
         var solution_count: u32 = 0;
-
-        const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
+        const chosen_column_index = choose_best_column_index(ctx.links_h, ctx.links_v);
 
         // Iterate over choices (rows)
         var vertical_index = ctx.links_v[chosen_column_index].next;
@@ -304,6 +327,17 @@ fn link_together(links: []DoublyLink, start_index: u32, count: u32) void {
 
     links[start_index].prev = end_index - 1;
     links[end_index - 1].next = start_index;
+}
+
+fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
+    var count: u32 = 1;
+    var next_index = links[start_index].next;
+
+    while (next_index != start_index) : (next_index = links[next_index].next) {
+        count += 1;
+    }
+
+    return count;
 }
 
 test {

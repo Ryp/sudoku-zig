@@ -60,7 +60,6 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
         .choice_link_offset = choice_link_offset,
         .choices_constraint_link_indices = choices_constraint_link_indices,
         .solution = solution,
-        .random = &rng.random(),
     }, 0);
 
     if (!found_solution) {
@@ -112,8 +111,8 @@ fn DancingLinkContext(extent: comptime_int) type {
         links_v: []DoublyLink,
         choice_link_offset: u32,
         choices_constraint_link_indices: []ChoiceConstraintsIndices,
+
         solution: []SolutionClue,
-        random: *const std.Random,
     };
 }
 
@@ -121,7 +120,7 @@ fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(e
     if (ctx.links_h[0].next == 0) {
         return true;
     } else {
-        const chosen_column_index = ctx.links_h[0].next; // FIXME choose better one
+        const chosen_column_index = dancing_links_solver.choose_best_column_index(ctx.links_h, ctx.links_v);
 
         // Iterate over choices (rows)
         var vertical_index = ctx.links_v[chosen_column_index].next;
