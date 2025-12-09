@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const board_generic = @import("board_generic.zig");
 const RegionSet = board_generic.RegionSet;
 
+const solver_logical = @import("solver_logical.zig");
 const known_boards = @import("known_boards.zig");
 
 pub const Options = struct {
@@ -68,13 +69,59 @@ fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.Stat
         const free_cell = free_cell_list[list_index];
 
         const valid_candidates = cell_valid_candidates(extent, board, free_cell);
+        const candidate_masks = solver_logical.trivial_candidate_masks(extent, board);
+        const valid_mask = candidate_masks[free_cell.index];
 
-        const cell_number = &board.numbers[free_cell.index];
+        std.debug.print("index = {}\n", .{free_cell.index});
+        std.debug.print("vald = ", .{});
+        for (0..extent) |i| {
+            std.debug.print("{d}", .{if (valid_candidates[extent - i - 1]) @as(u32, 1) else @as(u32, 0)});
+        }
+        std.debug.print("\n", .{});
+        std.debug.print("mask = {b:0>9}\n", .{valid_mask});
+
         const start: u32 = current_guess[list_index];
 
-        for (valid_candidates[start..], start..) |is_valid, number| {
+        for (valid_candidates[start..], start..) |_, number| {
+            const is_valid_old = valid_candidates[number];
+            const is_valid_new = (valid_mask & board.mask_for_number(@intCast(number))) != 0;
+
+            var is_valid: bool = undefined;
+            const new = false;
+            if (new) {
+                is_valid = is_valid_new;
+            } else {
+                is_valid = is_valid_old;
+            }
+
+            if (is_valid_old != is_valid_new) {
+                std.debug.print("Column indices\n", .{});
+                for (board.regions.col(free_cell.col)) |index| {
+                    if (board.numbers[index]) |n| {
+                        std.debug.print("{}", .{n});
+                    }
+                }
+                std.debug.print("\n", .{});
+                std.debug.print("Row indices\n", .{});
+                for (board.regions.row(free_cell.row)) |index| {
+                    if (board.numbers[index]) |n| {
+                        std.debug.print("{}", .{n});
+                    }
+                }
+                std.debug.print("\n", .{});
+                std.debug.print("Box indices\n", .{});
+                for (board.regions.box(board.regions.box_indices[free_cell.index])) |index| {
+                    if (board.numbers[index]) |n| {
+                        std.debug.print("{}", .{n});
+                    }
+                }
+                std.debug.print("\n", .{});
+
+                std.debug.assert(is_valid_old == is_valid_new);
+            }
+
             if (is_valid) {
-                cell_number.* = @intCast(number);
+                board.numbers[free_cell.index] = @intCast(number);
                 current_guess[list_index] = @intCast(number + 1);
 
                 list_index += 1;
@@ -82,7 +129,7 @@ fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.Stat
                 break :main;
             }
         } else {
-            cell_number.* = null;
+            board.numbers[free_cell.index] = null;
             current_guess[list_index] = 0;
 
             // Backtracking at index zero means we didn't find a solution

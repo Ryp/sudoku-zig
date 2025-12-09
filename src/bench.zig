@@ -5,14 +5,16 @@ const solver = @import("sudoku/solver.zig");
 const known_boards = @import("sudoku/known_boards.zig");
 
 pub fn main() !void {
-    inline for (known_boards.TestDancingLinksSolver) |known_board| {
+    inline for (.{
+        known_boards.easy,
+    }) |known_board| {
         std.debug.print("Testing solver on known board: rules = {}, start = {s}\n", .{ known_board.rules, known_board.start_string });
         const extent = comptime known_board.rules.type.extent();
 
         var board = board_generic.State(extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solver.solve(extent, &board, .{ .dancing_links = .{} }));
+        try std.testing.expect(solver.solve(extent, &board, .{ .sorted_backtracking = .{} }));
 
         var solution_board = board_generic.State(extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
