@@ -5,10 +5,13 @@ const board_generic = @import("board_generic.zig");
 
 // Only generates a regular sudoku board
 // This is a naive implementation that doesn't guarantee a unique solution
-pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed: u64) board_generic.State(extent) {
-    var board = board_generic.State(extent).init(board_type);
+pub fn generate(extent: comptime_int, rules: board_generic.Rules, seed: u64) board_generic.State(extent) {
+    std.debug.assert(!rules.chess_anti_king);
+    std.debug.assert(!rules.chess_anti_knight);
 
-    const regular_type: board_generic.RegularSudoku = switch (board.board_type) {
+    var board = board_generic.State(extent).init(rules);
+
+    const regular_type: board_generic.RegularSudoku = switch (board.rules.type) {
         .regular => |r| r,
         else => @panic("Naive generator only supports regular sudoku boards"),
     };

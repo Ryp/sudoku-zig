@@ -13,6 +13,8 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
         \\-W, --box_width <u32>   Box width for regular sudokus (default: 3)
         \\-H, --box_height <u32>  Box height for regular sudokus (default: 3)
         \\-j, --jigsaw <str>      Region indices string for jigsaw sudokus
+        \\--king                  Chess anti-king's constraint
+        \\--knight                Chess anti-knight's constraint
         \\<str>                   Sudoku string (you can use '.' for empty cells).
         \\                        Unset this if you want to have a sudoku board generated for you.
     );
@@ -32,12 +34,12 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
         return clap.helpToFile(.stderr(), clap.Help, &params, .{});
     }
 
-    var board_type: board_generic.BoardType = undefined;
+    var rules: board_generic.Rules = .{ .type = undefined };
 
     if (res.args.jigsaw) |jigsaw_string| {
         const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
 
-        board_type = .{
+        rules.type = .{
             .jigsaw = .{
                 .extent = jigsaw_extent,
                 .box_indices_string = jigsaw_string,
@@ -47,17 +49,20 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
         const box_w = res.args.box_width orelse 3;
         const box_h = res.args.box_height orelse 3;
 
-        board_type = .{ .regular = .{
+        rules.type = .{ .regular = .{
             .box_extent = .{ box_w, box_h },
         } };
     }
 
-    const board_extent = board_type.extent();
+    rules.chess_anti_king = res.args.king != 0;
+    rules.chess_anti_knight = res.args.knight != 0;
+
+    const board_extent = rules.type.extent();
 
     // Scalarize extent
     inline for (board_generic.MinExtent..board_generic.MaxExtent + 1) |comptime_extent| {
         if (board_extent == comptime_extent) {
-            var game_state = try game.State(comptime_extent).init(allocator, board_type, res.positionals[0]);
+            var game_state = try game.State(comptime_extent).init(allocator, rules, res.positionals[0]);
             defer game_state.deinit(allocator);
 
             try sdl.execute_main_loop(comptime_extent, &game_state, allocator);

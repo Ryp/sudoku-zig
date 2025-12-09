@@ -329,7 +329,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
     const board_extent = game.board.Extent;
 
     var box_region_colors: [extent]ColorRGBA8 = undefined;
-    fill_box_regions_colors(game.board.board_type, &box_region_colors);
+    fill_box_regions_colors(game.board.rules.type, &box_region_colors);
 
     var sdl_context = try SdlContext(extent).init(allocator);
     defer sdl_context.deinit(allocator);
@@ -591,7 +591,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
     std.debug.print("Board at exit: {s}\n", .{&game.board.string_from_board()});
 }
 
-fn fill_box_regions_colors(board_type: board_generic.BoardType, box_region_colors: []ColorRGBA8) void {
+fn fill_box_regions_colors(board_type: board_generic.Type, box_region_colors: []ColorRGBA8) void {
     switch (board_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern

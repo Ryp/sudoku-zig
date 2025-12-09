@@ -12,7 +12,7 @@ pub const JigsawSudoku = struct {
     box_indices_string: []const u8,
 };
 
-pub const BoardType = union(enum) {
+pub const Type = union(enum) {
     regular: RegularSudoku,
     jigsaw: JigsawSudoku,
 
@@ -24,9 +24,15 @@ pub const BoardType = union(enum) {
     }
 };
 
-pub const Regular3x3 = BoardType{ .regular = .{
+pub const Rules = struct {
+    type: Type,
+    chess_anti_king: bool = false,
+    chess_anti_knight: bool = false,
+};
+
+pub const Regular3x3 = Rules{ .type = .{ .regular = .{
     .box_extent = .{ 3, 3 },
-} };
+} } };
 
 pub const MinExtent: comptime_int = 2; // Minimum extent we support
 pub const MaxExtent: comptime_int = 16; // Maximum extent we support
@@ -85,10 +91,10 @@ pub fn State(extent: comptime_int) type {
                 return self.get(.{ .set = .Box, .sub_index = sub_index });
             }
 
-            pub fn init(board_type: BoardType) Regions {
+            pub fn init(rules: Rules) Regions {
                 var regions: Regions = undefined;
 
-                switch (board_type) {
+                switch (rules.type) {
                     .regular => |regular| {
                         if (extent != regular.box_extent[0] * regular.box_extent[1]) {
                             @panic("Board extent mismatch with box extents");
@@ -182,14 +188,14 @@ pub fn State(extent: comptime_int) type {
 
         numbers: [SelfExtentSqr]?SelfNumberType,
         regions: Regions,
-        board_type: BoardType,
+        rules: Rules,
 
         // Creates an empty sudoku board
-        pub fn init(board_type: BoardType) Self {
+        pub fn init(rules: Rules) Self {
             return .{
                 .numbers = .{null} ** SelfExtentSqr,
-                .regions = Regions.init(board_type),
-                .board_type = board_type,
+                .regions = Regions.init(rules),
+                .rules = rules,
             };
         }
 
@@ -259,51 +265,6 @@ pub fn State(extent: comptime_int) type {
             return string;
         }
 
-        pub fn fill_trivial_candidate_masks(self: Self) [self.ExtentSqr]MaskType(extent) {
-            var candidate_masks: [self.ExtentSqr]MaskType(extent) = undefined;
-            const full_mask = self.full_candidate_mask();
-
-            var col_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
-            var row_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
-            var box_region_candidate_masks: [extent]MaskType(extent) = .{full_mask} ** extent;
-
-            for (self.numbers, 0..) |number_opt, cell_index| {
-                if (number_opt) |number| {
-                    const cell_coord = self.cell_coord_from_index(cell_index);
-
-                    const col = cell_coord[0];
-                    const row = cell_coord[1];
-                    const box = self.regions.box_indices[cell_index];
-
-                    const mask = ~self.mask_for_number(number);
-
-                    col_region_candidate_masks[col] &= mask;
-                    row_region_candidate_masks[row] &= mask;
-                    box_region_candidate_masks[box] &= mask;
-                }
-            }
-
-            for (self.numbers, &candidate_masks, 0..) |number_opt, *cell_candidate_mask, cell_index| {
-                if (number_opt) |_| {
-                    cell_candidate_mask.* = 0;
-                } else {
-                    const cell_coord = self.cell_coord_from_index(cell_index);
-
-                    const col = cell_coord[0];
-                    const row = cell_coord[1];
-                    const box = self.regions.box_indices[cell_index];
-
-                    const col_candidate_mask = col_region_candidate_masks[col];
-                    const row_candidate_mask = row_region_candidate_masks[row];
-                    const box_candidate_mask = box_region_candidate_masks[box];
-
-                    cell_candidate_mask.* = col_candidate_mask & row_candidate_mask & box_candidate_mask;
-                }
-            }
-
-            return candidate_masks;
-        }
-
         comptime {
             std.debug.assert(extent >= MinExtent);
             std.debug.assert(extent <= MaxExtent);
@@ -325,7 +286,7 @@ pub fn MaskType(extent: comptime_int) type {
 }
 
 test "Basic" {
-    const board = State(16).init(.{ .regular = .{ .box_extent = .{ 4, 4 } } });
+    const board = State(16).init(.{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } });
     _ = board;
 }
 
@@ -339,13 +300,13 @@ test "Ergonomics" {
 
     const box_w: u32 = if (rng.random().uintLessThan(u32, 2) == 1) 3 else 4;
     const box_h: u32 = if (rng.random().uintLessThan(u32, 2) == 1) 3 else 4;
-    const board_type = BoardType{ .regular = .{ .box_extent = .{ box_w, box_h } } };
-    const extent = board_type.extent();
+    const rules = Rules{ .type = .{ .regular = .{ .box_extent = .{ box_w, box_h } } } };
+    const extent = rules.type.extent();
 
     // Scalarize extent
     inline for (.{ 9, 12, 16 }) |comptime_extent| {
         if (extent == comptime_extent) {
-            const board = State(comptime_extent).init(board_type);
+            const board = State(comptime_extent).init(rules);
             _ = board;
 
             break;

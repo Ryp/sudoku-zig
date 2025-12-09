@@ -7,11 +7,11 @@ const game = @import("game.zig");
 
 pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.State(extent)) void {
     // Create a dummy board we can modify
-    var board = board_generic.State(extent).init(const_board.board_type);
+    var board = board_generic.State(extent).init(const_board.rules);
 
     @memcpy(&board.numbers, &const_board.numbers);
 
-    var candidate_masks = board.fill_trivial_candidate_masks();
+    var candidate_masks = solver_logical.trivial_candidate_masks(extent, &board);
     var technique_histogram = [_]u32{0} ** 8;
 
     while (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {

@@ -23,6 +23,9 @@ pub const DoublyLink = struct {
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
+    std.debug.assert(!board.rules.chess_anti_king);
+    std.debug.assert(!board.rules.chess_anti_knight);
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
@@ -341,14 +344,14 @@ fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
 
 test {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
-        const board_extent = comptime known_board.board_type.extent();
+        const extent = comptime known_board.rules.type.extent();
 
-        var board = board_generic.State(board_extent).init(known_board.board_type);
+        var board = board_generic.State(extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(board_extent, &board, .{}));
+        try std.testing.expect(solve(extent, &board, .{}));
 
-        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        var solution_board = board_generic.State(extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqual(solution_board.numbers, board.numbers);

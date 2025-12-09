@@ -9,16 +9,31 @@ const known_boards = @import("known_boards.zig");
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
+const i32_2 = common.i32_2;
 const all = common.all;
 
 pub fn place_number_remove_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;
-    candidate_masks[cell_index] = 0;
 
-    remove_trivial_candidates_for_number_at(extent, board.*, candidate_masks, cell_index, number);
+    remove_trivial_candidates_for_number(extent, board, candidate_masks, cell_index, number);
 }
 
-pub fn remove_trivial_candidates_for_number_at(extent: comptime_int, board: board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
+pub fn trivial_candidate_masks(extent: comptime_int, board: *const board_generic.State(extent)) [board.ExtentSqr]board.MaskType {
+    var candidate_masks: [board.ExtentSqr]board.MaskType = .{board.full_candidate_mask()} ** board.ExtentSqr;
+
+    for (board.numbers, 0..) |number_opt, cell_index| {
+        if (number_opt) |number| {
+            remove_trivial_candidates_for_number(extent, board, &candidate_masks, @intCast(cell_index), number);
+        }
+    }
+
+    return candidate_masks;
+}
+
+pub fn remove_trivial_candidates_for_number(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
+    candidate_masks[cell_index] = 0;
+
+    // Remove candidates
     const cell_coord = board.cell_coord_from_index(cell_index);
     const box_index = board.regions.box_indices[cell_index];
 
@@ -26,12 +41,36 @@ pub fn remove_trivial_candidates_for_number_at(extent: comptime_int, board: boar
     const row_region = board.regions.row(cell_coord[1]);
     const box_region = board.regions.box(box_index);
 
-    const mask = board.mask_for_number(number);
+    const deletion_mask = ~board.mask_for_number(number);
 
     for (col_region, row_region, box_region) |col_cell, row_cell, box_cell| {
-        candidate_masks[col_cell] &= ~mask;
-        candidate_masks[row_cell] &= ~mask;
-        candidate_masks[box_cell] &= ~mask;
+        candidate_masks[col_cell] &= deletion_mask;
+        candidate_masks[row_cell] &= deletion_mask;
+        candidate_masks[box_cell] &= deletion_mask;
+    }
+
+    const cell_coord_signed: i32_2 = @intCast(cell_coord);
+
+    if (board.rules.chess_anti_king) {
+        for (ChessKingOffsets) |offset| {
+            const coord = cell_coord_signed + offset;
+
+            if (all(coord >= i32_2{ 0, 0 }) and all(coord < i32_2{ board.Extent, board.Extent })) {
+                const index = board.cell_index_from_coord(@intCast(coord));
+                candidate_masks[index] &= deletion_mask;
+            }
+        }
+    }
+
+    if (board.rules.chess_anti_knight) {
+        for (ChessKnightOffsets) |offset| {
+            const coord = cell_coord_signed + offset;
+
+            if (all(coord >= i32_2{ 0, 0 }) and all(coord < i32_2{ board.Extent, board.Extent })) {
+                const index = board.cell_index_from_coord(@intCast(coord));
+                candidate_masks[index] &= deletion_mask;
+            }
+        }
     }
 }
 
@@ -140,10 +179,10 @@ pub fn find_naked_pair_region(extent: comptime_int, board: board_generic.State(e
 }
 
 test "Naked pair" {
-    const board_type = board_generic.Regular3x3;
-    const extent = comptime board_type.extent();
+    const rules = board_generic.Regular3x3;
+    const extent = comptime rules.type.extent();
 
-    var board = board_generic.State(extent).init(board_type);
+    var board = board_generic.State(extent).init(rules);
 
     var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
 
@@ -513,10 +552,10 @@ pub fn find_box_line_reduction_for_line(extent: comptime_int, board: board_gener
 }
 
 test "Box-line removal" {
-    const board_type = board_generic.Regular3x3;
-    const extent = comptime board_type.extent();
+    const rules = board_generic.Regular3x3;
+    const extent = comptime rules.type.extent();
 
-    var board = board_generic.State(extent).init(board_type);
+    var board = board_generic.State(extent).init(rules);
 
     const full_mask = board.full_candidate_mask();
     var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{full_mask} ** board.ExtentSqr;
@@ -618,7 +657,7 @@ pub fn apply_technique(extent: comptime_int, board: *board_generic.State(extent)
 }
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
-    var candidate_masks = board.fill_trivial_candidate_masks();
+    var candidate_masks = trivial_candidate_masks(extent, board);
 
     while (find_easiest_known_technique(extent, board.*, &candidate_masks)) |technique| {
         apply_technique(extent, board, &candidate_masks, technique);
@@ -633,16 +672,39 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
     return true;
 }
 
+// NOTE: Commented offsets are the ones covered by sudoku rules
+const ChessKingOffsets = [_]i32_2{
+    .{ -1, -1 },
+    .{ 1, -1 },
+    .{ -1, 1 },
+    .{ 1, 1 },
+    // .{ 0, -1 },
+    // .{ -1, 0 },
+    // .{ 1, 0 },
+    // .{ 0, 1 },
+};
+
+const ChessKnightOffsets = [_]i32_2{
+    .{ -2, -1 },
+    .{ 2, -1 },
+    .{ -2, 1 },
+    .{ 2, 1 },
+    .{ -1, -2 },
+    .{ 1, -2 },
+    .{ -1, 2 },
+    .{ 1, 2 },
+};
+
 test {
     inline for (known_boards.TestLogicalSolver) |known_board| {
-        const board_extent = comptime known_board.board_type.extent();
+        const board_extent = comptime known_board.rules.type.extent();
 
-        var board = board_generic.State(board_extent).init(known_board.board_type);
+        var board = board_generic.State(board_extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solve(board_extent, &board));
 
-        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        var solution_board = board_generic.State(board_extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqual(solution_board.numbers, board.numbers);

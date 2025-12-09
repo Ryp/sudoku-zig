@@ -9,13 +9,13 @@ pub const Algorithm = union(enum) {
     naive,
 };
 
-pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed: u64, algorithm: Algorithm) board_generic.State(extent) {
+pub fn generate(extent: comptime_int, rules: board_generic.Rules, seed: u64, algorithm: Algorithm) board_generic.State(extent) {
     switch (algorithm) {
         .dancing_links => |options| {
-            return dancing_links.generate(extent, board_type, seed, options.difficulty);
+            return dancing_links.generate(extent, rules, seed, options.difficulty);
         },
         .naive => {
-            return naive.generate(extent, board_type, seed);
+            return naive.generate(extent, rules, seed);
         },
     }
 }

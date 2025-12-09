@@ -41,8 +41,8 @@ pub fn State(extent: comptime_int) type {
         validation_error: ?ValidationError,
         solver_event: ?SolverEvent,
 
-        pub fn init(allocator: std.mem.Allocator, board_type: board_generic.BoardType, sudoku_string_opt: ?[]const u8) !Self {
-            var board = board_generic.State(extent).init(board_type);
+        pub fn init(allocator: std.mem.Allocator, rules: board_generic.Rules, sudoku_string_opt: ?[]const u8) !Self {
+            var board = board_generic.State(extent).init(rules);
 
             if (sudoku_string_opt) |sudoku_string| {
                 board.fill_board_from_string(sudoku_string);
@@ -52,7 +52,7 @@ pub fn State(extent: comptime_int) type {
 
                 const seed = std.mem.readInt(u64, &random_buffer, .little);
 
-                board = generator.generate(extent, board_type, seed, .{ .dancing_links = .{ .difficulty = 200 } });
+                board = generator.generate(extent, rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             }
 
             std.debug.print("Board: {s}\n", .{&board.string_from_board()});
@@ -270,7 +270,7 @@ pub fn State(extent: comptime_int) type {
         }
 
         fn player_fill_candidates(self: *Self) void {
-            self.candidate_masks[0..self.board.ExtentSqr].* = self.board.fill_trivial_candidate_masks();
+            self.candidate_masks[0..self.board.ExtentSqr].* = solver_logical.trivial_candidate_masks(self.board.Extent, &self.board);
 
             self.push_state_to_history();
         }

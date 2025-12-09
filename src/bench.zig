@@ -6,15 +6,15 @@ const known_boards = @import("sudoku/known_boards.zig");
 
 pub fn main() !void {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
-        std.debug.print("Testing solver on known board: type = {}, start = {s}\n", .{ known_board.board_type, known_board.start_string });
-        const board_extent = comptime known_board.board_type.extent();
+        std.debug.print("Testing solver on known board: rules = {}, start = {s}\n", .{ known_board.rules, known_board.start_string });
+        const extent = comptime known_board.rules.type.extent();
 
-        var board = board_generic.State(board_extent).init(known_board.board_type);
+        var board = board_generic.State(extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solver.solve(board_extent, &board, .{ .dancing_links = .{} }));
+        try std.testing.expect(solver.solve(extent, &board, .{ .dancing_links = .{} }));
 
-        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        var solution_board = board_generic.State(extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
         std.debug.print("Solver: {s}\n", .{board.string_from_board()});

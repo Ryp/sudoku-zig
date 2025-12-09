@@ -11,6 +11,9 @@ pub const Options = struct {
 };
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
+    std.debug.assert(!board.rules.chess_anti_king);
+    std.debug.assert(!board.rules.chess_anti_knight);
+
     var free_cell_list_full: [board.ExtentSqr]CellInfo = undefined;
     const free_cell_list = populate_free_list(extent, board, &free_cell_list_full);
 
@@ -171,14 +174,14 @@ fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo,
 
 test {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
-        const board_extent = comptime known_board.board_type.extent();
+        const extent = comptime known_board.rules.type.extent();
 
-        var board = board_generic.State(board_extent).init(known_board.board_type);
+        var board = board_generic.State(extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(board_extent, &board, .{}));
+        try std.testing.expect(solve(extent, &board, .{}));
 
-        var solution_board = board_generic.State(board_extent).init(known_board.board_type);
+        var solution_board = board_generic.State(extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqual(solution_board.numbers, board.numbers);
