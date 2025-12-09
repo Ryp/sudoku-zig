@@ -248,12 +248,11 @@ fn cover_columns_for_given_clues(extent: comptime_int, board: board_generic.Stat
     for (board.numbers, 0..) |number_opt, cell_index| {
         if (number_opt) |number| {
             const choice_index = get_choice_index(@intCast(cell_index), number, board.Extent);
-            const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
+            const header = choices_constraint_link_indices[choice_index];
 
-            cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.row_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.col_index);
-            cover_column(links_h, links_v, choice_constraint_link_indices.box_index);
+            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+                cover_column(links_h, links_v, constraint_index);
+            }
         }
     }
 }

@@ -174,11 +174,25 @@ fn cover_columns_for_random_clues(extent: comptime_int, board: *board_generic.St
         board.numbers[cell_index] = number;
 
         const choice_index = dancing_links_solver.get_choice_index(@intCast(cell_index), number, board.Extent);
-        const choice_constraint_link_indices = choices_constraint_link_indices[choice_index];
+        const header = choices_constraint_link_indices[choice_index];
 
-        dancing_links_solver.cover_column(links_h, links_v, choice_constraint_link_indices.exs_index);
-        dancing_links_solver.cover_column(links_h, links_v, choice_constraint_link_indices.row_index);
-        dancing_links_solver.cover_column(links_h, links_v, choice_constraint_link_indices.col_index);
-        dancing_links_solver.cover_column(links_h, links_v, choice_constraint_link_indices.box_index);
+        inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+            dancing_links_solver.cover_column(links_h, links_v, constraint_index);
+        }
+    }
+}
+
+test {
+    const Seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
+    const Difficulty: u32 = 200;
+
+    inline for (.{
+        board_generic.Regular3x3,
+        board_generic.BoardType{ .regular = .{ .box_extent = .{ 4, 3 } } },
+        // board_generic.BoardType{ .regular = .{ .box_extent = .{ 4, 4 } } }, // FIXME crashes
+        // known_boards.jigsaw9.board_type, // FIXME Can't make a board
+    }) |board_type| {
+        const board = generate(comptime board_type.extent(), board_type, Seed, Difficulty);
+        std.debug.print("Generated: {s}\n", .{board.string_from_board()});
     }
 }

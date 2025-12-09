@@ -140,9 +140,7 @@ pub fn find_naked_pair_region(extent: comptime_int, board: board_generic.State(e
 }
 
 test "Naked pair" {
-    const board_type = board_generic.BoardType{ .regular = .{
-        .box_extent = .{ 3, 3 },
-    } };
+    const board_type = board_generic.Regular3x3;
     const extent = comptime board_type.extent();
 
     var board = board_generic.State(extent).init(board_type);
@@ -342,7 +340,6 @@ pub fn apply_pointing_line(extent: comptime_int, board: board_generic.State(exte
     const number_mask = board.mask_for_number(pointing_line.number);
 
     for (line_region, 0..) |cell_index, region_cell_index| {
-        // FIXME super confusing
         if (board.mask_for_number(@intCast(region_cell_index)) & pointing_line.line_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
         }
@@ -443,7 +440,6 @@ pub fn apply_box_line_reduction(extent: comptime_int, board: board_generic.State
     const number_mask = board.mask_for_number(box_line_reduction.number);
 
     for (box_region, 0..) |cell_index, region_cell_index| {
-        // FIXME super confusing
         if (board.mask_for_number(@intCast(region_cell_index)) & box_line_reduction.box_region_deletion_mask != 0) {
             candidate_masks[cell_index] &= ~number_mask;
         }
@@ -517,9 +513,7 @@ pub fn find_box_line_reduction_for_line(extent: comptime_int, board: board_gener
 }
 
 test "Box-line removal" {
-    const board_type = board_generic.BoardType{ .regular = .{
-        .box_extent = .{ 3, 3 },
-    } };
+    const board_type = board_generic.Regular3x3;
     const extent = comptime board_type.extent();
 
     var board = board_generic.State(extent).init(board_type);

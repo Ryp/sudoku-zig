@@ -24,6 +24,10 @@ pub const BoardType = union(enum) {
     }
 };
 
+pub const Regular3x3 = BoardType{ .regular = .{
+    .box_extent = .{ 3, 3 },
+} };
+
 pub const MinExtent: comptime_int = 2; // Minimum extent we support
 pub const MaxExtent: comptime_int = 16; // Maximum extent we support
 pub const MaxNumbersString = [MaxExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };

@@ -58,7 +58,6 @@ pub fn generate(extent: comptime_int, board_type: board_generic.BoardType, seed:
 }
 
 fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
-    // FIXME Use box count var
     const box_x = rng.random().uintLessThan(u32, regular_type.box_extent[1]);
     const col_offset = box_x * regular_type.box_extent[0];
     const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_extent[0]);
@@ -70,7 +69,6 @@ fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), re
 }
 
 fn swap_random_row(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
-    // FIXME Use box count var
     const box_y = rng.random().uintLessThan(u32, regular_type.box_extent[0]);
     const row_offset = box_y * regular_type.box_extent[1];
     const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_extent[1]);
