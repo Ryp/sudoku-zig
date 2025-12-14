@@ -11,7 +11,9 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
     @memcpy(&board.numbers, &const_board.numbers);
 
     var candidate_masks = solver_logical.trivial_candidate_masks(extent, &board);
-    var technique_histogram = [_]u32{0} ** 8;
+
+    const TechniqueUnionTypeInfo = @typeInfo(solver_logical.Technique).@"union";
+    var technique_histogram = [_]u32{0} ** TechniqueUnionTypeInfo.fields.len;
 
     while (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {
         const technique_index = @intFromEnum(technique);
@@ -29,7 +31,7 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
 
     for (technique_histogram, 0..) |count, bucket_index| {
         if (count > 0) {
-            const Tag = @typeInfo(solver_logical.Technique).@"union".tag_type.?;
+            const Tag = TechniqueUnionTypeInfo.tag_type.?;
             const technique = @as(Tag, @enumFromInt(bucket_index));
             std.debug.print("   '{s}' was applied {} times\n", .{ @tagName(technique), count });
         }
