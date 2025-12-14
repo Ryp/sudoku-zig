@@ -1,8 +1,8 @@
-const board_generic = @import("board_generic.zig");
-const Regular3x3 = board_generic.Regular3x3;
+const rules = @import("rules.zig");
+const Regular3x3 = rules.Regular3x3;
 
 pub const KnownBoard = struct {
-    rules: board_generic.Rules,
+    rules: rules.Rules,
     start_string: []const u8,
     solution_string: []const u8,
 };

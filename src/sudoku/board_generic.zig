@@ -2,37 +2,7 @@ const std = @import("std");
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
-
-pub const RegularSudoku = struct {
-    box_extent: u32_2,
-};
-
-pub const JigsawSudoku = struct {
-    extent: u32,
-    box_indices_string: []const u8,
-};
-
-pub const Type = union(enum) {
-    regular: RegularSudoku,
-    jigsaw: JigsawSudoku,
-
-    pub fn extent(self: @This()) u32 {
-        return switch (self) {
-            .regular => |regular| regular.box_extent[0] * regular.box_extent[1],
-            .jigsaw => |jigsaw| jigsaw.extent,
-        };
-    }
-};
-
-pub const Rules = struct {
-    type: Type,
-    chess_anti_king: bool = false,
-    chess_anti_knight: bool = false,
-};
-
-pub const Regular3x3 = Rules{ .type = .{ .regular = .{
-    .box_extent = .{ 3, 3 },
-} } };
+const Rules = @import("rules.zig").Rules;
 
 pub const MinExtent: comptime_int = 2; // Minimum extent we support
 pub const MaxExtent: comptime_int = 16; // Maximum extent we support

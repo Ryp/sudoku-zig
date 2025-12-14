@@ -6,6 +6,7 @@ const c = @cImport({
 
 const TrueType = @import("TrueType.zig");
 
+const rules = @import("../sudoku/rules.zig");
 const board_generic = @import("../sudoku/board_generic.zig");
 const solver_logical = @import("../sudoku/solver_logical.zig");
 
@@ -13,6 +14,7 @@ const game_state = @import("../sudoku/game.zig");
 const PlayerAction = game_state.PlayerAction;
 
 const grader = @import("../sudoku/grader.zig");
+const validator = @import("../sudoku/validator.zig");
 
 const common = @import("../sudoku/common.zig");
 const u32_2 = common.u32_2;
@@ -591,7 +593,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
     std.debug.print("Board at exit: {s}\n", .{&game.board.string_from_board()});
 }
 
-fn fill_box_regions_colors(board_type: board_generic.Type, box_region_colors: []ColorRGBA8) void {
+fn fill_box_regions_colors(board_type: rules.Type, box_region_colors: []ColorRGBA8) void {
     switch (board_type) {
         .regular => |regular| {
             // Draw a checkerboard pattern
@@ -826,28 +828,42 @@ fn draw_solver_technique_overlay(extent: comptime_int, board: board_generic.Stat
     }
 }
 
-fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext(extent), validation_error: game_state.ValidationError) void {
-    const region = board.regions.get(validation_error.region_index);
+fn draw_validation_error(extent: comptime_int, board: board_generic.State(extent), sdl_context: SdlContext(extent), validation_error: validator.Error) void {
+    // Highlight region that was considered if any
+    if (validation_error.region_index_opt) |region_index| {
+        const region = board.regions.get(region_index);
+        for (region) |cell_index| {
+            const cell_coord = board.cell_coord_from_index(cell_index);
+            const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
-    for (region) |cell_index| {
-        const cell_coord = board.cell_coord_from_index(cell_index);
+            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
+            _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+        }
+    }
+
+    // Draw reference cell
+    {
+        const cell_coord = board.cell_coord_from_index(validation_error.reference_cell_index);
         const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
-        if (validation_error.reference_cell_index == cell_index or validation_error.invalid_cell_index == cell_index and !validation_error.is_candidate) {
-            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
-        } else {
-            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverOrange);
-        }
+        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
         _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
+    }
 
-        if (validation_error.invalid_cell_index == cell_index and validation_error.is_candidate) {
-            var candidate_rect = sdl_context.candidate_local_rects[validation_error.number];
-            candidate_rect.x += cell_rect.x;
-            candidate_rect.y += cell_rect.y;
+    // Draw invalid cell
+    const cell_coord = board.cell_coord_from_index(validation_error.invalid_cell_index);
+    const cell_rect = sdl_context.cell_rectangle(cell_coord);
 
-            _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
-            _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
-        }
+    if (validation_error.is_candidate) {
+        var candidate_rect = sdl_context.candidate_local_rects[validation_error.number];
+        candidate_rect.x += cell_rect.x;
+        candidate_rect.y += cell_rect.y;
+
+        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
+        _ = c.SDL_RenderFillRect(sdl_context.renderer, &candidate_rect);
+    } else {
+        _ = SDL_SetRenderDrawColor2(sdl_context.renderer, SolverRed);
+        _ = c.SDL_RenderFillRect(sdl_context.renderer, &cell_rect);
     }
 }
 

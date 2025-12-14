@@ -2,8 +2,7 @@ const std = @import("std");
 
 const solver_logical = @import("solver_logical.zig");
 const board_generic = @import("board_generic.zig");
-
-const game = @import("game.zig");
+const validator = @import("validator.zig");
 
 pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.State(extent)) void {
     // Create a dummy board we can modify
@@ -20,7 +19,7 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
 
         solver_logical.apply_technique(extent, &board, &candidate_masks, technique);
 
-        if (game.check_board_for_validation_errors(extent, &board, &candidate_masks)) |validation_error| {
+        if (validator.check_board_for_errors(extent, &board, null)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});
             return;
         }

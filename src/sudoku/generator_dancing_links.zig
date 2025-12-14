@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const rules = @import("rules.zig");
 const board_generic = @import("board_generic.zig");
 const known_boards = @import("known_boards.zig");
 
@@ -8,11 +9,11 @@ const dancing_links_solver = @import("solver_dancing_links.zig");
 const DoublyLink = dancing_links_solver.DoublyLink;
 const ChoiceConstraintsIndices = dancing_links_solver.ChoiceConstraintsIndices;
 
-pub fn generate(extent: comptime_int, rules: board_generic.Rules, seed: u64, difficulty: u32) board_generic.State(extent) {
-    std.debug.assert(!rules.chess_anti_king);
-    std.debug.assert(!rules.chess_anti_knight);
+pub fn generate(extent: comptime_int, board_rules: rules.Rules, seed: u64, difficulty: u32) board_generic.State(extent) {
+    std.debug.assert(!board_rules.chess_anti_king);
+    std.debug.assert(!board_rules.chess_anti_knight);
 
-    var board = board_generic.State(extent).init(rules);
+    var board = board_generic.State(extent).init(board_rules);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -191,12 +192,12 @@ test {
     const Difficulty: u32 = 200;
 
     inline for (.{
-        board_generic.Regular3x3,
-        board_generic.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 3 } } } },
-        // board_generic.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } }, // FIXME crashes
+        rules.Regular3x3,
+        rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 3 } } } },
+        // rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } }, // FIXME crashes
         // known_boards.jigsaw9.rules, // FIXME Can't make a board
-    }) |rules| {
-        const board = generate(comptime rules.type.extent(), rules, Seed, Difficulty);
+    }) |board_rules| {
+        const board = generate(comptime board_rules.type.extent(), board_rules, Seed, Difficulty);
         std.debug.print("Generated: {s}\n", .{board.string_from_board()});
     }
 }

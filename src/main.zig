@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const game = @import("sudoku/game.zig");
 const board_generic = @import("sudoku/board_generic.zig");
+const rules = @import("sudoku/rules.zig");
 
 const clap = @import("clap.zig");
 const sdl = @import("frontend/sdl.zig");
@@ -34,12 +35,12 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
         return clap.helpToFile(.stderr(), clap.Help, &params, .{});
     }
 
-    var rules: board_generic.Rules = .{ .type = undefined };
+    var board_rules: rules.Rules = .{ .type = undefined };
 
     if (res.args.jigsaw) |jigsaw_string| {
         const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
 
-        rules.type = .{
+        board_rules.type = .{
             .jigsaw = .{
                 .extent = jigsaw_extent,
                 .box_indices_string = jigsaw_string,
@@ -49,20 +50,20 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
         const box_w = res.args.box_width orelse 3;
         const box_h = res.args.box_height orelse 3;
 
-        rules.type = .{ .regular = .{
+        board_rules.type = .{ .regular = .{
             .box_extent = .{ box_w, box_h },
         } };
     }
 
-    rules.chess_anti_king = res.args.king != 0;
-    rules.chess_anti_knight = res.args.knight != 0;
+    board_rules.chess_anti_king = res.args.king != 0;
+    board_rules.chess_anti_knight = res.args.knight != 0;
 
-    const board_extent = rules.type.extent();
+    const board_extent = board_rules.type.extent();
 
     // Scalarize extent
     inline for (board_generic.MinExtent..board_generic.MaxExtent + 1) |comptime_extent| {
         if (board_extent == comptime_extent) {
-            var game_state = try game.State(comptime_extent).init(allocator, rules, res.positionals[0]);
+            var game_state = try game.State(comptime_extent).init(allocator, board_rules, res.positionals[0]);
             defer game_state.deinit(allocator);
 
             try sdl.execute_main_loop(comptime_extent, &game_state, allocator);

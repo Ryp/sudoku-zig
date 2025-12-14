@@ -1,17 +1,18 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const rules = @import("rules.zig");
 const board_generic = @import("board_generic.zig");
 
 // Only generates a regular sudoku board
 // This is a naive implementation that doesn't guarantee a unique solution
-pub fn generate(extent: comptime_int, rules: board_generic.Rules, seed: u64) board_generic.State(extent) {
-    std.debug.assert(!rules.chess_anti_king);
-    std.debug.assert(!rules.chess_anti_knight);
+pub fn generate(extent: comptime_int, board_rules: rules.Rules, seed: u64) board_generic.State(extent) {
+    std.debug.assert(!board_rules.chess_anti_king);
+    std.debug.assert(!board_rules.chess_anti_knight);
 
-    var board = board_generic.State(extent).init(rules);
+    var board = board_generic.State(extent).init(board_rules);
 
-    const regular_type: board_generic.RegularSudoku = switch (board.rules.type) {
+    const regular_type: rules.RegularSudoku = switch (board.rules.type) {
         .regular => |r| r,
         else => @panic("Naive generator only supports regular sudoku boards"),
     };
@@ -60,7 +61,7 @@ pub fn generate(extent: comptime_int, rules: board_generic.Rules, seed: u64) boa
     return board;
 }
 
-fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), regular_type: rules.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     const box_x = rng.random().uintLessThan(u32, regular_type.box_extent[1]);
     const col_offset = box_x * regular_type.box_extent[0];
     const col_a = col_offset + rng.random().uintLessThan(u32, regular_type.box_extent[0]);
@@ -71,7 +72,7 @@ fn swap_random_col(extent: comptime_int, board: *board_generic.State(extent), re
     swap_region(extent, board, &board.regions.col(col_a), &board.regions.col(col_b));
 }
 
-fn swap_random_row(extent: comptime_int, board: *board_generic.State(extent), regular_type: board_generic.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
+fn swap_random_row(extent: comptime_int, board: *board_generic.State(extent), regular_type: rules.RegularSudoku, rng: *std.Random.Xoroshiro128) void {
     const box_y = rng.random().uintLessThan(u32, regular_type.box_extent[0]);
     const row_offset = box_y * regular_type.box_extent[1];
     const row_a = row_offset + rng.random().uintLessThan(u32, regular_type.box_extent[1]);

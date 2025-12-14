@@ -1,12 +1,13 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const rules = @import("rules.zig");
 const board_generic = @import("board_generic.zig");
-const RegionSet = board_generic.RegionSet;
 
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const generator = @import("generator.zig");
+const validator = @import("validator.zig");
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
@@ -38,11 +39,11 @@ pub fn State(extent: comptime_int) type {
         candidate_masks_history: []MaskType,
         history_index: u32 = 0,
         max_history_index: u32 = 0,
-        validation_error: ?ValidationError,
+        validation_error: ?validator.Error,
         solver_event: ?SolverEvent,
 
-        pub fn init(allocator: std.mem.Allocator, rules: board_generic.Rules, sudoku_string_opt: ?[]const u8) !Self {
-            var board = board_generic.State(extent).init(rules);
+        pub fn init(allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
+            var board = board_generic.State(extent).init(board_rules);
 
             if (sudoku_string_opt) |sudoku_string| {
                 board.fill_board_from_string(sudoku_string);
@@ -52,7 +53,7 @@ pub fn State(extent: comptime_int) type {
 
                 const seed = std.mem.readInt(u64, &random_buffer, .little);
 
-                board = generator.generate(extent, rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
+                board = generator.generate(extent, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             }
 
             std.debug.print("Board: {s}\n", .{&board.string_from_board()});
@@ -148,7 +149,7 @@ pub fn State(extent: comptime_int) type {
                 },
             }
 
-            self.validation_error = check_board_for_validation_errors(extent, &self.board, self.candidate_masks);
+            self.validation_error = validator.check_board_for_errors(extent, &self.board, self.candidate_masks);
         }
 
         fn apply_player_event_normal_flow(self: *Self, action: PlayerAction) void {
@@ -368,57 +369,3 @@ const PlayerSetNumberAtSelection = struct {
 const PlayerToggleCandidateAtSelection = struct {
     number: u4,
 };
-
-pub const ValidationError = struct {
-    number: u4,
-    is_candidate: bool,
-    invalid_cell_index: u32,
-    reference_cell_index: u32,
-    region_index: board_generic.RegionIndex,
-};
-
-pub fn check_board_for_validation_errors(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []const board_generic.MaskType(extent)) ?ValidationError {
-    for (0..board.Extent) |number_usize| {
-        const number: u4 = @intCast(number_usize);
-        const number_mask = board.mask_for_number(number);
-
-        inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-            for (0..board.Extent) |sub_index| {
-                const region_index = board.regions.get_region_index(set, sub_index);
-                const region = board.regions.get(region_index);
-
-                var last_cell_index: u32 = undefined;
-                var found = false;
-
-                for (region) |cell_index| {
-                    if (found and candidate_masks[cell_index] & number_mask != 0) {
-                        return .{
-                            .number = number,
-                            .is_candidate = true,
-                            .invalid_cell_index = cell_index,
-                            .reference_cell_index = last_cell_index,
-                            .region_index = region_index,
-                        };
-                    }
-
-                    if (board.numbers[cell_index] == number) {
-                        if (found) {
-                            return .{
-                                .number = number,
-                                .is_candidate = false,
-                                .invalid_cell_index = cell_index,
-                                .reference_cell_index = last_cell_index,
-                                .region_index = region_index,
-                            };
-                        }
-
-                        found = true;
-                        last_cell_index = cell_index;
-                    }
-                }
-            }
-        }
-    }
-
-    return null;
-}

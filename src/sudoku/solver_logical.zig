@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const board_generic = @import("board_generic.zig");
+const rules = @import("rules.zig");
 const RegionIndex = board_generic.RegionIndex;
 const RegionSet = board_generic.RegionSet;
 
@@ -52,7 +53,7 @@ pub fn remove_trivial_candidates_for_number(extent: comptime_int, board: *const 
     const cell_coord_signed: i32_2 = @intCast(cell_coord);
 
     if (board.rules.chess_anti_king) {
-        for (ChessKingOffsets) |offset| {
+        for (rules.AntiKingOffsets) |offset| {
             const coord = cell_coord_signed + offset;
 
             if (all(coord >= i32_2{ 0, 0 }) and all(coord < i32_2{ board.Extent, board.Extent })) {
@@ -63,7 +64,7 @@ pub fn remove_trivial_candidates_for_number(extent: comptime_int, board: *const 
     }
 
     if (board.rules.chess_anti_knight) {
-        for (ChessKnightOffsets) |offset| {
+        for (rules.AntiKnightOffsets) |offset| {
             const coord = cell_coord_signed + offset;
 
             if (all(coord >= i32_2{ 0, 0 }) and all(coord < i32_2{ board.Extent, board.Extent })) {
@@ -179,10 +180,10 @@ pub fn find_naked_pair_region(extent: comptime_int, board: board_generic.State(e
 }
 
 test "Naked pair" {
-    const rules = board_generic.Regular3x3;
-    const extent = comptime rules.type.extent();
+    const regular_rules = rules.Regular3x3;
+    const extent = comptime regular_rules.type.extent();
 
-    var board = board_generic.State(extent).init(rules);
+    var board = board_generic.State(extent).init(regular_rules);
 
     var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{0} ** board.ExtentSqr;
 
@@ -552,10 +553,10 @@ pub fn find_box_line_reduction_for_line(extent: comptime_int, board: board_gener
 }
 
 test "Box-line removal" {
-    const rules = board_generic.Regular3x3;
-    const extent = comptime rules.type.extent();
+    const regular_rules = rules.Regular3x3;
+    const extent = comptime regular_rules.type.extent();
 
-    var board = board_generic.State(extent).init(rules);
+    var board = board_generic.State(extent).init(regular_rules);
 
     const full_mask = board.full_candidate_mask();
     var candidate_masks: [board.ExtentSqr]board_generic.MaskType(extent) = .{full_mask} ** board.ExtentSqr;
@@ -671,29 +672,6 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent)) bool {
 
     return true;
 }
-
-// NOTE: Commented offsets are the ones covered by sudoku rules
-const ChessKingOffsets = [_]i32_2{
-    .{ -1, -1 },
-    .{ 1, -1 },
-    .{ -1, 1 },
-    .{ 1, 1 },
-    // .{ 0, -1 },
-    // .{ -1, 0 },
-    // .{ 1, 0 },
-    // .{ 0, 1 },
-};
-
-const ChessKnightOffsets = [_]i32_2{
-    .{ -2, -1 },
-    .{ 2, -1 },
-    .{ -2, 1 },
-    .{ 2, 1 },
-    .{ -1, -2 },
-    .{ 1, -2 },
-    .{ -1, 2 },
-    .{ 1, 2 },
-};
 
 test {
     inline for (known_boards.TestLogicalSolver) |known_board| {
