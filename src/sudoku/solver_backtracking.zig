@@ -1,9 +1,9 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 const board_generic = @import("board_generic.zig");
 const RegionSet = board_generic.RegionSet;
 
+const solver_logical = @import("solver_logical.zig");
 const known_boards = @import("known_boards.zig");
 
 pub const Options = struct {
@@ -11,9 +11,6 @@ pub const Options = struct {
 };
 
 pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
-    std.debug.assert(!board.rules.chess_anti_king);
-    std.debug.assert(!board.rules.chess_anti_knight);
-
     var free_cell_list_full: [board.ExtentSqr]CellInfo = undefined;
     const free_cell_list = populate_free_list(extent, board, &free_cell_list_full);
 
@@ -38,15 +35,11 @@ fn solve_backtracking_recursive(extent: comptime_int, board: *board_generic.Stat
     }
 
     const free_cell: CellInfo = free_cell_list[list_index];
+    const valid_mask = valid_candidates_mask(extent, board, free_cell);
 
-    const valid_candidates = cell_valid_candidates(extent, board, free_cell);
-
-    // Now let's place a number from the list of candidates and see if it sticks
-    const cell_number = &board.numbers[free_cell.index];
-
-    for (valid_candidates, 0..) |is_valid, number| {
-        if (is_valid) {
-            cell_number.* = @intCast(number);
+    for (0..extent) |number| {
+        if (board.mask_for_number(@intCast(number)) & valid_mask != 0) {
+            board.numbers[free_cell.index] = @intCast(number);
 
             if (solve_backtracking_recursive(extent, board, free_cell_list, list_index + 1)) {
                 return true;
@@ -54,41 +47,45 @@ fn solve_backtracking_recursive(extent: comptime_int, board: *board_generic.Stat
         }
     }
 
-    cell_number.* = null;
+    board.numbers[free_cell.index] = null;
     return false;
 }
 
 fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.State(extent), free_cell_list: []CellInfo) bool {
-    var current_guess_full = std.mem.zeroes([board.ExtentSqr]u4);
+    var current_guess_full = std.mem.zeroes([board.ExtentSqr]u32);
     var current_guess = current_guess_full[0..free_cell_list.len];
 
     var list_index: u32 = 0;
 
-    while (list_index < free_cell_list.len) main: {
+    outer_loop: while (list_index < free_cell_list.len) {
         const free_cell = free_cell_list[list_index];
+        const valid_mask = valid_candidates_mask(extent, board, free_cell);
 
-        const valid_candidates = cell_valid_candidates(extent, board, free_cell);
-
-        const cell_number = &board.numbers[free_cell.index];
         const start: u32 = current_guess[list_index];
 
-        for (valid_candidates[start..], start..) |is_valid, number| {
-            if (is_valid) {
-                cell_number.* = @intCast(number);
-                current_guess[list_index] = @intCast(number + 1);
+        for (start..extent) |number| {
+            if (board.mask_for_number(@intCast(number)) & valid_mask != 0) {
+                board.numbers[free_cell.index] = @intCast(number); // Guess this number
+                current_guess[list_index] = @intCast(number + 1); // If we backtrack, start after this number
 
                 list_index += 1;
 
-                break :main;
+                continue :outer_loop;
             }
         } else {
-            cell_number.* = null;
+            // Since we skipped the loop we shouldn't have any active guess
+            // If we came here from backtracking, this should have been cleared for us
+            // std.debug.assert(board.numbers[free_cell.index] == null);
+
+            // Invalidate all previous guesses for this cell
             current_guess[list_index] = 0;
 
             // Backtracking at index zero means we didn't find a solution
             if (list_index == 0) {
                 return false;
             } else {
+                // Clear previous guess because it's wrong!
+                board.numbers[free_cell_list[list_index - 1].index] = null;
                 list_index -= 1;
             }
         }
@@ -97,20 +94,25 @@ fn solve_backtracking_iterative(extent: comptime_int, board: *board_generic.Stat
     return true;
 }
 
-fn cell_valid_candidates(extent: comptime_int, board: *const board_generic.State(extent), cell_info: CellInfo) [board.Extent]bool {
+fn valid_candidates_mask(extent: comptime_int, board: *const board_generic.State(extent), cell_info: CellInfo) board.MaskType {
+    // NOTE: This is slow but needed for non-vanilla sudokus
+    if (board.rules.chess_anti_king or board.rules.chess_anti_knight) {
+        return solver_logical.trivial_candidate_masks(extent, board)[cell_info.index];
+    }
+
     const box = board.regions.box_indices[cell_info.index];
 
-    var valid_candidates: [board.Extent]bool = .{true} ** board.Extent;
+    var valid_mask = board.full_candidate_mask();
 
     inline for (.{ board.regions.col(cell_info.col), board.regions.row(cell_info.row), board.regions.box(box) }) |region| {
         for (region) |cell_index| {
             if (board.numbers[cell_index]) |number| {
-                valid_candidates[number] = false;
+                valid_mask &= ~board.mask_for_number(number);
             }
         }
     }
 
-    return valid_candidates;
+    return valid_mask;
 }
 
 fn populate_free_list(extent: comptime_int, board: *const board_generic.State(extent), free_cell_list_full: []CellInfo) []CellInfo {
@@ -172,14 +174,30 @@ fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo,
     return candidate_counts[lhs.index] < candidate_counts[rhs.index];
 }
 
-test {
+test "Iterative" {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
         const extent = comptime known_board.rules.type.extent();
 
         var board = board_generic.State(extent).init(known_board.rules);
         board.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(extent, &board, .{}));
+        try std.testing.expect(solve(extent, &board, .{ .recursive = false }));
+
+        var solution_board = board_generic.State(extent).init(known_board.rules);
+        solution_board.fill_board_from_string(known_board.solution_string);
+
+        try std.testing.expectEqual(solution_board.numbers, board.numbers);
+    }
+}
+
+test "Recursive" {
+    inline for (known_boards.TestBacktrackingSolver) |known_board| {
+        const extent = comptime known_board.rules.type.extent();
+
+        var board = board_generic.State(extent).init(known_board.rules);
+        board.fill_board_from_string(known_board.start_string);
+
+        try std.testing.expect(solve(extent, &board, .{ .recursive = true }));
 
         var solution_board = board_generic.State(extent).init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);

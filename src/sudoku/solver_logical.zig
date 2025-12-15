@@ -16,7 +16,7 @@ const all = common.all;
 pub fn place_number_remove_trivial_candidates(extent: comptime_int, board: *board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     board.numbers[cell_index] = number;
 
-    remove_trivial_candidates_for_number(extent, board, candidate_masks, cell_index, number);
+    remove_trivial_candidates_for_number_at(extent, board, candidate_masks, cell_index, number);
 }
 
 pub fn trivial_candidate_masks(extent: comptime_int, board: *const board_generic.State(extent)) [board.ExtentSqr]board.MaskType {
@@ -24,14 +24,14 @@ pub fn trivial_candidate_masks(extent: comptime_int, board: *const board_generic
 
     for (board.numbers, 0..) |number_opt, cell_index| {
         if (number_opt) |number| {
-            remove_trivial_candidates_for_number(extent, board, &candidate_masks, @intCast(cell_index), number);
+            remove_trivial_candidates_for_number_at(extent, board, &candidate_masks, @intCast(cell_index), number);
         }
     }
 
     return candidate_masks;
 }
 
-pub fn remove_trivial_candidates_for_number(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
+fn remove_trivial_candidates_for_number_at(extent: comptime_int, board: *const board_generic.State(extent), candidate_masks: []u16, cell_index: u32, number: u4) void {
     candidate_masks[cell_index] = 0;
 
     // Remove candidates

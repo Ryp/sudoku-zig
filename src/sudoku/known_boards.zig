@@ -47,15 +47,15 @@ pub const TestBacktrackingSolver = .{
     pointing_line,
     box_line_reduction,
     skyscraper,
-    // easy4x3, // NOTE: Too slow in debug mode but should work
+    // easy4x3, // Too slow in debug mode but should work
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
     naive_backtracking_killer_2,
-    // dancing_links_killer, // NOTE: Too slow in debug mode but should work
-    // chess_anti_king, // FIXME Unsupported
-    // chess_anti_king_hard, // FIXME Unsupported
-    // chess_anti_knight, // FIXME Unsupported
+    // dancing_links_killer, // Too slow in debug mode but should work
+    chess_anti_king,
+    // chess_anti_king_hard, // Too slow in debug mode but should work
+    chess_anti_knight,
 };
 
 pub const easy = KnownBoard{
