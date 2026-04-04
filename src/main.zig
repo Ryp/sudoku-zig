@@ -8,7 +8,9 @@ const rules = @import("sudoku/rules.zig");
 const clap = @import("clap.zig");
 const sdl = @import("frontend/sdl.zig");
 
-pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+
     const params = comptime clap.parseParamsComptime(
         \\-h, --help              Display this help and exit.
         \\-W, --box_width <u32>   Box width for regular sudokus (default: 3)
@@ -21,18 +23,18 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
     );
 
     var diag = clap.Diagnostic{};
-    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, init.minimal.args, .{
         .diagnostic = &diag,
         .allocator = allocator,
     }) catch |err| {
         // Report useful error and exit.
-        try diag.reportToFile(.stderr(), err);
+        try diag.reportToFile(init.io, .stderr(), err);
         return err;
     };
     defer res.deinit();
 
     if (res.args.help != 0) {
-        return clap.helpToFile(.stderr(), clap.Help, &params, .{});
+        return clap.helpToFile(init.io, .stderr(), clap.Help, &params, .{});
     }
 
     var board_rules: rules.Rules = .{ .type = undefined };
@@ -73,16 +75,6 @@ pub fn main_with_allocator(allocator: std.mem.Allocator) !void {
     } else {
         @panic("Invalid sudoku extent!");
     }
-}
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-    // const allocator = std.heap.page_allocator;
-
-    try main_with_allocator(allocator);
 }
 
 fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {

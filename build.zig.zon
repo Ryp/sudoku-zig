@@ -2,19 +2,21 @@
     .name = .sudoku,
     .version = "0.1.0",
     .fingerprint = 0x5cef6ae5b9e4cc18, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.16.0-dev.3073+28ae5d415",
     .dependencies = .{
         .sdl = .{
             .url = "git+https://github.com/castholm/SDL.git#701da66369221654c501e9661c648dd3aa2cfe52",
             .hash = "sdl-0.4.1+3.4.2-SDL--hF-pAEsbMtCvJAr9CwYI94eOItCgmnDb0ZXeKPJ",
         },
         .TrueType = .{
-            .url = "git+https://codeberg.org/andrewrk/TrueType.git#7543e2dca70267e8f09e37be00fbc0385138581d",
-            .hash = "TrueType-0.0.0-Ne-mWHIGAQBwHsiS9z_vbr1SkVZCkG01Vpzrs079dzIO",
+            // This links to a PR with 0.16 support
+            .url = "git+https://codeberg.org/lxnt/TrueType.git#4eb9be0dad9cdd0dc94a4d5e7e76dc547b560155",
+            .hash = "TrueType-0.0.0-Ne-mWMxxAQDit1oHfxlK2lkZAX8P7Wsa2SBPaR_xSpc8",
         },
         .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.11.0.tar.gz",
-            .hash = "clap-0.11.0-oBajB-HnAQDPCKYzwF7rO3qDFwRcD39Q0DALlTSz5H7e",
+            // Unreleased commit with 0.16 support
+            .url = "git+https://github.com/Hejsil/zig-clap.git#fc1e5cc3f6d9d3001112385ee6256d694e959d2f",
+            .hash = "clap-0.11.0-oBajB7foAQC3Iyn4IVCkUdYaOVVng5IZkSncySTjNig1",
         },
     },
     .paths = .{

@@ -274,11 +274,9 @@ fn create_font_textures_and_aabbs(allocator: std.mem.Allocator, ttf: TrueType, s
             break;
         }
 
-        if (ttf.codepointGlyphIndex(codepoint)) |glyph_index| {
-            glyph_indices[index] = glyph_index;
-        } else {
-            return error.FontMissingGlyph;
-        }
+        const glyph_index = ttf.codepointGlyphIndex(codepoint);
+        if (glyph_index == .notdef) return error.FontMissingGlyph;
+        glyph_indices[index] = glyph_index;
     }
 
     for (glyph_indices, 0..) |glyph_index, number| {

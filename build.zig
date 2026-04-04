@@ -35,8 +35,8 @@ pub fn build(b: *std.Build) void {
         exe.root_module.addIncludePath(b.path(tracy_path));
         exe.root_module.addCSourceFile(.{ .file = b.path(client_cpp), .flags = tracy_c_flags });
 
-        exe.linkLibC();
-        exe.linkLibCpp();
+        exe.root_module.link_libc = true;
+        exe.root_module.link_libcpp = true;
     }
 
     const sdl_dep = b.dependency("sdl", .{

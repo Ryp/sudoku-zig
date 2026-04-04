@@ -26,7 +26,7 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     std.debug.assert(!board.rules.chess_anti_king);
     std.debug.assert(!board.rules.chess_anti_knight);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();

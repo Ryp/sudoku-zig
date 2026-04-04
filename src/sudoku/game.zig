@@ -49,7 +49,7 @@ pub fn State(extent: comptime_int) type {
                 board.fill_board_from_string(sudoku_string);
             } else {
                 var random_buffer: [8]u8 = undefined;
-                std.crypto.random.bytes(&random_buffer);
+                _ = std.os.linux.getrandom(&random_buffer, random_buffer.len, 0);
 
                 const seed = std.mem.readInt(u64, &random_buffer, .little);
 
@@ -141,7 +141,7 @@ pub fn State(extent: comptime_int) type {
                 },
                 .WaitingForHintValidation => {
                     switch (action) {
-                        .get_hint => |_| {
+                        .get_hint => {
                             self.player_apply_hint();
                         },
                         else => {},
@@ -166,28 +166,28 @@ pub fn State(extent: comptime_int) type {
                 .toggle_candidate => |toggle_candidate| {
                     self.player_toggle_candidate(toggle_candidate.number);
                 },
-                .clear_selected_cell => |_| {
+                .clear_selected_cell => {
                     self.player_clear_selected_cell();
                 },
-                .undo => |_| {
+                .undo => {
                     self.player_undo();
                 },
-                .redo => |_| {
+                .redo => {
                     self.player_redo();
                 },
-                .fill_candidates => |_| {
+                .fill_candidates => {
                     self.player_fill_candidates();
                 },
-                .fill_all_candidates => |_| {
+                .fill_all_candidates => {
                     self.player_fill_candidates_all();
                 },
-                .clear_all_candidates => |_| {
+                .clear_all_candidates => {
                     self.player_clear_candidates();
                 },
-                .get_hint => |_| {
+                .get_hint => {
                     self.player_get_hint();
                 },
-                .solve_board => |_| {
+                .solve_board => {
                     self.player_solve_board();
                 },
             }

@@ -15,7 +15,7 @@ pub fn generate(extent: comptime_int, board_rules: rules.Rules, seed: u64, diffi
 
     var board = board_generic.State(extent).init(board_rules);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();

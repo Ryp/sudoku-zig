@@ -243,16 +243,9 @@ pub fn State(extent: comptime_int) type {
 }
 
 pub fn MaskType(extent: comptime_int) type {
-    if (false) {
-        return @Type(.{
-            .int = .{
-                .signedness = .unsigned,
-                .bits = extent,
-            },
-        });
-    } else {
-        return u16; // FIXME!!!!
-    }
+    _ = extent;
+    // return @Int(.unsigned, extent); // FIXME!!!!
+    return @Int(.unsigned, 16);
 }
 
 test "Basic" {
@@ -262,7 +255,7 @@ test "Basic" {
 
 test "Ergonomics" {
     var random_buffer: [8]u8 = undefined;
-    std.crypto.random.bytes(&random_buffer);
+    _ = std.os.linux.getrandom(&random_buffer, random_buffer.len, 0);
 
     const seed = std.mem.readInt(u64, &random_buffer, .little);
 
