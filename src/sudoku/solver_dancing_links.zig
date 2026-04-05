@@ -26,11 +26,6 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     std.debug.assert(!board.rules.chess_anti_king);
     std.debug.assert(!board.rules.chess_anti_knight);
 
-    var gpa = std.heap.DebugAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-
     // All links are allocated sequentially, so we're doing some math to compute relative addresses.
     const constraint_type_count = 4;
     const constraints_per_type_count = board.Extent * board.Extent;
@@ -39,21 +34,21 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     const choice_link_count = constraint_count * node_per_constraint_count;
     const link_count = 1 + constraint_count + choice_link_count;
 
-    const links_h = allocator.alloc(DoublyLink, link_count) catch unreachable; // FIXME
-    defer allocator.free(links_h);
+    var links_h_array: [link_count]DoublyLink = undefined;
+    const links_h = &links_h_array;
 
-    const links_v = allocator.alloc(DoublyLink, link_count) catch unreachable; // FIXME
-    defer allocator.free(links_v);
+    var links_v_array: [link_count]DoublyLink = undefined;
+    const links_v = &links_v_array;
 
     const root_link_offset = 0;
     const header_link_offset = root_link_offset + 1;
     const header_link_count = constraint_count;
     const choice_link_offset = header_link_offset + header_link_count;
 
-    // Allocate an array indexed by row giving containing the header link indices for the 4 satisfied contraints
+    // Array indexed by row giving containing the header link indices for the 4 satisfied contraints
     const choices_count = board.Extent * board.ExtentSqr;
-    const choices_constraint_link_indices = allocator.alloc(ChoiceConstraintsIndices, choices_count) catch unreachable; // FIXME
-    defer allocator.free(choices_constraint_link_indices);
+    var choices_constraint_link_indices_array : [choices_count]ChoiceConstraintsIndices = undefined;
+    const choices_constraint_link_indices = &choices_constraint_link_indices_array;
 
     // This changes between runs only if the size of the sudoku or the box layout changes
     fill_choices_constraint_link_indices(extent, board.*, choices_constraint_link_indices, header_link_offset);

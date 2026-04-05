@@ -44,6 +44,8 @@ const CellExtentBasePx = 75;
 const CellExtentBasePxMin = 16;
 const CellExtentBasePxMax = 160;
 
+const CellCandidateFillRatio = 0.85;
+
 fn SdlContext(board_extent: comptime_int) type {
     return struct {
         const Self = @This();
@@ -173,7 +175,7 @@ fn SdlContext(board_extent: comptime_int) type {
         pub fn compute_candidate_local_rects(self: *Self) void {
             const candidate_layout = get_candidate_layout(self.BoardExtent);
 
-            const fill_ratio = self.cell_extent_px * 0.85;
+            const fill_ratio = self.cell_extent_px * CellCandidateFillRatio;
             const offset = (self.cell_extent_px - fill_ratio) / 2.0;
 
             const candidate_box_extent = .{
@@ -326,8 +328,6 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 }
 
 pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), allocator: std.mem.Allocator) !void {
-    const board_extent = game.board.Extent;
-
     var box_region_colors: [extent]ColorRGBA8 = undefined;
     fill_box_regions_colors(game.board.rules.type, &box_region_colors);
 
@@ -376,7 +376,7 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
                     };
 
                     // Clamp to board extent
-                    selected_cell_coord = @min(selected_cell_coord, u32_2{ board_extent - 1, board_extent - 1 });
+                    selected_cell_coord = @min(selected_cell_coord, u32_2{ game.board.Extent - 1, game.board.Extent - 1 });
 
                     if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
                         game.apply_player_event(.{ .toggle_select = .{ .coord = selected_cell_coord } });
