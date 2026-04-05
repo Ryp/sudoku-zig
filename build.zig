@@ -1,4 +1,5 @@
 const std = @import("std");
+const pspsdk = @import("pspsdk");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -7,16 +8,25 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const optimize = b.standardOptimizeOption(.{});
 
+    const psp_target = pspsdk.getPspTarget(b);
+
     const exe = b.addExecutable(.{
         .name = "sudoku",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
-            .target = target,
+            .target = psp_target,
             .optimize = optimize,
+            .strip = false, // disable as cannot be used with "link_emit_relocs = true"
         }),
     });
 
-    b.installArtifact(exe);
+    pspsdk.configurePspExecutable(exe);
+
+    _ = pspsdk.addEbootSteps(b, exe, .{
+        .title = "Sudoku",
+        .output_dir = "sudoku",
+        .icon0 = b.path("res/icon0.png"),
+    });
 
     exe.root_module.addAnonymousImport("font_regular", .{ .root_source_file = b.path("res/VarelaRound-Regular.ttf") });
     exe.root_module.addAnonymousImport("font_small", .{ .root_source_file = b.path("res/VarelaRound-Regular.ttf") });
@@ -27,33 +37,40 @@ pub fn build(b: *std.Build) void {
     exe_options.addOption(bool, "enable_tracy", enable_tracy);
     exe.root_module.addOptions("build_options", exe_options);
 
-    if (enable_tracy) {
-        const tracy_path = "external/tracy";
-        const client_cpp = "external/tracy/public/TracyClient.cpp";
-        const tracy_c_flags: []const []const u8 = &[_][]const u8{ "-DTRACY_ENABLE=1", "-fno-sanitize=undefined" };
+    // if (enable_tracy) {
+    //     const tracy_path = "external/tracy";
+    //     const client_cpp = "external/tracy/public/TracyClient.cpp";
+    //     const tracy_c_flags: []const []const u8 = &[_][]const u8{ "-DTRACY_ENABLE=1", "-fno-sanitize=undefined" };
 
-        exe.root_module.addIncludePath(b.path(tracy_path));
-        exe.root_module.addCSourceFile(.{ .file = b.path(client_cpp), .flags = tracy_c_flags });
+    //     exe.root_module.addIncludePath(b.path(tracy_path));
+    //     exe.root_module.addCSourceFile(.{ .file = b.path(client_cpp), .flags = tracy_c_flags });
 
-        exe.root_module.link_libc = true;
-        exe.root_module.link_libcpp = true;
-    }
+    //     exe.root_module.link_libc = true;
+    //     exe.root_module.link_libcpp = true;
+    // }
 
-    const sdl_dep = b.dependency("sdl", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const sdl_lib = sdl_dep.artifact("SDL3");
+    // const sdl_dep = b.dependency("sdl", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // const sdl_lib = sdl_dep.artifact("SDL3");
 
-    exe.root_module.linkLibrary(sdl_lib);
+    // exe.root_module.linkLibrary(sdl_lib);
 
     const true_type = b.dependency("TrueType", .{});
     exe.root_module.addImport("TrueType.zig", true_type.module("TrueType"));
 
-    const clap = b.dependency("clap", .{});
-    exe.root_module.addImport("clap.zig", clap.module("clap"));
+    // const clap = b.dependency("clap", .{});
+    // exe.root_module.addImport("clap.zig", clap.module("clap"));
+
+    const pspsdk_dep = b.dependency("pspsdk", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("pspsdk", pspsdk_dep.module("pspsdk"));
 
     const run_cmd = b.addRunArtifact(exe);
+
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);

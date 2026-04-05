@@ -2,7 +2,7 @@
     .name = .sudoku,
     .version = "0.1.0",
     .fingerprint = 0x5cef6ae5b9e4cc18, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.3073+28ae5d415",
+    .minimum_zig_version = "0.16.0-dev.3028+a85495ca2",
     .dependencies = .{
         .sdl = .{
             .url = "git+https://github.com/castholm/SDL.git#701da66369221654c501e9661c648dd3aa2cfe52",
@@ -17,6 +17,10 @@
             // Unreleased commit with 0.16 support
             .url = "git+https://github.com/Hejsil/zig-clap.git#fc1e5cc3f6d9d3001112385ee6256d694e959d2f",
             .hash = "clap-0.11.0-oBajB7foAQC3Iyn4IVCkUdYaOVVng5IZkSncySTjNig1",
+        },
+        .pspsdk = .{
+            .url = "git+https://github.com/zPSP-Dev/Zig-PSP.git#52d0b5a98b28cdd2d4e746f9c6c69dd17e037be3",
+            .hash = "pspsdk-0.7.0-BZphygo9DgDdyhEW2nWJZCpQlE2P3m7xKUPNOY5xZVpP",
         },
     },
     .paths = .{

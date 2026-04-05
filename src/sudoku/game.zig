@@ -16,6 +16,8 @@ const all = common.all;
 
 const MaxHistorySize = 512;
 
+const sdk = @import("pspsdk");
+
 const GameFlow = enum {
     Normal,
     WaitingForHintValidation,
