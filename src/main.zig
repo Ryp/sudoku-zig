@@ -1,117 +1,25 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
-const game = @import("sudoku/game.zig");
-const board = @import("sudoku/board.zig");
-const rules = @import("sudoku/rules.zig");
-const save_state = @import("sudoku/save_state.zig");
+const psp = @import("frontend/psp.zig");
 
-const clap = @import("clap.zig");
-const sdl = @import("frontend/sdl.zig");
+const sdk = @import("pspsdk");
+
+pub const panic = sdk.extra.debug.panic; // Import panic handler
+
+pub const std_options_debug_threaded_io: ?*std.Io.Threaded = null;
+pub const std_options_debug_io: std.Io = sdk.extra.Io.psp_io;
+
+pub fn std_options_cwd() std.Io.Dir {
+    return .{ .handle = -1 };
+}
+
+comptime {
+    asm (sdk.extra.module.module_info("Sudoku", .{ .mode = .User }, 1, 0));
+}
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help              Display this help and exit.
-        \\-W, --box_width <u32>   Box width for regular sudokus (default: 3)
-        \\-H, --box_height <u32>  Box height for regular sudokus (default: 3)
-        \\-j, --jigsaw <str>      Region indices string for jigsaw sudokus
-        \\--king                  Chess anti-king's constraint
-        \\--knight                Chess anti-knight's constraint
-        \\--load <str>            Load save file
-        \\<str>                   Sudoku string (you can use '.' for empty cells).
-        \\                        Unset this if you want to have a sudoku board generated for you.
-    );
-
-    var diag = clap.Diagnostic{};
-    var res = clap.parse(clap.Help, &params, clap.parsers.default, init.minimal.args, .{
-        .diagnostic = &diag,
-        .allocator = allocator,
-    }) catch |err| {
-        // Report useful error and exit.
-        try diag.reportToFile(io, .stderr(), err);
-        return err;
-    };
-    defer res.deinit();
-
-    if (res.args.help != 0) {
-        return clap.helpToFile(io, .stderr(), clap.Help, &params, .{});
-    }
-
-    var game_state: game.State = undefined;
-
-    if (res.args.load) |save_state_path| {
-        var save_state_file = if (std.Io.Dir.cwd().openFile(io, save_state_path, .{})) |f| f else |err| {
-            std.debug.print("Failed to open save state file '{s}': ", .{save_state_path});
-            return err;
-        };
-        defer save_state_file.close(io);
-
-        var reader_buffer: [4096]u8 = undefined;
-        var reader = save_state_file.reader(io, &reader_buffer);
-
-        game_state = save_state.load(&reader.interface, allocator) catch |err| {
-            std.debug.print("Failed to load save file: {}\n", .{err});
-            return err;
-        };
-    } else {
-        var board_rules: rules.Rules = .{ .type = undefined };
-
-        if (res.args.jigsaw) |jigsaw_string| {
-            const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
-
-            board_rules.type = .{
-                .jigsaw = .{
-                    .extent = jigsaw_extent,
-                    .box_indices_max = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
-                },
-            };
-        } else {
-            const box_w = res.args.box_width orelse 3;
-            const box_h = res.args.box_height orelse 3;
-
-            board_rules.type = .{ .regular = .{
-                .box_extent = .{ box_w, box_h },
-            } };
-        }
-
-        board_rules.chess_anti_king = res.args.king != 0;
-        board_rules.chess_anti_knight = res.args.knight != 0;
-
-        game_state = try .init(io, allocator, board_rules, res.positionals[0]);
-    }
-    defer game_state.deinit(allocator);
-
-    try sdl.execute_main_loop(&game_state, allocator);
-
-    if (true) {
-        const output_path = "latest.sdku";
-        const output_file = std.Io.Dir.cwd().createFile(io, output_path, .{}) catch |err| {
-            std.debug.print("Error creating output file: {s}\n", .{output_path});
-            return err;
-        };
-        errdefer std.Io.Dir.cwd().deleteFile(io, output_path) catch {}; // If we encounter an error, just delete the file and ignore failures
-        defer output_file.close(io);
-
-        var writer_buffer: [4096]u8 = undefined;
-        var writer = output_file.writer(io, &writer_buffer);
-        const io_writer = &writer.interface;
-
-        try save_state.save(&game_state, io_writer);
-    }
-}
-
-fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {
-    const string_len = jigsaw_string.len;
-
-    for (board.MinExtent..board.MaxExtent + 1) |extent| {
-        if (string_len == extent * extent) {
-            return @intCast(extent);
-        }
-    }
-
-    std.debug.print("Invalid jigsaw string length {}, only perfect squares are valid\n", .{jigsaw_string.len});
-    return error.InvalidJigsawStringLength;
+    try psp.execute_main_loop(io, allocator);
 }

@@ -4,6 +4,8 @@ const std = @import("std");
 pub const u32_2 = @Vector(2, u32);
 pub const i32_2 = @Vector(2, i32);
 
+pub const f32_2 = @Vector(2, f32);
+
 // I borrowed this name from HLSL
 pub fn all(vector: anytype) bool {
     const type_info = @typeInfo(@TypeOf(vector));
