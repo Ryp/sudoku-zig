@@ -19,6 +19,10 @@
             .url = "git+https://github.com/Hejsil/zig-clap.git#fc1e5cc3f6d9d3001112385ee6256d694e959d2f",
             .hash = "clap-0.11.0-oBajB7foAQC3Iyn4IVCkUdYaOVVng5IZkSncySTjNig1",
         },
+        .pspsdk = .{
+            .url = "git+https://github.com/zPSP-Dev/Zig-PSP.git#52d0b5a98b28cdd2d4e746f9c6c69dd17e037be3",
+            .hash = "pspsdk-0.7.0-BZphygo9DgDdyhEW2nWJZCpQlE2P3m7xKUPNOY5xZVpP",
+        },
     },
     .paths = .{
         "res",
