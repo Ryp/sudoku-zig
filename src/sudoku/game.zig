@@ -42,16 +42,16 @@ pub fn State(extent: comptime_int) type {
         validation_error: ?validator.Error,
         solver_event: ?SolverEvent,
 
-        pub fn init(allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
+        pub fn init(io: std.Io, allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
             var board = board_generic.State(extent).init(board_rules);
 
             if (sudoku_string_opt) |sudoku_string| {
                 board.fill_board_from_string(sudoku_string);
             } else {
-                var random_buffer: [8]u8 = undefined;
-                _ = std.os.linux.getrandom(&random_buffer, random_buffer.len, 0);
+                var seed_buffer: [8]u8 = undefined;
+                io.random(&seed_buffer);
 
-                const seed = std.mem.readInt(u64, &random_buffer, .little);
+                const seed = std.mem.readInt(u64, &seed_buffer, .little);
 
                 board = generator.generate(extent, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             }

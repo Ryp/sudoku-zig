@@ -254,10 +254,10 @@ test "Basic" {
 }
 
 test "Ergonomics" {
-    var random_buffer: [8]u8 = undefined;
-    _ = std.os.linux.getrandom(&random_buffer, random_buffer.len, 0);
+    var seed_buffer: [8]u8 = undefined;
+    std.testing.io.random(&seed_buffer);
 
-    const seed = std.mem.readInt(u64, &random_buffer, .little);
+    const seed = std.mem.readInt(u64, &seed_buffer, .little);
 
     var rng = std.Random.Xoroshiro128.init(seed);
 

@@ -65,7 +65,7 @@ pub fn main(init: std.process.Init) !void {
     // Scalarize extent
     inline for (board_generic.MinExtent..board_generic.MaxExtent + 1) |comptime_extent| {
         if (board_extent == comptime_extent) {
-            var game_state = try game.State(comptime_extent).init(allocator, board_rules, res.positionals[0]);
+            var game_state = try game.State(comptime_extent).init(init.io, allocator, board_rules, res.positionals[0]);
             defer game_state.deinit(allocator);
 
             try sdl.execute_main_loop(comptime_extent, &game_state, allocator);
