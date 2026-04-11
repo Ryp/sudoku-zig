@@ -42,6 +42,14 @@ const TrueType = @import("TrueType.zig");
 
 const psp = @import("pspsdk");
 
+const UIState = struct {
+    selected_number: u4 = 4,
+    selected_mode: enum {
+        Normal,
+        Candidate,
+    } = .Normal,
+};
+
 pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
     const board = known_boards.easy;
     const extent = comptime board.rules.type.extent();
@@ -49,19 +57,10 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
     var game = try game_state.State(extent).init(io, allocator, board.rules, board.start_string);
     defer game.deinit(allocator);
 
-    // FIXME debug
-    const NumberMode = enum {
-        Normal,
-        Candidate,
-    };
-
-    var selected_number: u4 = 4;
-    var selected_mode: NumberMode = .Normal;
+    var ui_state: UIState = .{};
 
     game.apply_player_event(.{ .toggle_select = .{ .coord = .{ 0, 0 } } });
     game.apply_player_event(.{ .fill_candidates = undefined });
-    // game.apply_player_event(.{ .get_hint = undefined });
-    // game.apply_player_event(.{ .solve_board = undefined });
 
     psp.extra.utils.enableHBCB();
     psp.extra.debug.screenInit();
@@ -142,91 +141,6 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
     grader.grade_and_print_summary(extent, game.board);
 
     while (true) {
-        // Poll events
-        // while (c.SDL_PollEvent(&sdl_event)) {
-        //     switch (sdl_event.type) {
-        //         c.SDL_EVENT_MOUSE_BUTTON_UP => {
-        //             _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
-
-        //             var selected_cell_coord = u32_2{
-        //                 @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.x - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
-        //                 @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.y - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
-        //             };
-
-        //             // Clamp to board extent
-        //             selected_cell_coord = @min(selected_cell_coord, u32_2{ game.board.Extent - 1, game.board.Extent - 1 });
-
-        //             if (sdl_event.button.button == c.SDL_BUTTON_LEFT) {
-        //                 game.apply_player_event(.{ .toggle_select = .{ .coord = selected_cell_coord } });
-        //             }
-        //         },
-        //         c.SDL_EVENT_KEY_DOWN => {
-        //             const key_sym = sdl_event.key.key;
-        //             switch (key_sym) {
-        //                 c.SDLK_MINUS, c.SDLK_KP_MINUS => {
-        //                     sdl_context.base_cell_extent = @max(sdl_context.base_cell_extent - 5, CellExtentBasePxMin);
-        //                     sdl_context.resize_window();
-        //                     sdl_context.update_content_metrics();
-        //                     try sdl_context.resize_fonts(allocator);
-        //                 },
-        //                 c.SDLK_EQUALS, c.SDLK_KP_PLUS => {
-        //                     sdl_context.base_cell_extent = @min(sdl_context.base_cell_extent + 5, CellExtentBasePxMax);
-        //                     sdl_context.resize_window();
-        //                     sdl_context.update_content_metrics();
-        //                     try sdl_context.resize_fonts(allocator);
-        //                 },
-        //                 else => switch (game.flow) {
-        //                     .Normal => {
-        //                         const player_event =
-        //                             switch (key_sym) {
-        //                                 c.SDLK_LEFT => PlayerAction{ .move_selection = .{ .x_offset = -1, .y_offset = 0 } },
-        //                                 c.SDLK_RIGHT => PlayerAction{ .move_selection = .{ .x_offset = 1, .y_offset = 0 } },
-        //                                 c.SDLK_UP => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = -1 } },
-        //                                 c.SDLK_DOWN => PlayerAction{ .move_selection = .{ .x_offset = 0, .y_offset = 1 } },
-        //                                 c.SDLK_1...c.SDLK_9, c.SDLK_KP_1...c.SDLK_KP_9, c.SDLK_A, c.SDLK_B, c.SDLK_C, c.SDLK_D, c.SDLK_E, c.SDLK_F, c.SDLK_G => if (is_any_shift_pressed)
-        //                                     PlayerAction{ .toggle_candidate = .{ .number = sdl_key_to_number(key_sym) } }
-        //                                 else
-        //                                     PlayerAction{ .set_number = .{ .number = sdl_key_to_number(key_sym) } },
-        //                                 c.SDLK_DELETE, c.SDLK_0, c.SDLK_KP_0 => PlayerAction{ .clear_selected_cell = undefined },
-        //                                 c.SDLK_Z => if (is_any_ctrl_pressed)
-        //                                     if (is_any_shift_pressed)
-        //                                         PlayerAction{ .redo = undefined }
-        //                                     else
-        //                                         PlayerAction{ .undo = undefined }
-        //                                 else
-        //                                     null,
-        //                                 c.SDLK_H => if (is_any_shift_pressed)
-        //                                     PlayerAction{ .clear_all_candidates = undefined }
-        //                                 else if (is_any_ctrl_pressed)
-        //                                     PlayerAction{ .fill_all_candidates = undefined }
-        //                                 else
-        //                                     PlayerAction{ .fill_candidates = undefined },
-        //                                 c.SDLK_RETURN => if (is_any_shift_pressed)
-        //                                     PlayerAction{ .get_hint = undefined }
-        //                                 else
-        //                                     PlayerAction{ .solve_board = undefined },
-        //                                 else => null,
-        //                             };
-
-        //                         if (player_event) |event| {
-        //                             game.apply_player_event(event);
-        //                         }
-        //                     },
-        //                     .WaitingForHintValidation => {
-        //                         switch (key_sym) {
-        //                             c.SDLK_RETURN => {
-        //                                 game.apply_player_event(PlayerAction{ .get_hint = undefined });
-        //                             },
-        //                             else => {},
-        //                         }
-        //                     },
-        //                 },
-        //             }
-        //         },
-        //         else => {},
-        //     }
-        // }
-
         var button_held: psp.c.types.SceCtrlData = undefined;
         _ = try psp.sceCtrlReadBufferPositive((&button_held)[0..1]);
 
@@ -245,7 +159,7 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
         }
 
         if (button_pressed.r_trigger == 1) {
-            selected_mode = switch (selected_mode) {
+            ui_state.selected_mode = switch (ui_state.selected_mode) {
                 .Normal => .Candidate,
                 .Candidate => .Normal,
             };
@@ -255,9 +169,9 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
             if (button_held.buttons.l_trigger == 1) {
                 game.apply_player_event(.{ .clear_selected_cell = undefined });
             } else {
-                switch (selected_mode) {
-                    .Normal => game.apply_player_event(.{ .set_number = .{ .number = selected_number } }),
-                    .Candidate => game.apply_player_event(.{ .toggle_candidate = .{ .number = selected_number } }),
+                switch (ui_state.selected_mode) {
+                    .Normal => game.apply_player_event(.{ .set_number = .{ .number = ui_state.selected_number } }),
+                    .Candidate => game.apply_player_event(.{ .toggle_candidate = .{ .number = ui_state.selected_number } }),
                 }
             }
         } else if (button_pressed.square == 1) {
@@ -275,7 +189,7 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
             const DeadzoneSqr = Deadzone * Deadzone;
 
             if (position_stick_length_sqr < DeadzoneSqr) {
-                selected_number = 5;
+                ui_state.selected_number = 5;
             } else {
                 const test_a_1_2 = cross(.{ -1.0, -2.0 }, position_stick) > 0.0;
                 const test_b_3_6 = cross(.{ 2.0, -1.0 }, position_stick) > 0.0;
@@ -284,36 +198,31 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
 
                 if (test_a_1_2) {
                     if (test_b_3_6) {
-                        selected_number = if (test_c_6_9) 9 else 6;
+                        ui_state.selected_number = if (test_c_6_9) 9 else 6;
                     } else {
-                        selected_number = if (test_d_2_3) 3 else 2;
+                        ui_state.selected_number = if (test_d_2_3) 3 else 2;
                     }
                 } else {
                     if (test_b_3_6) {
-                        selected_number = if (test_d_2_3) 8 else 7;
+                        ui_state.selected_number = if (test_d_2_3) 8 else 7;
                     } else {
-                        selected_number = if (test_c_6_9) 4 else 1;
+                        ui_state.selected_number = if (test_c_6_9) 4 else 1;
                     }
                 }
             }
-            selected_number -= 1;
+            ui_state.selected_number -= 1;
         }
 
-        // Compute hishlight mask
-        // var highlight_mask: game.board.MaskType = 0;
-        // for (game.selected_cells) |selected_cell_index| {
-        //     if (game.board.numbers[selected_cell_index]) |number| {
-        //         highlight_mask |= game.board.mask_for_number(number);
-        //     }
-        // }
-
-        const highlight_mask = game.board.mask_for_number(selected_number);
+        const highlight_mask = game.board.mask_for_number(ui_state.selected_number);
 
         psp.sceGuStart(.Direct, &display_list);
 
         psp.sceGuClearColor(@bitCast(Color24{ .r = GridColor.r, .g = GridColor.g, .b = GridColor.b }));
         psp.sceGuClearDepth(0);
         psp.sceGuClear(.{ .color = true, .depth = true });
+
+        psp.sceGuDisable(.Blend);
+        psp.sceGuDisable(.Texture2D);
 
         // Draw backgrounds
         for (game.board.numbers, game.candidate_masks, 0..) |number_opt, cell_candidate_mask, cell_index| {
@@ -382,25 +291,6 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
 
         draw_sudoku_box_regions(extent, game.board, sdl_context);
 
-        // Draw OSK cells
-        {
-            const region = [9]u32_2{
-                .{ 0, 0 }, .{ 1, 0 }, .{ 2, 0 },
-                .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 },
-                .{ 0, 2 }, .{ 1, 2 }, .{ 2, 2 },
-            };
-
-            for (region, 0..) |cell_coord, number| {
-                const cell_rect = sdl_context.cell_rectangle(cell_coord + u32_2{ 11, 3 });
-
-                if (number == selected_number) {
-                    psp_draw_colored_rect(cell_rect, HighlightColor);
-                } else {
-                    psp_draw_colored_rect(cell_rect, BgColor);
-                }
-            }
-        }
-
         {
             psp.sceGuEnable(.Blend);
             psp.sceGuEnable(.Texture2D);
@@ -452,62 +342,9 @@ pub fn execute_main_loop(io: std.Io, allocator: std.mem.Allocator) !void {
                     }
                 }
             }
-
-            // Draw OSK numbers
-            {
-                const osk_regions = [9]u32_2{
-                    .{ 0, 0 }, .{ 1, 0 }, .{ 2, 0 },
-                    .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 },
-                    .{ 0, 2 }, .{ 1, 2 }, .{ 2, 2 },
-                };
-
-                var counts = std.mem.zeroes([extent]u32);
-
-                for (game.board.numbers) |number_opt| {
-                    if (number_opt) |number| {
-                        counts[number] += 1;
-                    }
-                }
-
-                for (osk_regions, 0..) |cell_coord, number| {
-                    const cell_rect = sdl_context.cell_rectangle(cell_coord + u32_2{ 11, 3 });
-
-                    if (counts[number] == extent) {
-                        psp.sceGuTexEnvColor(rgba8_to_u24(InactiveTextColor));
-                    } else {
-                        psp.sceGuTexEnvColor(rgba8_to_u24(TextColor));
-                    }
-
-                    switch (selected_mode) {
-                        .Normal => {
-                            const glyph_rect = sdl_context.fonts.regular_text_aabbs[number];
-                            const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
-
-                            const texture = sdl_context.fonts.regular_text_textures[number];
-
-                            psp.sceGuTexMode(texture.gu_pixel_format, 0, .Single, .Linear);
-                            psp.sceGuTexImage(0, texture.width, texture.height, texture.element_stride, texture.vram_buffer.ptr);
-
-                            psp_draw_textured_rect(centered_glyph_rect);
-                        },
-                        .Candidate => {
-                            const glyph_rect = sdl_context.fonts.small_text_aabbs[number];
-                            const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
-
-                            const texture = sdl_context.fonts.small_text_textures[number];
-
-                            psp.sceGuTexMode(texture.gu_pixel_format, 0, .Single, .Linear);
-                            psp.sceGuTexImage(0, texture.width, texture.height, texture.element_stride, texture.vram_buffer.ptr);
-
-                            psp_draw_textured_rect(centered_glyph_rect);
-                        },
-                    }
-                }
-            }
-
-            psp.sceGuDisable(.Blend);
-            psp.sceGuDisable(.Texture2D);
         }
+
+        draw_osk(extent, game.board, sdl_context, ui_state);
 
         _ = psp.sceGuFinish();
         _ = psp.sceGuSync(.Finish, .wait);
@@ -857,6 +694,86 @@ fn fill_box_regions_colors(board_type: rules.Type, box_region_colors: []ColorRGB
                 box_region_color.* = hsv_to_rgba8(hue, JigsawRegionSaturation, JigsawRegionValue);
             }
         },
+    }
+}
+
+fn draw_osk(extent: comptime_int, board: board_generic.State(extent), sdl_context: PspContext(extent), ui_state: UIState) void {
+    psp.sceGuDisable(.Blend);
+    psp.sceGuDisable(.Texture2D);
+
+    const osk_regions = [9]u32_2{
+        .{ 0, 0 }, .{ 1, 0 }, .{ 2, 0 },
+        .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 },
+        .{ 0, 2 }, .{ 1, 2 }, .{ 2, 2 },
+    };
+
+    const osk_offset = sdl_context.cell_rectangle(u32_2{ 11, 3 });
+
+    // Draw backgrounds
+    for (osk_regions, 0..) |cell_coord, number| {
+        var cell_rect = sdl_context.cell_rectangle(cell_coord);
+        cell_rect.x += osk_offset.x;
+        cell_rect.y += osk_offset.y;
+
+        if (number == ui_state.selected_number) {
+            psp_draw_colored_rect(cell_rect, HighlightColor);
+        } else {
+            psp_draw_colored_rect(cell_rect, BgColor);
+        }
+    }
+
+    // Draw numbers
+    psp.sceGuEnable(.Blend);
+    psp.sceGuEnable(.Texture2D);
+
+    psp.sceGuTexFunc(.Blend, .Rgba);
+    psp.sceGuTexEnvColor(rgba8_to_u24(TextColor));
+    psp.sceGuBlendFunc(.Add, .SrcAlpha, .OneMinusSrcAlpha, 0, 0);
+    psp.sceGuTexFilter(.Nearest, .Nearest);
+
+    var counts = std.mem.zeroes([extent]u32);
+
+    for (board.numbers) |number_opt| {
+        if (number_opt) |number| {
+            counts[number] += 1;
+        }
+    }
+
+    for (osk_regions, 0..) |cell_coord, number| {
+        var cell_rect = sdl_context.cell_rectangle(cell_coord);
+        cell_rect.x += osk_offset.x;
+        cell_rect.y += osk_offset.y;
+
+        if (counts[number] == extent) {
+            psp.sceGuTexEnvColor(rgba8_to_u24(InactiveTextColor));
+        } else {
+            psp.sceGuTexEnvColor(rgba8_to_u24(TextColor));
+        }
+
+        switch (ui_state.selected_mode) {
+            .Normal => {
+                const glyph_rect = sdl_context.fonts.regular_text_aabbs[number];
+                const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
+
+                const texture = sdl_context.fonts.regular_text_textures[number];
+
+                psp.sceGuTexMode(texture.gu_pixel_format, 0, .Single, .Linear);
+                psp.sceGuTexImage(0, texture.width, texture.height, texture.element_stride, texture.vram_buffer.ptr);
+
+                psp_draw_textured_rect(centered_glyph_rect);
+            },
+            .Candidate => {
+                const glyph_rect = sdl_context.fonts.small_text_aabbs[number];
+                const centered_glyph_rect = center_rect_inside_rect(glyph_rect, cell_rect);
+
+                const texture = sdl_context.fonts.small_text_textures[number];
+
+                psp.sceGuTexMode(texture.gu_pixel_format, 0, .Single, .Linear);
+                psp.sceGuTexImage(0, texture.width, texture.height, texture.element_stride, texture.vram_buffer.ptr);
+
+                psp_draw_textured_rect(centered_glyph_rect);
+            },
+        }
     }
 }
 
