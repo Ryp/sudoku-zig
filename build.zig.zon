@@ -2,7 +2,7 @@
     .name = .sudoku,
     .version = "0.1.0",
     .fingerprint = 0x5cef6ae5b9e4cc18, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.3073+28ae5d415",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .sdl = .{
             .url = "git+https://github.com/castholm/SDL.git#701da66369221654c501e9661c648dd3aa2cfe52",
