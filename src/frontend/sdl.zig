@@ -337,6 +337,8 @@ pub fn execute_main_loop(extent: comptime_int, game: *game_state.State(extent), 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
 
+    std.debug.print("Board: {s}\n", .{game.board.string_from_board()});
+
     grader.grade_and_print_summary(extent, game.board);
 
     main_loop: while (true) {

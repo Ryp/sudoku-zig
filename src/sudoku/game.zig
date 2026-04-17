@@ -56,8 +56,6 @@ pub fn State(extent: comptime_int) type {
                 board = generator.generate(extent, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             }
 
-            std.debug.print("Board: {s}\n", .{&board.string_from_board()});
-
             const candidate_masks = try allocator.alloc(MaskType, board.numbers.len);
             errdefer allocator.free(candidate_masks);
 
