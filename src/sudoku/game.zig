@@ -43,6 +43,8 @@ pub fn State(extent: comptime_int) type {
         solver_event: ?SolverEvent,
 
         pub fn init(io: std.Io, allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
+            var game = try Self.init_empty_board(allocator);
+
             var board = board_generic.State(extent).init(board_rules);
 
             if (sudoku_string_opt) |sudoku_string| {
@@ -56,25 +58,35 @@ pub fn State(extent: comptime_int) type {
                 board = generator.generate(extent, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
             }
 
-            const candidate_masks = try allocator.alloc(MaskType, board.numbers.len);
+            game.board = board;
+
+            game.save_state_to_history(0);
+
+            return game;
+        }
+
+        pub fn init_empty_board(allocator: std.mem.Allocator) !Self {
+            const extent_sqr = extent * extent;
+
+            const candidate_masks = try allocator.alloc(MaskType, extent_sqr);
             errdefer allocator.free(candidate_masks);
 
             for (candidate_masks) |*candidate_mask| {
                 candidate_mask.* = 0;
             }
 
-            const selected_cells_full = try allocator.alloc(u32, board.ExtentSqr);
+            const selected_cells_full = try allocator.alloc(u32, extent_sqr);
             errdefer allocator.free(selected_cells_full);
 
             // Allocate history stack
-            const board_history = try allocator.alloc(?u4, board.ExtentSqr * MaxHistorySize);
+            const board_history = try allocator.alloc(?u4, extent_sqr * MaxHistorySize);
             errdefer allocator.free(board_history);
 
-            const candidate_masks_history = try allocator.alloc(MaskType, board.numbers.len * MaxHistorySize);
+            const candidate_masks_history = try allocator.alloc(MaskType, extent_sqr * MaxHistorySize);
             errdefer allocator.free(candidate_masks_history);
 
-            var game = Self{
-                .board = board,
+            return .{
+                .board = undefined, // Not set yet!
                 .candidate_masks = candidate_masks,
                 .selected_cells_full = selected_cells_full,
                 .selected_cells = selected_cells_full[0..0],
@@ -84,10 +96,6 @@ pub fn State(extent: comptime_int) type {
                 .validation_error = null,
                 .solver_event = null,
             };
-
-            game.save_state_to_history(0);
-
-            return game;
         }
 
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {

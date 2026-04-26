@@ -45,7 +45,7 @@ pub fn main(init: std.process.Init) !void {
         board_rules.type = .{
             .jigsaw = .{
                 .extent = jigsaw_extent,
-                .box_indices_string = jigsaw_string,
+                .box_indices = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
             },
         };
     } else {
@@ -86,5 +86,6 @@ fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {
         }
     }
 
+    std.debug.print("Invalid jigsaw string length {}, only perfect squares are valid\n", .{jigsaw_string.len});
     return error.InvalidJigsawStringLength;
 }

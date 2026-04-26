@@ -6,6 +6,7 @@ const Rules = @import("rules.zig").Rules;
 
 pub const MinExtent: comptime_int = 2; // Minimum extent we support
 pub const MaxExtent: comptime_int = 16; // Maximum extent we support
+pub const MaxExtentSqr = MaxExtent * MaxExtent;
 pub const MaxNumbersString = [MaxExtent]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
 
 pub const RegionIndex = struct {
@@ -73,7 +74,7 @@ pub fn State(extent: comptime_int) type {
                         regions.box_indices = regular_box_indices(regular.box_extent);
                     },
                     .jigsaw => |jigsaw| {
-                        regions.box_indices = jigsaw_box_indices(jigsaw.box_indices_string);
+                        regions.box_indices = jigsaw.box_indices[0..SelfExtentSqr].*; // FIXME
                     },
                 }
 
@@ -109,42 +110,6 @@ pub fn State(extent: comptime_int) type {
                     const box_coord_y = (cell_coord[1] / box_extent[1]);
 
                     box_index.* = @intCast(box_coord_y * box_extent[1] + box_coord_x);
-                }
-
-                return box_indices;
-            }
-
-            fn jigsaw_box_indices(box_indices_string: []const u8) [SelfExtentSqr]SelfNumberType {
-                var box_indices: [SelfExtentSqr]SelfNumberType = undefined;
-
-                if (box_indices_string.len < SelfExtentSqr) {
-                    @panic("Invalid box indices: string too short");
-                } else if (box_indices_string.len > SelfExtentSqr) {
-                    @panic("Invalid box indices: string too long");
-                }
-
-                var region_sizes: [extent]u32 = .{0} ** extent;
-
-                for (&box_indices, box_indices_string) |*box_index, char| {
-                    var number: u8 = undefined;
-
-                    if (char >= '1' and char <= '9') {
-                        number = char - '1';
-                    } else if (char >= 'A' and char <= 'G') {
-                        number = char - 'A' + 9;
-                    } else if (char >= 'a' and char <= 'g') {
-                        number = char - 'a' + 9;
-                    } else {
-                        @panic("Invalid character in box indices string");
-                    }
-
-                    if (number >= extent) {
-                        @panic("Index out of bounds in box indices string");
-                    }
-
-                    box_index.* = @intCast(number);
-
-                    region_sizes[number] += 1;
                 }
 
                 return box_indices;
