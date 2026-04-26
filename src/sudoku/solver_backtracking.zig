@@ -138,9 +138,8 @@ fn sort_free_cell_list(extent: comptime_int, board: *const board_generic.State(e
     const full_mask = board.full_candidate_mask();
     var region_type_masks: [3][board.Extent]board.MaskType = undefined;
 
-    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
-        const set_index = @intFromEnum(set);
-        for (board.regions.all[set_index], &region_type_masks[set_index]) |region, *region_mask| {
+    inline for (.{ board.regions.cols, board.regions.rows, board.regions.boxes }, 0..) |region_set, region_set_index| {
+        for (region_set, &region_type_masks[region_set_index]) |region, *region_mask| {
             region_mask.* = full_mask;
 
             for (region) |cell_index| {

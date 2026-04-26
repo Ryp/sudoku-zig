@@ -18,8 +18,6 @@ pub const RegionSet = enum(usize) {
     Col = 0,
     Row = 1,
     Box = 2,
-
-    Count = 3,
 };
 
 pub fn State(extent: comptime_int) type {
@@ -30,7 +28,9 @@ pub fn State(extent: comptime_int) type {
 
         // This struct is used as a helper to iterate over regions of the board without doing index math everywhere.
         const Regions = struct {
-            all: [@intFromEnum(RegionSet.Count)][extent][extent]u32,
+            cols: [extent][extent]u32,
+            rows: [extent][extent]u32,
+            boxes: [extent][extent]u32,
             box_indices: [SelfExtentSqr]SelfNumberType,
 
             pub fn get_region_index(self: Regions, set: RegionSet, region_index: usize) RegionIndex {
@@ -42,11 +42,11 @@ pub fn State(extent: comptime_int) type {
             }
 
             pub fn get(self: Regions, region_index: RegionIndex) [extent]u32 {
-                return self.all[@intFromEnum(region_index.set)][region_index.sub_index];
-            }
-
-            pub fn get_set(self: Regions, set: RegionSet) [extent][extent]u32 {
-                return self.all[@intFromEnum(set)];
+                switch (region_index.set) {
+                    .Col => return self.cols[region_index.sub_index],
+                    .Row => return self.rows[region_index.sub_index],
+                    .Box => return self.boxes[region_index.sub_index],
+                }
             }
 
             // Get single region
@@ -85,9 +85,9 @@ pub fn State(extent: comptime_int) type {
                     const cell_coords = _cell_coord_from_index(cell_index);
                     const box_slot = box_region_slots[box_index];
 
-                    regions.all[@intFromEnum(RegionSet.Col)][cell_coords[0]][cell_coords[1]] = cell_index;
-                    regions.all[@intFromEnum(RegionSet.Row)][cell_coords[1]][cell_coords[0]] = cell_index;
-                    regions.all[@intFromEnum(RegionSet.Box)][box_index][box_slot] = cell_index;
+                    regions.cols[cell_coords[0]][cell_coords[1]] = cell_index;
+                    regions.rows[cell_coords[1]][cell_coords[0]] = cell_index;
+                    regions.boxes[box_index][box_slot] = cell_index;
 
                     box_region_slots[box_index] += 1;
                 }
