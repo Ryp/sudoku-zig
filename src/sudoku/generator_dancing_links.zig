@@ -36,10 +36,10 @@ pub fn generate(extent: comptime_int, board_rules: rules.Rules, seed: u64, diffi
 
     // Array indexed by row giving containing the header link indices for the 4 satisfied contraints
     const choices_count = board.Extent * board.ExtentSqr;
-    var choices_constraint_link_indices_array : [choices_count]ChoiceConstraintsIndices = undefined;
+    var choices_constraint_link_indices_array: [choices_count]ChoiceConstraintsIndices = undefined;
     const choices_constraint_link_indices = &choices_constraint_link_indices_array;
 
-    var solution_array : [board.ExtentSqr]SolutionClue = undefined;
+    var solution_array: [board.ExtentSqr]SolutionClue = undefined;
     const solution = &solution_array;
 
     // This changes between runs only if the size of the sudoku or the box layout changes

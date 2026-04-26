@@ -47,7 +47,7 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
 
     // Array indexed by row giving containing the header link indices for the 4 satisfied contraints
     const choices_count = board.Extent * board.ExtentSqr;
-    var choices_constraint_link_indices_array : [choices_count]ChoiceConstraintsIndices = undefined;
+    var choices_constraint_link_indices_array: [choices_count]ChoiceConstraintsIndices = undefined;
     const choices_constraint_link_indices = &choices_constraint_link_indices_array;
 
     // This changes between runs only if the size of the sudoku or the box layout changes
