@@ -14,6 +14,7 @@ pub const TestLogicalSolver = .{
     // box_line_reduction, // Too hard for logical solver to finish
     // skyscraper, // Too hard for logical solver to finish
     easy4x3,
+    // hard4x4, // Too hard for logical solver to finish
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
@@ -31,6 +32,7 @@ pub const TestDancingLinksSolver = .{
     box_line_reduction,
     skyscraper,
     easy4x3,
+    hard4x4,
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
@@ -48,6 +50,7 @@ pub const TestBacktrackingSolver = .{
     box_line_reduction,
     skyscraper,
     // easy4x3, // Too slow in debug mode but should work
+    // hard4x4, // Too slow in debug mode but should work
     jigsaw9,
     backtracking_killer,
     naive_backtracking_killer_1,
@@ -92,6 +95,12 @@ pub const easy4x3 = KnownBoard{
     .rules = .{ .type = .{ .regular = .{ .box_extent = .{ 4, 3 } } } },
     .start_string = "8.9....B.4C.C......3.B9...B5..A8.2...2.4..5........9........7...1B69...32...C47A...B........5........1..A.7...5.87..13...8A.3......2.14.5....8.C",
     .solution_string = "839A721B64C5C72165438B9A64B59CA872311234A85C96B75B694327CA187AC81B6925432516C47A398BAC73B9865124498B2135AC76B65287C413A998AC36B1475231475A92B86C",
+};
+
+pub const hard4x4 = KnownBoard{
+    .rules = .{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } },
+    .start_string = ".FC..2.5.G6E4..D..3.6B.F.7.A9CEG..E.34.A..BC..F..8...C.G.4DF1.7.2.....4.GC..E...B5G.2E....97.6.4..4..GC7......D.DCA.83...B.4..G1.3...8.........E.6...1....7B.4..A..DG6F.41..8..B.B8C.A....G....3E1..4.......B..7...7.9..BF46..5.8A6.....7E12.G49C4...7..A93.6..2",
+    .solution_string = "7FCA12859G6E43BD12346BDF578A9CEG9DEG347A12BC58F658B69CEG34DF127A2713BD46GCA5E98FB5GF2EA18D9736C46948FGC723E1ABD5DCAE83596BF427G1G32178B4CA59DF6EF659D123E87BG4ACAE7DG6FC4123859B4B8C5A9EF6GD7123E1924F68D5CGBA373GD7A912BF46CE588A6BC53D7E12FG49C4F5E7GBA9386D12",
 };
 
 pub const jigsaw9 = KnownBoard{
