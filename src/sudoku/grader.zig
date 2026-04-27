@@ -1,27 +1,28 @@
 const std = @import("std");
 
 const solver_logical = @import("solver_logical.zig");
-const board_generic = @import("board_generic.zig");
+const board = @import("board.zig");
 const validator = @import("validator.zig");
 
-pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.State(extent)) void {
+pub fn grade_and_print_summary(const_board: board.Board) void {
     // Create a dummy board we can modify
-    var board = board_generic.State(extent).init(const_board.rules);
+    var board_state: board.Board = .init(const_board.rules);
 
-    @memcpy(&board.numbers, &const_board.numbers);
+    @memcpy(board_state.numbers(), const_board.numbers_const());
 
-    var candidate_masks = solver_logical.trivial_candidate_masks(extent, &board);
+    var candidate_masks_max = solver_logical.trivial_candidate_masks_max(&board_state);
+    const candidate_masks = candidate_masks_max[0 .. const_board.extent * const_board.extent];
 
     const TechniqueUnionTypeInfo = @typeInfo(solver_logical.Technique).@"union";
     var technique_histogram = [_]u32{0} ** TechniqueUnionTypeInfo.fields.len;
 
-    while (solver_logical.find_easiest_known_technique(extent, board, &candidate_masks)) |technique| {
+    while (solver_logical.find_easiest_known_technique(board_state, candidate_masks)) |technique| {
         const technique_index = @intFromEnum(technique);
         technique_histogram[technique_index] += 1;
 
-        solver_logical.apply_technique(extent, &board, &candidate_masks, technique);
+        solver_logical.apply_technique(&board_state, candidate_masks, technique);
 
-        if (validator.check_board_for_errors(extent, &board, null)) |validation_error| {
+        if (validator.check_board_for_errors(&board_state, null)) |validation_error| {
             std.debug.print("The board has a validation error: {}\n", .{validation_error});
             return;
         }
@@ -37,7 +38,7 @@ pub fn grade_and_print_summary(extent: comptime_int, const_board: board_generic.
         }
     }
 
-    for (board.numbers) |number_opt| {
+    for (board_state.numbers()) |number_opt| {
         if (number_opt == null) {
             std.debug.print("WARNING: Couldn't fully solve this board with logic!\n", .{});
             break;

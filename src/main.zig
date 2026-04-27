@@ -2,7 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const game = @import("sudoku/game.zig");
-const board_generic = @import("sudoku/board_generic.zig");
+const board = @import("sudoku/board.zig");
 const rules = @import("sudoku/rules.zig");
 
 const clap = @import("clap.zig");
@@ -45,7 +45,7 @@ pub fn main(init: std.process.Init) !void {
         board_rules.type = .{
             .jigsaw = .{
                 .extent = jigsaw_extent,
-                .box_indices = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
+                .box_indices_max = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
             },
         };
     } else {
@@ -60,27 +60,16 @@ pub fn main(init: std.process.Init) !void {
     board_rules.chess_anti_king = res.args.king != 0;
     board_rules.chess_anti_knight = res.args.knight != 0;
 
-    const board_extent = board_rules.type.extent();
+    var game_state: game.State = try .init(init.io, allocator, board_rules, res.positionals[0]);
+    defer game_state.deinit(allocator);
 
-    // Scalarize extent
-    inline for (board_generic.MinExtent..board_generic.MaxExtent + 1) |comptime_extent| {
-        if (board_extent == comptime_extent) {
-            var game_state = try game.State(comptime_extent).init(init.io, allocator, board_rules, res.positionals[0]);
-            defer game_state.deinit(allocator);
-
-            try sdl.execute_main_loop(comptime_extent, &game_state, allocator);
-
-            break;
-        }
-    } else {
-        @panic("Invalid sudoku extent!");
-    }
+    try sdl.execute_main_loop(&game_state, allocator);
 }
 
 fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {
     const string_len = jigsaw_string.len;
 
-    for (board_generic.MinExtent..board_generic.MaxExtent + 1) |extent| {
+    for (board.MinExtent..board.MaxExtent + 1) |extent| {
         if (string_len == extent * extent) {
             return @intCast(extent);
         }

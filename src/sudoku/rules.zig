@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const board_generic = @import("board_generic.zig");
+const board = @import("board.zig");
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
 const i32_2 = common.i32_2;
@@ -11,7 +11,7 @@ pub const RegularSudoku = struct {
 
 pub const JigsawSudoku = struct {
     extent: u32,
-    box_indices: [board_generic.MaxExtentSqr]u4,
+    box_indices_max: [board.MaxExtentSqr]u4,
 };
 
 pub const Type = union(enum(u8)) {
@@ -36,7 +36,7 @@ pub const Type = union(enum(u8)) {
             .jigsaw => |jigsaw| {
                 try writer.writeInt(@TypeOf(jigsaw.extent), jigsaw.extent, .little);
 
-                for (jigsaw.box_indices[0 .. jigsaw.extent * jigsaw.extent]) |index| {
+                for (jigsaw.box_indices_max[0 .. jigsaw.extent * jigsaw.extent]) |index| {
                     try writer.writeByte(index);
                 }
             },
@@ -60,7 +60,7 @@ pub const Type = union(enum(u8)) {
 
                 jigsaw.extent = try reader.takeInt(u32, .little);
 
-                for (jigsaw.box_indices[0 .. jigsaw.extent * jigsaw.extent]) |*index| {
+                for (jigsaw.box_indices_max[0 .. jigsaw.extent * jigsaw.extent]) |*index| {
                     index.* = @intCast(try reader.takeByte());
                 }
 
@@ -111,10 +111,10 @@ pub const AntiKnightOffsets = [_]i32_2{
     .{ 1, 2 },
 };
 
-pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![board_generic.MaxExtentSqr]u4 {
+pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![board.MaxExtentSqr]u4 {
     const extent_sqr = extent * extent;
 
-    var box_indices_max = std.mem.zeroes([board_generic.MaxExtentSqr]u4);
+    var box_indices_max = std.mem.zeroes([board.MaxExtentSqr]u4);
     const box_indices = box_indices_max[0..extent_sqr];
 
     if (box_indices_string.len < extent_sqr) {
@@ -123,7 +123,7 @@ pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![b
         @panic("Invalid box indices: string too long");
     }
 
-    var region_sizes_max = std.mem.zeroes([board_generic.MaxExtent]u32);
+    var region_sizes_max = std.mem.zeroes([board.MaxExtent]u32);
     const region_sizes = region_sizes_max[0..extent];
 
     for (box_indices, box_indices_string, 0..) |*box_index, char, position| {
@@ -141,7 +141,7 @@ pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![b
         }
 
         if (number >= extent) {
-            std.debug.print("Character '{c}' out of bounds in box indices string at position {}, max is '{c}'\n", .{ char, position, board_generic.MaxNumbersString[number] });
+            std.debug.print("Character '{c}' out of bounds in box indices string at position {}, max is '{c}'\n", .{ char, position, board.MaxNumbersString[number] });
             return error.IndexOutOfBounds;
         }
 
@@ -152,7 +152,7 @@ pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![b
 
     for (region_sizes, 0..) |region_size, region_index| {
         if (region_size != extent) {
-            std.debug.print("Invalid jigsaw region count {} for region '{c}', expected {}\n", .{ region_size, board_generic.MaxNumbersString[region_index], extent });
+            std.debug.print("Invalid jigsaw region count {} for region '{c}', expected {}\n", .{ region_size, board.MaxNumbersString[region_index], extent });
             return error.InvalidJigsawRegionCount;
         }
     }

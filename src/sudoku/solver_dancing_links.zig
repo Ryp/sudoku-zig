@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const board_generic = @import("board_generic.zig");
+const board = @import("board.zig");
 const known_boards = @import("known_boards.zig");
 
 pub const Options = struct {
@@ -22,23 +22,35 @@ pub const DoublyLink = struct {
 // choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
-pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options: Options) bool {
-    std.debug.assert(!board.rules.chess_anti_king);
-    std.debug.assert(!board.rules.chess_anti_knight);
+pub fn solve(board_state: *board.Board, options: Options) bool {
+    std.debug.assert(!board_state.rules.chess_anti_king);
+    std.debug.assert(!board_state.rules.chess_anti_knight);
+
+    const extent = board_state.rules.type.extent();
+    const extent_sqr = extent * extent;
 
     // All links are allocated sequentially, so we're doing some math to compute relative addresses.
     const constraint_type_count = 4;
-    const constraints_per_type_count = board.Extent * board.Extent;
+
+    // Actual size version
+    const constraints_per_type_count = extent_sqr;
     const constraint_count = constraints_per_type_count * constraint_type_count;
-    const node_per_constraint_count = board.Extent;
+    const node_per_constraint_count = extent;
     const choice_link_count = constraint_count * node_per_constraint_count;
     const link_count = 1 + constraint_count + choice_link_count;
 
-    var links_h_array: [link_count]DoublyLink = undefined;
-    const links_h = &links_h_array;
+    // Max size version
+    const constraints_per_type_count_max = board.MaxExtentSqr;
+    const constraint_count_max = constraints_per_type_count_max * constraint_type_count;
+    const node_per_constraint_count_max = board.MaxExtent;
+    const choice_link_count_max = constraint_count_max * node_per_constraint_count_max;
+    const link_count_max = 1 + constraint_count_max + choice_link_count_max;
 
-    var links_v_array: [link_count]DoublyLink = undefined;
-    const links_v = &links_v_array;
+    var links_h_max: [link_count_max]DoublyLink = undefined;
+    const links_h = links_h_max[0..link_count];
+
+    var links_v_max: [link_count_max]DoublyLink = undefined;
+    const links_v = links_v_max[0..link_count];
 
     const root_link_offset = 0;
     const header_link_offset = root_link_offset + 1;
@@ -46,21 +58,23 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     const choice_link_offset = header_link_offset + header_link_count;
 
     // Array indexed by row giving containing the header link indices for the 4 satisfied contraints
-    const choices_count = board.Extent * board.ExtentSqr;
-    var choices_constraint_link_indices_array: [choices_count]ChoiceConstraintsIndices = undefined;
-    const choices_constraint_link_indices = &choices_constraint_link_indices_array;
+    const choices_count = extent * extent_sqr;
+    const choices_count_max = board.MaxExtent * board.MaxExtentSqr;
+
+    var choices_constraint_link_indices_max: [choices_count_max]ChoiceConstraintsIndices = undefined;
+    const choices_constraint_link_indices = choices_constraint_link_indices_max[0..choices_count];
 
     // This changes between runs only if the size of the sudoku or the box layout changes
-    fill_choices_constraint_link_indices(extent, board.*, choices_constraint_link_indices, header_link_offset);
+    fill_choices_constraint_link_indices(board_state, choices_constraint_link_indices, header_link_offset);
 
     link_matrix(choices_constraint_link_indices, links_h, links_v, choice_link_offset);
 
-    cover_columns_for_given_clues(extent, board.*, choices_constraint_link_indices, links_h, links_v);
+    cover_columns_for_given_clues(board_state, choices_constraint_link_indices, links_h, links_v);
 
     // FIXME sort header links by size
 
-    const context = DancingLinkContext(extent){
-        .board = board,
+    const context = DancingLinkContext{
+        .board_state = board_state,
         .links_h = links_h,
         .links_v = links_v,
         .choice_link_offset = choice_link_offset,
@@ -68,23 +82,21 @@ pub fn solve(extent: comptime_int, board: *board_generic.State(extent), options:
     };
 
     if (options.check_if_unique) {
-        const solution_count = solve_dancing_links_recursive_count_solutions(extent, context);
+        const solution_count = solve_dancing_links_recursive_count_solutions(context);
         return solution_count == 1;
     } else {
-        return solve_dancing_links_recursive(extent, context);
+        return solve_dancing_links_recursive(context);
     }
 }
 
-fn DancingLinkContext(extent: comptime_int) type {
-    return struct {
-        board: *board_generic.State(extent),
-        // FIXME use SoAoS?
-        links_h: []DoublyLink,
-        links_v: []DoublyLink,
-        choice_link_offset: u32,
-        choices_constraint_link_indices: []ChoiceConstraintsIndices,
-    };
-}
+const DancingLinkContext = struct {
+    board_state: *board.Board,
+    // FIXME use SoAoS?
+    links_h: []DoublyLink,
+    links_v: []DoublyLink,
+    choice_link_offset: u32,
+    choices_constraint_link_indices: []ChoiceConstraintsIndices,
+};
 
 pub fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const DoublyLink) u32 {
     const root_index: u32 = 0;
@@ -112,7 +124,7 @@ pub fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const Do
     return best_col;
 }
 
-fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(extent)) bool {
+fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
     if (ctx.links_h[0].next == 0) {
         return true;
     } else {
@@ -128,11 +140,11 @@ fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(e
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            if (solve_dancing_links_recursive(extent, ctx)) {
-                const cell_index = row_index / ctx.board.Extent;
-                const number = row_index % ctx.board.Extent;
+            if (solve_dancing_links_recursive(ctx)) {
+                const cell_index = row_index / ctx.board_state.extent;
+                const number = row_index % ctx.board_state.extent;
 
-                ctx.board.numbers[cell_index] = @intCast(number);
+                ctx.board_state.numbers()[cell_index] = @intCast(number);
 
                 return true;
             }
@@ -146,7 +158,7 @@ fn solve_dancing_links_recursive(extent: comptime_int, ctx: DancingLinkContext(e
     }
 }
 
-fn solve_dancing_links_recursive_count_solutions(extent: comptime_int, ctx: DancingLinkContext(extent)) u32 {
+fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
     if (ctx.links_h[0].next == 0) {
         return 1;
     } else {
@@ -164,7 +176,7 @@ fn solve_dancing_links_recursive_count_solutions(extent: comptime_int, ctx: Danc
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            solution_count += solve_dancing_links_recursive_count_solutions(extent, ctx);
+            solution_count += solve_dancing_links_recursive_count_solutions(ctx);
 
             inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
                 uncover_column(ctx.links_h, ctx.links_v, constraint_index);
@@ -175,7 +187,7 @@ fn solve_dancing_links_recursive_count_solutions(extent: comptime_int, ctx: Danc
     }
 }
 
-pub fn get_choice_index(cell_index: usize, number: usize, extent: comptime_int) usize {
+pub fn get_choice_index(cell_index: usize, number: usize, extent: u32) usize {
     return cell_index * extent + number;
 }
 
@@ -187,28 +199,29 @@ pub const ChoiceConstraintsIndices = struct {
     box_index: u32,
 };
 
-pub fn fill_choices_constraint_link_indices(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []ChoiceConstraintsIndices, header_link_offset: u32) void {
-    const constraint_exs_headers_offset = header_link_offset + 0 * board.ExtentSqr;
-    const constraint_row_headers_offset = header_link_offset + 1 * board.ExtentSqr;
-    const constraint_col_headers_offset = header_link_offset + 2 * board.ExtentSqr;
-    const constraint_box_headers_offset = header_link_offset + 3 * board.ExtentSqr;
+pub fn fill_choices_constraint_link_indices(board_state: *board.Board, choices_constraint_link_indices: []ChoiceConstraintsIndices, header_link_offset: u32) void {
+    const extent = board_state.extent;
+    const constraint_exs_headers_offset = header_link_offset + 0 * extent * extent;
+    const constraint_row_headers_offset = header_link_offset + 1 * extent * extent;
+    const constraint_col_headers_offset = header_link_offset + 2 * extent * extent;
+    const constraint_box_headers_offset = header_link_offset + 3 * extent * extent;
 
-    for (0..board.ExtentSqr) |cell_index| {
-        const cell_coord = board.cell_coord_from_index(cell_index);
+    for (0..extent * extent) |cell_index| {
+        const cell_coord = board_state.cell_coord_from_index(cell_index);
         const cell_col = cell_coord[0];
         const cell_row = cell_coord[1];
-        const cell_box = board.regions.box_indices[cell_index];
+        const cell_box = board_state.regions.box_indices()[cell_index];
 
-        for (0..board.Extent) |number_usize| {
+        for (0..extent) |number_usize| {
             const number: u32 = @intCast(number_usize);
-            const choice_index = get_choice_index(cell_index, number, board.Extent);
+            const choice_index = get_choice_index(cell_index, number, extent);
 
             // Get indices for each four constraints we satisfy
             choices_constraint_link_indices[choice_index] = ChoiceConstraintsIndices{
                 .exs_index = constraint_exs_headers_offset + @as(u32, @intCast(cell_index)),
-                .row_index = constraint_row_headers_offset + cell_row * @as(u32, board.Extent) + number,
-                .col_index = constraint_col_headers_offset + cell_col * @as(u32, board.Extent) + number,
-                .box_index = constraint_box_headers_offset + cell_box * @as(u32, board.Extent) + number,
+                .row_index = constraint_row_headers_offset + cell_row * @as(u32, extent) + number,
+                .col_index = constraint_col_headers_offset + cell_col * @as(u32, extent) + number,
+                .box_index = constraint_box_headers_offset + cell_box * @as(u32, extent) + number,
             };
         }
     }
@@ -240,12 +253,12 @@ pub fn link_matrix(choices_constraint_link_indices: []const ChoiceConstraintsInd
     }
 }
 
-fn cover_columns_for_given_clues(extent: comptime_int, board: board_generic.State(extent), choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
+fn cover_columns_for_given_clues(board_state: *board.Board, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
     // We now have the initial fully connected matrix
     // Let's remove the rows we already have a clue for
-    for (board.numbers, 0..) |number_opt, cell_index| {
+    for (board_state.numbers(), 0..) |number_opt, cell_index| {
         if (number_opt) |number| {
-            const choice_index = get_choice_index(@intCast(cell_index), number, board.Extent);
+            const choice_index = get_choice_index(@intCast(cell_index), number, board_state.extent);
             const header = choices_constraint_link_indices[choice_index];
 
             inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
@@ -339,16 +352,14 @@ fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
 
 test {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
-        const extent = comptime known_board.rules.type.extent();
+        var board_state: board.Board = .init(known_board.rules);
+        board_state.fill_board_from_string(known_board.start_string);
 
-        var board = board_generic.State(extent).init(known_board.rules);
-        board.fill_board_from_string(known_board.start_string);
+        try std.testing.expect(solve(&board_state, .{}));
 
-        try std.testing.expect(solve(extent, &board, .{}));
-
-        var solution_board = board_generic.State(extent).init(known_board.rules);
+        var solution_board: board.Board = .init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
-        try std.testing.expectEqual(solution_board.numbers, board.numbers);
+        try std.testing.expect(std.mem.eql(?board.NumberType, solution_board.numbers(), board_state.numbers()));
     }
 }

@@ -104,7 +104,7 @@ pub const hard4x4 = KnownBoard{
 };
 
 pub const jigsaw9 = KnownBoard{
-    .rules = .{ .type = .{ .jigsaw = .{ .extent = 9, .box_indices = rules.parse_jigsaw_box_indices(9, "111111222113444422133455442334455222366657777366559997366659977386858997888888997") catch @compileError("Invalid jigsaw sudoku string") } } },
+    .rules = .{ .type = .{ .jigsaw = .{ .extent = 9, .box_indices_max = rules.parse_jigsaw_box_indices(9, "111111222113444422133455442334455222366657777366559997366659977386858997888888997") catch @compileError("Invalid jigsaw sudoku string") } } },
     .start_string = ".38.4.1...6.9532......6....97......54..........5..2......6..8...57....6.34.8.....",
     .solution_string = "238549176761953248123465789976184325492318657685792431514627893857231964349876512",
 };
