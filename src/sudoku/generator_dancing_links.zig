@@ -204,8 +204,8 @@ test {
     inline for (.{
         rules.Regular3x3,
         rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 3 } } } },
-        // rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } }, // FIXME crashes
-        // known_boards.jigsaw9.rules, // FIXME Can't make a board
+        // rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } }, // FIXME stack overflows in solver
+        // known_boards.jigsaw9.rules, // FIXME Can't make a board (possibly in how box index is calculated)
     }) |board_rules| {
         _ = generate(board_rules, Seed, Difficulty);
     }
