@@ -4,12 +4,14 @@ const assert = std.debug.assert;
 const game = @import("sudoku/game.zig");
 const board = @import("sudoku/board.zig");
 const rules = @import("sudoku/rules.zig");
+const save_state = @import("sudoku/save_state.zig");
 
 const clap = @import("clap.zig");
 const sdl = @import("frontend/sdl.zig");
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
+    const io = init.io;
 
     const params = comptime clap.parseParamsComptime(
         \\-h, --help              Display this help and exit.
@@ -18,6 +20,7 @@ pub fn main(init: std.process.Init) !void {
         \\-j, --jigsaw <str>      Region indices string for jigsaw sudokus
         \\--king                  Chess anti-king's constraint
         \\--knight                Chess anti-knight's constraint
+        \\--load <str>            Load save file
         \\<str>                   Sudoku string (you can use '.' for empty cells).
         \\                        Unset this if you want to have a sudoku board generated for you.
     );
@@ -28,42 +31,76 @@ pub fn main(init: std.process.Init) !void {
         .allocator = allocator,
     }) catch |err| {
         // Report useful error and exit.
-        try diag.reportToFile(init.io, .stderr(), err);
+        try diag.reportToFile(io, .stderr(), err);
         return err;
     };
     defer res.deinit();
 
     if (res.args.help != 0) {
-        return clap.helpToFile(init.io, .stderr(), clap.Help, &params, .{});
+        return clap.helpToFile(io, .stderr(), clap.Help, &params, .{});
     }
 
-    var board_rules: rules.Rules = .{ .type = undefined };
+    var game_state: game.State = undefined;
 
-    if (res.args.jigsaw) |jigsaw_string| {
-        const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
+    if (res.args.load) |save_state_path| {
+        var save_state_file = if (std.Io.Dir.cwd().openFile(io, save_state_path, .{})) |f| f else |err| {
+            std.debug.print("Failed to open save state file '{s}': ", .{save_state_path});
+            return err;
+        };
+        defer save_state_file.close(io);
 
-        board_rules.type = .{
-            .jigsaw = .{
-                .extent = jigsaw_extent,
-                .box_indices_max = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
-            },
+        var reader_buffer: [4096]u8 = undefined;
+        var reader = save_state_file.reader(io, &reader_buffer);
+
+        game_state = save_state.load(&reader.interface, allocator) catch |err| {
+            std.debug.print("Failed to load save file: {}\n", .{err});
+            return err;
         };
     } else {
-        const box_w = res.args.box_width orelse 3;
-        const box_h = res.args.box_height orelse 3;
+        var board_rules: rules.Rules = .{ .type = undefined };
 
-        board_rules.type = .{ .regular = .{
-            .box_extent = .{ box_w, box_h },
-        } };
+        if (res.args.jigsaw) |jigsaw_string| {
+            const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
+
+            board_rules.type = .{
+                .jigsaw = .{
+                    .extent = jigsaw_extent,
+                    .box_indices_max = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
+                },
+            };
+        } else {
+            const box_w = res.args.box_width orelse 3;
+            const box_h = res.args.box_height orelse 3;
+
+            board_rules.type = .{ .regular = .{
+                .box_extent = .{ box_w, box_h },
+            } };
+        }
+
+        board_rules.chess_anti_king = res.args.king != 0;
+        board_rules.chess_anti_knight = res.args.knight != 0;
+
+        game_state = try .init(io, allocator, board_rules, res.positionals[0]);
     }
-
-    board_rules.chess_anti_king = res.args.king != 0;
-    board_rules.chess_anti_knight = res.args.knight != 0;
-
-    var game_state: game.State = try .init(init.io, allocator, board_rules, res.positionals[0]);
     defer game_state.deinit(allocator);
 
     try sdl.execute_main_loop(&game_state, allocator);
+
+    if (true) {
+        const output_path = "latest.sdku";
+        const output_file = std.Io.Dir.cwd().createFile(io, output_path, .{}) catch |err| {
+            std.debug.print("Error creating output file: {s}\n", .{output_path});
+            return err;
+        };
+        errdefer std.Io.Dir.cwd().deleteFile(io, output_path) catch {}; // If we encounter an error, just delete the file and ignore failures
+        defer output_file.close(io);
+
+        var writer_buffer: [4096]u8 = undefined;
+        var writer = output_file.writer(io, &writer_buffer);
+        const io_writer = &writer.interface;
+
+        try save_state.save(&game_state, io_writer);
+    }
 }
 
 fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {

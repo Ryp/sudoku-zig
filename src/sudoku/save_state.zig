@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const board = @import("board.zig");
 const game = @import("game.zig");
 
 const SupportedSaveStateVersion = 1;
@@ -17,21 +18,18 @@ const SaveHeader = packed struct {
 };
 
 pub fn save(game_state: *const game.State, writer: *std.Io.Writer) !void {
-    const header = SaveHeader{};
-    try writer.writeStruct(header, .little);
-
-    try game_state.board.rules.save(writer);
-
+    try writer.writeStruct(SaveHeader{}, .little);
+    try game_state.save(writer);
     try writer.flush();
 }
 
-pub fn load(game_state: *game.State, reader: *std.Io.Reader) !void {
+pub fn load(reader: *std.Io.Reader, allocator: std.mem.Allocator) !game.State {
     const header = try reader.takeStruct(SaveHeader, .little);
 
     std.debug.assert(header.magic == SaveMagic{});
     std.debug.assert(header.version == SupportedSaveStateVersion);
 
-    try game_state.board.rules.load(reader);
+    return try game.State.load(reader, allocator);
 }
 
 const known_boards = @import("known_boards.zig");
@@ -49,15 +47,25 @@ test "State serialization" {
 
         try save(&game_1, &allocating_writer.writer);
 
-        var game_2: game.State = try .init_empty_board(allocator, known_board.rules.type.extent());
-        defer game_2.deinit(allocator);
-
         var reader: std.Io.Reader = .fixed(allocating_writer.writer.buffer[0..allocating_writer.writer.end]);
 
-        try load(&game_2, &reader);
+        const game_2 = try load(&reader, allocator);
+        defer game_2.deinit(allocator);
 
         try std.testing.expectEqual(allocating_writer.writer.end, reader.end);
-        try std.testing.expectEqual(game_1.board.rules.type.extent(), game_2.board.rules.type.extent());
-        // try std.testing.expectEqualSlices(u8, &psx.bios, &psx_2.bios);
+
+        const extent_sqr = known_board.rules.type.extent() * known_board.rules.type.extent();
+
+        try std.testing.expectEqualSlices(?board.NumberType, game_1.board.numbers_const(), game_2.board.numbers_const());
+        try std.testing.expectEqualSlices(board.MaskType, game_1.candidate_masks[0..extent_sqr], game_2.candidate_masks[0..extent_sqr]);
+        try std.testing.expectEqual(game_1.history_index, game_2.history_index);
+        try std.testing.expectEqual(game_1.max_history_index, game_2.max_history_index);
+
+        const history_entry_count = game_1.max_history_index + 1;
+        for (0..history_entry_count) |i| {
+            const start = extent_sqr * i;
+            try std.testing.expectEqualSlices(?board.NumberType, game_1.board_history[start .. start + extent_sqr], game_2.board_history[start .. start + extent_sqr]);
+            try std.testing.expectEqualSlices(board.MaskType, game_1.candidate_masks_history[start .. start + extent_sqr], game_2.candidate_masks_history[start .. start + extent_sqr]);
+        }
     }
 }

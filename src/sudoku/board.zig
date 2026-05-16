@@ -41,6 +41,30 @@ pub const Board = struct {
         };
     }
 
+    pub fn save(self: @This(), writer: *std.Io.Writer) !void {
+        try writer.writeInt(@TypeOf(self.extent), self.extent, .little);
+
+        for (self.numbers_max[0 .. self.extent * self.extent]) |number_opt| {
+            try writer.writeByte(if (number_opt) |number| number else 0xff);
+        }
+
+        try self.rules.save(writer);
+    }
+
+    pub fn load(self: *@This(), reader: *std.Io.Reader) !void {
+        self.extent = try reader.takeInt(u32, .little);
+
+        for (0..self.extent * self.extent) |number_index| {
+            const number = try reader.takeByte();
+            self.numbers_max[number_index] = if (number == 0xff) null else @intCast(number);
+        }
+
+        try self.rules.load(reader);
+        self.regions = Regions.init(self.rules);
+
+        std.debug.assert(self.extent == self.rules.type.extent());
+    }
+
     pub fn numbers(self: *Self) []?NumberType {
         return self.numbers_max[0 .. self.extent * self.extent];
     }

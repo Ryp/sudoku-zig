@@ -43,6 +43,7 @@ pub const State = struct {
 
     pub fn init(io: std.Io, allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
         var game = try Self.init_empty_board(allocator, board_rules.type.extent());
+        errdefer game.deinit(allocator);
 
         var board_state: board.Board = .init(board_rules);
 
@@ -95,6 +96,65 @@ pub const State = struct {
             .validation_error = null,
             .solver_event = null,
         };
+    }
+
+    pub fn save(self: *const Self, writer: *std.Io.Writer) !void {
+        // Write extent first to be able to allocate the state
+        try writer.writeInt(u32, self.board.extent, .little);
+
+        try self.board.save(writer);
+
+        const extent_sqr = self.board.extent * self.board.extent;
+
+        for (self.candidate_masks[0..extent_sqr]) |mask| {
+            try writer.writeInt(MaskType, mask, .little);
+        }
+
+        try writer.writeInt(u32, self.history_index, .little);
+        try writer.writeInt(u32, self.max_history_index, .little);
+
+        const history_entry_count = self.max_history_index + 1;
+        for (0..history_entry_count) |i| {
+            const start = extent_sqr * i;
+            for (self.board_history[start .. start + extent_sqr]) |number_opt| {
+                try writer.writeByte(if (number_opt) |n| n else 0xff);
+            }
+            for (self.candidate_masks_history[start .. start + extent_sqr]) |mask| {
+                try writer.writeInt(MaskType, mask, .little);
+            }
+        }
+    }
+
+    pub fn load(reader: *std.Io.Reader, allocator: std.mem.Allocator) !Self {
+        const extent = try reader.takeInt(u32, .little);
+
+        var self: Self = try .init_empty_board(allocator, extent);
+        errdefer self.deinit(allocator);
+
+        try self.board.load(reader);
+
+        const extent_sqr = self.board.extent * self.board.extent;
+
+        for (self.candidate_masks[0..extent_sqr]) |*mask| {
+            mask.* = try reader.takeInt(MaskType, .little);
+        }
+
+        self.history_index = try reader.takeInt(u32, .little);
+        self.max_history_index = try reader.takeInt(u32, .little);
+
+        const history_entry_count = self.max_history_index + 1;
+        for (0..history_entry_count) |i| {
+            const start = extent_sqr * i;
+            for (self.board_history[start .. start + extent_sqr]) |*number_opt| {
+                const byte = try reader.takeByte();
+                number_opt.* = if (byte == 0xff) null else @intCast(byte);
+            }
+            for (self.candidate_masks_history[start .. start + extent_sqr]) |*mask| {
+                mask.* = try reader.takeInt(MaskType, .little);
+            }
+        }
+
+        return self;
     }
 
     pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
