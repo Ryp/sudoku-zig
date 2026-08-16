@@ -327,8 +327,10 @@ fn sdl_key_to_number(key_code: c.SDL_Keycode) u4 {
 }
 
 pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) !void {
-    var box_region_colors: [board.MaxExtent]ColorRGBA8 = undefined;
-    fill_box_regions_colors(game.board.rules.type, &box_region_colors);
+    var box_region_colors_full: [board.MaxExtent]ColorRGBA8 = undefined;
+    const box_region_colors = box_region_colors_full[0..game.board.extent];
+
+    fill_box_regions_colors(game.board.rules.type, box_region_colors);
 
     var sdl_context: SdlContext = try .init(allocator, game.board.extent);
     defer sdl_context.deinit(allocator);
