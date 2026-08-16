@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const rules = @import("rules.zig");
 const board = @import("board.zig");
 const known_boards = @import("known_boards.zig");
+const validator = @import("validator.zig");
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
 const DoublyLink = dancing_links_solver.DoublyLink;
@@ -94,7 +95,7 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) board.Boar
 
         board_state.numbers()[random_index] = null;
 
-        is_unique = dancing_links_solver.solve(&board_state, .{ .check_if_unique = true });
+        is_unique = dancing_links_solver.solve(&board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
 
         if (!is_unique) {
             // Whoops, we've gone one step too far - restore the number
@@ -157,8 +158,8 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext, depth: u32) bool {
                 return true;
             }
 
-            // Iterate over constraints (columns)
-            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+            // Iterate over constraints (columns) in the exact reverse order of covering
+            inline for (.{ header.box_index, header.col_index, header.row_index, header.exs_index }) |constraint_index| {
                 dancing_links_solver.uncover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
         }
@@ -199,14 +200,17 @@ fn cover_columns_for_random_clues(board_state: *board.Board, random: *const std.
 
 test {
     const Seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
-    const Difficulty: u32 = 200;
+    const Difficulty: u32 = 50;
 
     inline for (.{
         rules.Regular3x3,
         rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 3 } } } },
-        // rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } }, // FIXME stack overflows in solver
-        // known_boards.jigsaw9.rules, // FIXME Can't make a board (possibly in how box index is calculated)
+        rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } },
+        known_boards.jigsaw9.rules,
     }) |board_rules| {
-        _ = generate(board_rules, Seed, Difficulty);
+        var generated_board = generate(board_rules, Seed, Difficulty);
+
+        try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
+        try std.testing.expect(dancing_links_solver.solve(&generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
     }
 }

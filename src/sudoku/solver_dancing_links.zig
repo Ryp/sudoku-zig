@@ -5,7 +5,8 @@ const board = @import("board.zig");
 const known_boards = @import("known_boards.zig");
 
 pub const Options = struct {
-    check_if_unique: bool = false,
+    solution_count_max: u32 = 1,
+    fill_solution: bool = true,
 };
 
 pub const DoublyLink = struct {
@@ -22,7 +23,9 @@ pub const DoublyLink = struct {
 // choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
-pub fn solve(board_state: *board.Board, options: Options) bool {
+//
+// Returns the number of solutions found (capped by solution_count_max)
+pub fn solve(board_state: *board.Board, options: Options) u32 {
     std.debug.assert(!board_state.rules.chess_anti_king);
     std.debug.assert(!board_state.rules.chess_anti_knight);
 
@@ -81,12 +84,7 @@ pub fn solve(board_state: *board.Board, options: Options) bool {
         .choices_constraint_link_indices = choices_constraint_link_indices,
     };
 
-    if (options.check_if_unique) {
-        const solution_count = solve_dancing_links_recursive_count_solutions(context);
-        return solution_count == 1;
-    } else {
-        return solve_dancing_links_recursive(context);
-    }
+    return solve_dancing_links_recursive(context, options.solution_count_max, options.fill_solution);
 }
 
 const DancingLinkContext = struct {
@@ -124,41 +122,7 @@ pub fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const Do
     return best_col;
 }
 
-fn solve_dancing_links_recursive(ctx: DancingLinkContext) bool {
-    if (ctx.links_h[0].next == 0) {
-        return true;
-    } else {
-        const chosen_column_index = choose_best_column_index(ctx.links_h, ctx.links_v);
-
-        // Iterate over choices (rows)
-        var vertical_index = ctx.links_v[chosen_column_index].next;
-        while (vertical_index != chosen_column_index) : (vertical_index = ctx.links_v[vertical_index].next) {
-            const row_index = (vertical_index - ctx.choice_link_offset) / 4;
-            const header = ctx.choices_constraint_link_indices[row_index];
-
-            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
-                cover_column(ctx.links_h, ctx.links_v, constraint_index);
-            }
-
-            if (solve_dancing_links_recursive(ctx)) {
-                const cell_index = row_index / ctx.board_state.extent;
-                const number = row_index % ctx.board_state.extent;
-
-                ctx.board_state.numbers()[cell_index] = @intCast(number);
-
-                return true;
-            }
-
-            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
-                uncover_column(ctx.links_h, ctx.links_v, constraint_index);
-            }
-        }
-
-        return false;
-    }
-}
-
-fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
+fn solve_dancing_links_recursive(ctx: DancingLinkContext, solution_count_max: u32, fill_solution: bool) u32 {
     if (ctx.links_h[0].next == 0) {
         return 1;
     } else {
@@ -176,10 +140,22 @@ fn solve_dancing_links_recursive_count_solutions(ctx: DancingLinkContext) u32 {
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            solution_count += solve_dancing_links_recursive_count_solutions(ctx);
+            solution_count += solve_dancing_links_recursive(ctx, solution_count_max - solution_count, fill_solution);
 
-            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
+            // Uncover in the exact reverse order of covering
+            inline for (.{ header.box_index, header.col_index, header.row_index, header.exs_index }) |constraint_index| {
                 uncover_column(ctx.links_h, ctx.links_v, constraint_index);
+            }
+
+            if (solution_count >= solution_count_max) {
+                if (fill_solution) {
+                    const cell_index = row_index / ctx.board_state.extent;
+                    const number = row_index % ctx.board_state.extent;
+
+                    ctx.board_state.numbers()[cell_index] = @intCast(number);
+                }
+
+                return solution_count;
             }
         }
 
@@ -355,7 +331,7 @@ test {
         var board_state: board.Board = .init(known_board.rules);
         board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{}));
+        try std.testing.expect(solve(&board_state, .{}) > 0);
 
         var solution_board: board.Board = .init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
