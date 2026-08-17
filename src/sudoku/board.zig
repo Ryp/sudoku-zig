@@ -90,8 +90,10 @@ pub const Board = struct {
         return @intCast((@as(u32, 1) << @intCast(self.extent)) - 1);
     }
 
-    pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) void {
-        std.debug.assert(sudoku_string.len == self.extent * self.extent);
+    pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) !void {
+        if (sudoku_string.len != self.extent * self.extent) {
+            return error.InvalidSudokuStringLength;
+        }
 
         for (self.numbers(), sudoku_string) |*board_number_opt, char| {
             var number_opt: ?NumberType = null;
@@ -105,7 +107,9 @@ pub const Board = struct {
             }
 
             if (number_opt) |number| {
-                std.debug.assert(number < self.extent);
+                if (number >= self.extent) {
+                    return error.SudokuClueOutOfRange;
+                }
             }
 
             board_number_opt.* = number_opt;

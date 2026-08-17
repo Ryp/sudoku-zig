@@ -9,12 +9,12 @@ pub fn main() !void {
         std.debug.print("Testing solver on known board: rules = {}, start = {s}\n", .{ known_board.rules, known_board.start_string });
 
         var board_state: board.Board = .init(known_board.rules);
-        board_state.fill_board_from_string(known_board.start_string);
+        try board_state.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solver.solve(&board_state, .{ .dancing_links = .{} }));
 
         var solution_board: board.Board = .init(known_board.rules);
-        solution_board.fill_board_from_string(known_board.solution_string);
+        try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expect(std.mem.eql(?board.NumberType, board_state.numbers(), solution_board.numbers()));
     }

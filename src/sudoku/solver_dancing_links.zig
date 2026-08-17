@@ -329,12 +329,12 @@ fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
 test {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
         var board_state: board.Board = .init(known_board.rules);
-        board_state.fill_board_from_string(known_board.start_string);
+        try board_state.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solve(&board_state, .{}) > 0);
 
         var solution_board: board.Board = .init(known_board.rules);
-        solution_board.fill_board_from_string(known_board.solution_string);
+        try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expect(std.mem.eql(?board.NumberType, solution_board.numbers(), board_state.numbers()));
     }

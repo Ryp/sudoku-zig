@@ -48,7 +48,7 @@ pub const State = struct {
         var board_state: board.Board = .init(board_rules);
 
         if (sudoku_string_opt) |sudoku_string| {
-            board_state.fill_board_from_string(sudoku_string);
+            try board_state.fill_board_from_string(sudoku_string);
         } else {
             var seed_buffer: [8]u8 = undefined;
             io.random(&seed_buffer);
