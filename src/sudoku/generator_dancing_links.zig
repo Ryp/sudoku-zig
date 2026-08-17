@@ -96,6 +96,10 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) board.Boar
         const random_index = rng.random().uintLessThan(u32, extent_sqr);
         const number_at_random_index = board_state.numbers()[random_index];
 
+        if (number_at_random_index == null) {
+            continue;
+        }
+
         board_state.numbers()[random_index] = null;
 
         is_unique = dancing_links_solver.solve(&board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
