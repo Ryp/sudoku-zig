@@ -78,7 +78,10 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) board.Boar
     }, 0);
 
     if (!found_solution) {
-        std.debug.print("Current solution: {s}\n", .{board_state.string_from_board()});
+        const board_string_max = board_state.string_from_board_max();
+        const board_string = board_string_max[0..extent_sqr];
+
+        std.debug.print("Current solution: {s}\n", .{board_string});
         @panic("Failed to find solution for generated sudoku!");
     }
 

@@ -16,9 +16,6 @@ pub fn main() !void {
         var solution_board: board.Board = .init(known_board.rules);
         solution_board.fill_board_from_string(known_board.solution_string);
 
-        std.debug.print("Solver: {s}\n", .{board_state.string_from_board()});
-        std.debug.print("Actual: {s}\n", .{solution_board.string_from_board()});
-
         try std.testing.expect(std.mem.eql(?board.NumberType, board_state.numbers(), solution_board.numbers()));
     }
 }

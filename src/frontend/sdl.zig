@@ -338,7 +338,10 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
 
-    std.debug.print("Board: {s}\n", .{game.board.string_from_board()});
+    const board_string_max = game.board.string_from_board_max();
+    const board_string = board_string_max[0 .. game.board.extent * game.board.extent];
+
+    std.debug.print("Board: {s}\n", .{board_string});
 
     grader.grade_and_print_summary(game.board);
 
@@ -591,7 +594,10 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
 
-    std.debug.print("Board at exit: {s}\n", .{game.board.string_from_board()});
+    const exit_board_string_max = game.board.string_from_board_max();
+    const exit_board_string = exit_board_string_max[0 .. game.board.extent * game.board.extent];
+
+    std.debug.print("Board at exit: {s}\n", .{exit_board_string});
 }
 
 fn fill_box_regions_colors(board_type: rules.Type, box_region_colors: []ColorRGBA8) void {

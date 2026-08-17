@@ -112,7 +112,7 @@ pub const Board = struct {
         }
     }
 
-    pub fn string_from_board(self: *Self) [MaxExtentSqr]u8 {
+    pub fn string_from_board_max(self: *Self) [MaxExtentSqr]u8 {
         var string_max = std.mem.zeroes([MaxExtentSqr]u8);
         const string = string_max[0 .. self.extent * self.extent];
 
