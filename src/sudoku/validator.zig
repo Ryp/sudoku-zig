@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const rules = @import("rules.zig");
 const board = @import("board.zig");
 
@@ -112,4 +114,75 @@ fn check_anti_rule(board_state: *const board.Board, candidate_masks_opt: ?[]cons
     }
 
     return null;
+}
+
+const Regular2x2 = rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 2, 2 } } } };
+
+test "Valid boards" {
+    var board_state: board.Board = .init(Regular2x2);
+
+    // Empty board
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+
+    // Solved board
+    try board_state.fill_board_from_string("1234341221434321");
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+}
+
+test "Duplicate numbers in a region" {
+    var board_state: board.Board = .init(Regular2x2);
+
+    // Row duplicate
+    try board_state.fill_board_from_string("11..............");
+    try std.testing.expect(check_board_for_errors(&board_state, null) != null);
+
+    // Column duplicate
+    try board_state.fill_board_from_string("1...1...........");
+    try std.testing.expect(check_board_for_errors(&board_state, null) != null);
+
+    // Box duplicate that shares neither row nor column
+    try board_state.fill_board_from_string("1....1..........");
+
+    const box_error = check_board_for_errors(&board_state, null) orelse return error.TestExpectedError;
+    try std.testing.expectEqual(0, box_error.number);
+    try std.testing.expect(!box_error.is_candidate);
+}
+
+test "Candidate conflicting with a placed number" {
+    var board_state: board.Board = .init(Regular2x2);
+    try board_state.fill_board_from_string("1...............");
+
+    var candidate_masks = std.mem.zeroes([16]board.MaskType);
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, &candidate_masks));
+
+    // Mark number 1 as a candidate in the same row
+    candidate_masks[2] = board_state.mask_for_number(0);
+
+    const candidate_error = check_board_for_errors(&board_state, &candidate_masks) orelse return error.TestExpectedError;
+    try std.testing.expectEqual(0, candidate_error.number);
+    try std.testing.expect(candidate_error.is_candidate);
+    try std.testing.expectEqual(2, candidate_error.invalid_cell_index);
+}
+
+test "Chess rules" {
+    // Diagonal neighbors across a box boundary, only invalid with the anti-king rule
+    var board_state: board.Board = .init(Regular2x2);
+    try board_state.fill_board_from_string(".....1....1.....");
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+
+    var king_rules = Regular2x2;
+    king_rules.chess_anti_king = true;
+    var king_board: board.Board = .init(king_rules);
+    try king_board.fill_board_from_string(".....1....1.....");
+    try std.testing.expect(check_board_for_errors(&king_board, null) != null);
+
+    // A knight's move apart, only invalid with the anti-knight rule
+    try board_state.fill_board_from_string("1.....1.........");
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+
+    var knight_rules = Regular2x2;
+    knight_rules.chess_anti_knight = true;
+    var knight_board: board.Board = .init(knight_rules);
+    try knight_board.fill_board_from_string("1.....1.........");
+    try std.testing.expect(check_board_for_errors(&knight_board, null) != null);
 }
