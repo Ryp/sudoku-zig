@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 const rules = @import("rules.zig");
 const board = @import("board.zig");
@@ -10,14 +9,16 @@ const dancing_links_solver = @import("solver_dancing_links.zig");
 const DoublyLink = dancing_links_solver.DoublyLink;
 const ChoiceConstraintsIndices = dancing_links_solver.ChoiceConstraintsIndices;
 
-pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) board.Board {
-    std.debug.assert(!board_rules.chess_anti_king);
-    std.debug.assert(!board_rules.chess_anti_knight);
+pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Board {
+    if (board_rules.chess_anti_king or board_rules.chess_anti_knight) {
+        std.debug.print("error: generating puzzles with chess constraints isn't supported yet, please provide a sudoku string instead\n", .{});
+        return error.UnsupportedDLXGeneratorChessRules;
+    }
 
     const extent = board_rules.type.extent();
     const extent_sqr = extent * extent;
 
-    var board_state: board.Board = .init(board_rules);
+    var board_state: board.Board = try .init(board_rules);
 
     // All links are allocated sequentially, so we're doing some math to compute relative addresses.
     const constraint_type_count = 4;
@@ -102,7 +103,7 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) board.Boar
 
         board_state.numbers()[random_index] = null;
 
-        is_unique = dancing_links_solver.solve(&board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
+        is_unique = try dancing_links_solver.solve(&board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
 
         if (!is_unique) {
             // Whoops, we've gone one step too far - restore the number
@@ -215,9 +216,9 @@ test {
         rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } },
         known_boards.jigsaw9.rules,
     }) |board_rules| {
-        var generated_board = generate(board_rules, Seed, Difficulty);
+        var generated_board = try generate(board_rules, Seed, Difficulty);
 
         try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
-        try std.testing.expect(dancing_links_solver.solve(&generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
+        try std.testing.expect(try dancing_links_solver.solve(&generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
     }
 }

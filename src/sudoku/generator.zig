@@ -8,7 +8,7 @@ pub const Algorithm = union(enum) {
     },
 };
 
-pub fn generate(board_rules: rules.Rules, seed: u64, algorithm: Algorithm) board.Board {
+pub fn generate(board_rules: rules.Rules, seed: u64, algorithm: Algorithm) !board.Board {
     switch (algorithm) {
         .dancing_links => |options| {
             return dancing_links.generate(board_rules, seed, options.difficulty);

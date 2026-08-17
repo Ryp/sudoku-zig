@@ -4,9 +4,9 @@ const solver_logical = @import("solver_logical.zig");
 const board = @import("board.zig");
 const validator = @import("validator.zig");
 
-pub fn grade_and_print_summary(const_board: board.Board) void {
+pub fn grade_and_print_summary(const_board: board.Board) !void {
     // Create a dummy board we can modify
-    var board_state: board.Board = .init(const_board.rules);
+    var board_state: board.Board = try .init(const_board.rules);
 
     @memcpy(board_state.numbers(), const_board.numbers_const());
 

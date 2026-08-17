@@ -16,7 +16,8 @@ pub fn solve(board_state: *board.Board, generic_options: Options) bool {
             return logical.solve(board_state);
         },
         .dancing_links => |options| {
-            return dancing_links.solve(board_state, options) > 0;
+            const solution_count = dancing_links.solve(board_state, options) catch @as(u32, 0);
+            return solution_count > 0;
         },
         .sorted_backtracking => |options| {
             return backtracking.solve(board_state, options);

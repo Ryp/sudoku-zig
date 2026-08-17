@@ -343,7 +343,7 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
 
     std.debug.print("Board: {s}\n", .{board_string});
 
-    grader.grade_and_print_summary(game.board);
+    try grader.grade_and_print_summary(game.board);
 
     main_loop: while (true) {
         // Poll events

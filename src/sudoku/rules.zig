@@ -111,16 +111,15 @@ pub const AntiKnightOffsets = [_]i32_2{
     .{ 1, 2 },
 };
 
-pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![board.MaxExtentSqr]u4 {
+pub fn fill_jigsaw_box_indices_from_string_max(extent: u32, box_indices_string: []const u8) ![board.MaxExtentSqr]u4 {
     const extent_sqr = extent * extent;
 
     var box_indices_max = std.mem.zeroes([board.MaxExtentSqr]u4);
     const box_indices = box_indices_max[0..extent_sqr];
 
-    if (box_indices_string.len < extent_sqr) {
-        @panic("Invalid box indices: string too short");
-    } else if (box_indices_string.len > extent_sqr) {
-        @panic("Invalid box indices: string too long");
+    if (box_indices_string.len != extent_sqr) {
+        std.debug.print("error: invalid jigsaw indices string length {}, expected {}\n", .{ box_indices_string.len, extent_sqr });
+        return error.InvalidJigsawIndicesStringLength;
     }
 
     var region_sizes_max = std.mem.zeroes([board.MaxExtent]u32);
@@ -136,13 +135,13 @@ pub fn parse_jigsaw_box_indices(extent: u32, box_indices_string: []const u8) ![b
         } else if (char >= 'a' and char <= 'g') {
             number = char - 'a' + 9;
         } else {
-            std.debug.print("Invalid character '{c}' in box indices string at position {}\n", .{ char, position });
-            return error.IndexInvalid;
+            std.debug.print("error: invalid character '{c}' in box indices string at position {}\n", .{ char, position });
+            return error.InvalidJigsawIndexCharacter;
         }
 
         if (number >= extent) {
-            std.debug.print("Character '{c}' out of bounds in box indices string at position {}, max is '{c}'\n", .{ char, position, board.MaxNumbersString[number] });
-            return error.IndexOutOfBounds;
+            std.debug.print("error: character '{c}' out of bounds in box indices string at position {}, max is '{c}'\n", .{ char, position, board.MaxNumbersString[extent - 1] });
+            return error.InvalidJigsawIndexOutOfBounds;
         }
 
         box_index.* = @intCast(number);

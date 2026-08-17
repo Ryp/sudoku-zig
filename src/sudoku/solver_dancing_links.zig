@@ -25,9 +25,11 @@ pub const DoublyLink = struct {
 // IDEA: SoA for links?
 //
 // Returns the number of solutions found (capped by solution_count_max)
-pub fn solve(board_state: *board.Board, options: Options) u32 {
-    std.debug.assert(!board_state.rules.chess_anti_king);
-    std.debug.assert(!board_state.rules.chess_anti_knight);
+pub fn solve(board_state: *board.Board, options: Options) !u32 {
+    if (board_state.rules.chess_anti_king or board_state.rules.chess_anti_knight) {
+        std.debug.print("error: solving puzzles with chess constraints isn't supported yet\n", .{});
+        return error.UnsupportedDLXSolverChessRules;
+    }
 
     const extent = board_state.rules.type.extent();
     const extent_sqr = extent * extent;
@@ -328,12 +330,12 @@ fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
 
 test {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
-        var board_state: board.Board = .init(known_board.rules);
+        var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{}) > 0);
+        try std.testing.expect(try solve(&board_state, .{}) > 0);
 
-        var solution_board: board.Board = .init(known_board.rules);
+        var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expect(std.mem.eql(?board.NumberType, solution_board.numbers(), board_state.numbers()));

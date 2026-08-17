@@ -21,7 +21,7 @@ pub fn main(init: std.process.Init) !void {
         \\--king                  Chess anti-king's constraint
         \\--knight                Chess anti-knight's constraint
         \\--load <str>            Load save file
-        \\<str>                   Sudoku string (you can use '.' for empty cells).
+        \\<str>                   Sudoku string (use '.' for empty cells).
         \\                        Unset this if you want to have a sudoku board generated for you.
     );
 
@@ -30,9 +30,8 @@ pub fn main(init: std.process.Init) !void {
         .diagnostic = &diag,
         .allocator = allocator,
     }) catch |err| {
-        // Report useful error and exit.
         try diag.reportToFile(io, .stderr(), err);
-        return err;
+        return;
     };
     defer res.deinit();
 
@@ -60,12 +59,16 @@ pub fn main(init: std.process.Init) !void {
         var board_rules: rules.Rules = .{ .type = undefined };
 
         if (res.args.jigsaw) |jigsaw_string| {
-            const jigsaw_extent = try get_extent_from_jigsaw_string(jigsaw_string);
+            const jigsaw_extent = get_extent_from_jigsaw_string(jigsaw_string) catch {
+                return; // We already printed a helpful message, just return
+            };
 
             board_rules.type = .{
                 .jigsaw = .{
                     .extent = jigsaw_extent,
-                    .box_indices_max = try rules.parse_jigsaw_box_indices(jigsaw_extent, jigsaw_string),
+                    .box_indices_max = rules.fill_jigsaw_box_indices_from_string_max(jigsaw_extent, jigsaw_string) catch {
+                        return; // We already printed a helpful message, just return
+                    },
                 },
             };
         } else {
@@ -80,11 +83,35 @@ pub fn main(init: std.process.Init) !void {
         board_rules.chess_anti_king = res.args.king != 0;
         board_rules.chess_anti_knight = res.args.knight != 0;
 
-        game_state = try .init(io, allocator, board_rules, res.positionals[0]);
+        game_state = game.State.init(io, allocator, board_rules, res.positionals[0]) catch |err| {
+            switch (err) {
+                error.InvalidSudokuBoardExtent,
+                error.InvalidSudokuStringLength,
+                error.InvalidSudokuStringCharacter,
+                error.InvalidSudokuClue,
+                error.UnsupportedDLXSolverChessRules,
+                error.UnsupportedDLXGeneratorChessRules,
+                => {
+                    return; // We already printed a helpful message, just return
+                },
+                error.OutOfMemory => {
+                    return err;
+                },
+            }
+        };
     }
     defer game_state.deinit(allocator);
 
-    try sdl.execute_main_loop(&game_state, allocator);
+    sdl.execute_main_loop(&game_state, allocator) catch |err| {
+        switch (err) {
+            error.InvalidSudokuBoardExtent => {
+                return; // We already printed a helpful message, just return
+            },
+            else => {
+                return err; // Catch-all, as there's way more errors that can happen here
+            },
+        }
+    };
 
     if (true) {
         const output_path = "latest.sdku";
@@ -112,6 +139,6 @@ fn get_extent_from_jigsaw_string(jigsaw_string: []const u8) !u32 {
         }
     }
 
-    std.debug.print("Invalid jigsaw string length {}, only perfect squares are valid\n", .{jigsaw_string.len});
+    std.debug.print("error: invalid jigsaw string length {}, only perfect squares are valid\n", .{jigsaw_string.len});
     return error.InvalidJigsawStringLength;
 }

@@ -45,7 +45,7 @@ pub const State = struct {
         var game = try Self.init_empty_board(allocator, board_rules.type.extent());
         errdefer game.deinit(allocator);
 
-        var board_state: board.Board = .init(board_rules);
+        var board_state: board.Board = try .init(board_rules);
 
         if (sudoku_string_opt) |sudoku_string| {
             try board_state.fill_board_from_string(sudoku_string);
@@ -55,7 +55,7 @@ pub const State = struct {
 
             const seed = std.mem.readInt(u64, &seed_buffer, .little);
 
-            board_state = generator.generate(board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
+            board_state = try generator.generate(board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
         }
 
         game.board = board_state;

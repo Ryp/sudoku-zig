@@ -186,7 +186,7 @@ pub fn find_naked_pair_region(board_state: board.Board, candidate_masks: []const
 test "Naked pair" {
     const regular_rules = rules.Regular3x3;
 
-    var board_state: board.Board = .init(regular_rules);
+    var board_state: board.Board = try .init(regular_rules);
 
     var candidate_masks = std.mem.zeroes([board.MaxExtentSqr]board.MaskType);
 
@@ -564,7 +564,7 @@ pub fn find_box_line_reduction_for_line(board_state: board.Board, candidate_mask
 test "Box-line removal" {
     const regular_rules = rules.Regular3x3;
 
-    var board_state: board.Board = .init(regular_rules);
+    var board_state: board.Board = try .init(regular_rules);
 
     const extent = board_state.extent;
     const extent_sqr = extent * extent;
@@ -684,12 +684,12 @@ pub fn solve(board_state: *board.Board) bool {
 
 test {
     inline for (known_boards.TestLogicalSolver) |known_board| {
-        var board_state: board.Board = .init(known_board.rules);
+        var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solve(&board_state));
 
-        var solution_board: board.Board = .init(known_board.rules);
+        var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqualSlices(?board.NumberType, solution_board.numbers(), board_state.numbers());

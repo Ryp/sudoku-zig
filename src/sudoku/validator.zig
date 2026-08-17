@@ -119,7 +119,7 @@ fn check_anti_rule(board_state: *const board.Board, candidate_masks_opt: ?[]cons
 const Regular2x2 = rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 2, 2 } } } };
 
 test "Valid boards" {
-    var board_state: board.Board = .init(Regular2x2);
+    var board_state: board.Board = try .init(Regular2x2);
 
     // Empty board
     try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
@@ -130,7 +130,7 @@ test "Valid boards" {
 }
 
 test "Duplicate numbers in a region" {
-    var board_state: board.Board = .init(Regular2x2);
+    var board_state: board.Board = try .init(Regular2x2);
 
     // Row duplicate
     try board_state.fill_board_from_string("11..............");
@@ -149,7 +149,7 @@ test "Duplicate numbers in a region" {
 }
 
 test "Candidate conflicting with a placed number" {
-    var board_state: board.Board = .init(Regular2x2);
+    var board_state: board.Board = try .init(Regular2x2);
     try board_state.fill_board_from_string("1...............");
 
     var candidate_masks = std.mem.zeroes([16]board.MaskType);
@@ -166,13 +166,13 @@ test "Candidate conflicting with a placed number" {
 
 test "Chess rules" {
     // Diagonal neighbors across a box boundary, only invalid with the anti-king rule
-    var board_state: board.Board = .init(Regular2x2);
+    var board_state: board.Board = try .init(Regular2x2);
     try board_state.fill_board_from_string(".....1....1.....");
     try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
 
     var king_rules = Regular2x2;
     king_rules.chess_anti_king = true;
-    var king_board: board.Board = .init(king_rules);
+    var king_board: board.Board = try .init(king_rules);
     try king_board.fill_board_from_string(".....1....1.....");
     try std.testing.expect(check_board_for_errors(&king_board, null) != null);
 
@@ -182,7 +182,7 @@ test "Chess rules" {
 
     var knight_rules = Regular2x2;
     knight_rules.chess_anti_knight = true;
-    var knight_board: board.Board = .init(knight_rules);
+    var knight_board: board.Board = try .init(knight_rules);
     try knight_board.fill_board_from_string("1.....1.........");
     try std.testing.expect(check_board_for_errors(&knight_board, null) != null);
 }

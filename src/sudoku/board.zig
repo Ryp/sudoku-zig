@@ -32,11 +32,11 @@ pub const Board = struct {
     rules: Rules,
 
     // Creates an empty sudoku board
-    pub fn init(rules: Rules) Self {
+    pub fn init(rules: Rules) !Self {
         return .{
             .extent = rules.type.extent(),
             .numbers_max = .{null} ** MaxExtentSqr,
-            .regions = Regions.init(rules),
+            .regions = try Regions.init(rules),
             .rules = rules,
         };
     }
@@ -60,9 +60,12 @@ pub const Board = struct {
         }
 
         try self.rules.load(reader);
-        self.regions = Regions.init(self.rules);
 
-        std.debug.assert(self.extent == self.rules.type.extent());
+        if (self.extent != self.rules.type.extent()) {
+            return error.CorruptSaveState;
+        }
+
+        self.regions = try Regions.init(self.rules);
     }
 
     pub fn numbers(self: *Self) []?NumberType {
@@ -92,11 +95,12 @@ pub const Board = struct {
 
     pub fn fill_board_from_string(self: *Self, sudoku_string: []const u8) !void {
         if (sudoku_string.len != self.extent * self.extent) {
+            std.debug.print("error: invalid sudoku string length {}, expected {}\n", .{ sudoku_string.len, self.extent * self.extent });
             return error.InvalidSudokuStringLength;
         }
 
-        for (self.numbers(), sudoku_string) |*board_number_opt, char| {
-            var number_opt: ?NumberType = null;
+        for (self.numbers(), sudoku_string, 0..) |*board_number_opt, char, position| {
+            var number_opt: ?NumberType = undefined;
 
             if (char >= '1' and char <= '9') {
                 number_opt = @intCast(char - '1');
@@ -104,11 +108,17 @@ pub const Board = struct {
                 number_opt = @intCast(char - 'A' + 9);
             } else if (char >= 'a' and char <= 'g') {
                 number_opt = @intCast(char - 'a' + 9);
+            } else if (char == '.') {
+                number_opt = null;
+            } else {
+                std.debug.print("error: invalid character '{c}' at position {}\n", .{ char, position });
+                return error.InvalidSudokuStringCharacter;
             }
 
             if (number_opt) |number| {
                 if (number >= self.extent) {
-                    return error.SudokuClueOutOfRange;
+                    std.debug.print("error: clue '{c}' out of bounds at position {}, max is '{c}'\n", .{ char, position, MaxNumbersString[self.extent - 1] });
+                    return error.InvalidSudokuClue;
                 }
             }
 
@@ -169,11 +179,21 @@ const Regions = struct {
         return self.box_indices_max[0 .. self.extent * self.extent];
     }
 
-    pub fn init(rules: Rules) Regions {
+    pub fn init(rules: Rules) !Regions {
         const extent = rules.type.extent();
 
-        std.debug.assert(extent >= MinExtent);
-        std.debug.assert(extent <= MaxExtent);
+        // Validate basic stuff
+        if (extent < MinExtent or extent > MaxExtent) {
+            switch (rules.type) {
+                .regular => |regular| {
+                    std.debug.print("error: invalid box extents {}x{}, the board must hold between {} and {} numbers\n", .{ regular.box_extent[0], regular.box_extent[1], MinExtent, MaxExtent });
+                },
+                .jigsaw => {
+                    std.debug.print("error: invalid jigsaw extent {}, the board must hold between {} and {} numbers\n", .{ extent, MinExtent, MaxExtent });
+                },
+            }
+            return error.InvalidSudokuBoardExtent;
+        }
 
         var regions: Regions = undefined;
 
@@ -181,11 +201,7 @@ const Regions = struct {
 
         switch (rules.type) {
             .regular => |regular| {
-                if (extent != regular.box_extent[0] * regular.box_extent[1]) {
-                    @panic("Board extent mismatch with box extents");
-                }
-
-                regions.box_indices_max = regular_box_indices(extent, regular.box_extent);
+                regions.box_indices_max = regular_box_indices(regular.box_extent);
             },
             .jigsaw => |jigsaw| {
                 regions.box_indices_max = jigsaw.box_indices_max;
@@ -218,7 +234,9 @@ const Regions = struct {
         return regions;
     }
 
-    fn regular_box_indices(extent: u32, box_extent: u32_2) [MaxExtentSqr]NumberType {
+    fn regular_box_indices(box_extent: u32_2) [MaxExtentSqr]NumberType {
+        const extent = box_extent[0] * box_extent[1];
+
         var box_indices_max = std.mem.zeroes([MaxExtentSqr]NumberType);
         const indices = box_indices_max[0 .. extent * extent];
 
@@ -252,7 +270,7 @@ fn private_cell_index_from_coord(extent: u32, position: u32_2) u32 {
 }
 
 test "Basic" {
-    const board: Board = .init(.{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } });
+    const board: Board = try .init(.{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } });
     _ = board;
 }
 
@@ -268,6 +286,6 @@ test "Ergonomics" {
     const box_h: u32 = if (rng.random().uintLessThan(u32, 2) == 1) 3 else 4;
     const rules = Rules{ .type = .{ .regular = .{ .box_extent = .{ box_w, box_h } } } };
 
-    const board: Board = .init(rules);
+    const board: Board = try .init(rules);
     _ = board;
 }

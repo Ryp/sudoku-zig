@@ -184,12 +184,12 @@ fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo,
 
 test "Iterative" {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
-        var board_state: board.Board = .init(known_board.rules);
+        var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solve(&board_state, .{ .recursive = false }));
 
-        var solution_board: board.Board = .init(known_board.rules);
+        var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqualSlices(?board.NumberType, solution_board.numbers(), board_state.numbers());
@@ -198,12 +198,12 @@ test "Iterative" {
 
 test "Recursive" {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
-        var board_state: board.Board = .init(known_board.rules);
+        var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
         try std.testing.expect(solve(&board_state, .{ .recursive = true }));
 
-        var solution_board: board.Board = .init(known_board.rules);
+        var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqualSlices(?board.NumberType, solution_board.numbers(), board_state.numbers());
