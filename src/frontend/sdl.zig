@@ -374,8 +374,8 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
                     _ = c.SDL_ConvertEventToRenderCoordinates(sdl_context.renderer, &sdl_event);
 
                     var selected_cell_coord = u32_2{
-                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.x - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
-                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.y - sdl_context.thick_line_px)) / sdl_context.cell_extent_px)),
+                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.x - sdl_context.thick_line_px)) / sdl_context.cell_stride_px)),
+                        @as(u32, @intFromFloat(@max(0.0, (sdl_event.button.y - sdl_context.thick_line_px)) / sdl_context.cell_stride_px)),
                     };
 
                     // Clamp to board extent
