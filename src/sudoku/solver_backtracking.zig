@@ -114,7 +114,7 @@ fn valid_candidates_mask(board_state: *const board.Board, cell_info: CellInfo) b
 }
 
 fn populate_free_list(board_state: *const board.Board, free_cell_list_full: []CellInfo) []CellInfo {
-    var list_index: u8 = 0;
+    var list_index: u32 = 0;
 
     for (board_state.numbers_const(), 0..) |cell_number, cell_index| {
         if (cell_number == null) {
