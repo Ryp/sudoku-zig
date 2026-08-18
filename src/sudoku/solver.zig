@@ -2,25 +2,31 @@ const board = @import("board.zig");
 
 const dancing_links = @import("solver_dancing_links.zig");
 const backtracking = @import("solver_backtracking.zig");
-const logical = @import("solver_logical.zig");
 
-pub const Options = union(enum) {
-    logical,
-    dancing_links: dancing_links.Options,
-    sorted_backtracking: backtracking.Options,
+pub const Options = struct {
+    solution_count_max: u32 = 1,
+    fill_solution: bool = true,
 };
 
-pub fn solve(board_state: *board.Board, generic_options: Options) bool {
-    switch (generic_options) {
-        .logical => {
-            return logical.solve(board_state);
-        },
-        .dancing_links => |options| {
-            const solution_count = dancing_links.solve(board_state, options) catch @as(u32, 0);
-            return solution_count > 0;
-        },
-        .sorted_backtracking => |options| {
-            return backtracking.solve(board_state, options);
-        },
+// Returns the number of solutions found (capped by solution_count_max)
+// Call a specific solver directly if you need more control
+pub fn solve(board_state: *board.Board, options: Options) !u32 {
+    const using_chess_rules = board_state.rules.chess_anti_king or board_state.rules.chess_anti_knight;
+
+    if (!using_chess_rules) {
+        return dancing_links.solve(board_state, .{
+            .solution_count_max = options.solution_count_max,
+            .fill_solution = options.fill_solution,
+        }) catch |err| {
+            switch (err) {
+                error.UnsupportedDLXSolverChessRules => unreachable, // We just made sure this was not possible
+            }
+        };
+    } else {
+        // Fallback on backtracking
+        return backtracking.solve(board_state, .{
+            .solution_count_max = options.solution_count_max,
+            .fill_solution = options.fill_solution,
+        });
     }
 }

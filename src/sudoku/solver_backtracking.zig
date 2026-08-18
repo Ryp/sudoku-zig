@@ -4,14 +4,20 @@ const board = @import("board.zig");
 const solver_logical = @import("solver_logical.zig");
 const known_boards = @import("known_boards.zig");
 const validator = @import("validator.zig");
+const rules = @import("rules.zig");
 
 pub const Options = struct {
-    recursive: bool = false,
+    solution_count_max: u32 = 1,
+    fill_solution: bool = true,
+    recursive: bool = true, // Fastest solver ATM
 };
 
-pub fn solve(board_state: *board.Board, options: Options) bool {
+const BoardNumbers = [board.MaxExtentSqr]?board.NumberType;
+
+// Returns the number of solutions found (capped by solution_count_max)
+pub fn solve(board_state: *board.Board, options: Options) u32 {
     if (validator.check_board_for_errors(board_state, null) != null) {
-        return false;
+        return 0;
     }
 
     var free_cell_list_max: [board.MaxExtentSqr]CellInfo = undefined;
@@ -19,11 +25,27 @@ pub fn solve(board_state: *board.Board, options: Options) bool {
 
     sort_free_cell_list(board_state, free_cell_list);
 
-    if (options.recursive) {
-        return solve_backtracking_recursive(board_state, free_cell_list, 0);
-    } else {
-        return solve_backtracking_iterative(board_state, free_cell_list);
+    var first_solution: ?BoardNumbers = null;
+
+    const solution_count = if (options.recursive)
+        solve_backtracking_recursive(board_state, free_cell_list, options.solution_count_max, &first_solution, 0)
+    else
+        solve_backtracking_iterative(board_state, free_cell_list, options.solution_count_max, &first_solution);
+
+    // The search stops wherever it ran out of budget, so the board can be left
+    // holding a half-finished guess. Free cells were null on entry by
+    // construction, so clearing them restores exactly what the caller passed in.
+    for (free_cell_list) |free_cell| {
+        board_state.numbers()[free_cell.index] = null;
     }
+
+    if (options.fill_solution) {
+        if (first_solution) |solution| {
+            board_state.numbers_max = solution;
+        }
+    }
+
+    return solution_count;
 }
 
 const CellInfo = struct {
@@ -32,10 +54,16 @@ const CellInfo = struct {
     row: u4,
 };
 
-fn solve_backtracking_recursive(board_state: *board.Board, free_cell_list: []CellInfo, list_index: u32) bool {
+fn solve_backtracking_recursive(board_state: *board.Board, free_cell_list: []CellInfo, solution_count_max: u32, first_solution: *?BoardNumbers, list_index: u32) u32 {
     if (list_index >= free_cell_list.len) {
-        return true;
+        if (first_solution.* == null) {
+            first_solution.* = board_state.numbers_max;
+        }
+
+        return 1;
     }
+
+    var solution_count: u32 = 0;
 
     const free_cell: CellInfo = free_cell_list[list_index];
     const valid_mask = valid_candidates_mask(board_state, free_cell);
@@ -44,23 +72,49 @@ fn solve_backtracking_recursive(board_state: *board.Board, free_cell_list: []Cel
         if (board_state.mask_for_number(@intCast(number)) & valid_mask != 0) {
             board_state.numbers()[free_cell.index] = @intCast(number);
 
-            if (solve_backtracking_recursive(board_state, free_cell_list, list_index + 1)) {
-                return true;
+            solution_count += solve_backtracking_recursive(board_state, free_cell_list, solution_count_max - solution_count, first_solution, list_index + 1);
+
+            if (solution_count >= solution_count_max) {
+                return solution_count;
             }
         }
     }
 
     board_state.numbers()[free_cell.index] = null;
-    return false;
+    return solution_count;
 }
 
-fn solve_backtracking_iterative(board_state: *board.Board, free_cell_list: []CellInfo) bool {
+fn solve_backtracking_iterative(board_state: *board.Board, free_cell_list: []CellInfo, solution_count_max: u32, first_solution: *?BoardNumbers) u32 {
+    // Special case already solved boards to not have to worry about underflowing list_index.
+    if (free_cell_list.len == 0) {
+        return 1;
+    }
+
     var current_guess_max = std.mem.zeroes([board.MaxExtentSqr]u32);
     var current_guess = current_guess_max[0..free_cell_list.len];
 
     var list_index: u32 = 0;
+    var solution_count: u32 = 0;
 
-    outer_loop: while (list_index < free_cell_list.len) {
+    outer_loop: while (true) {
+        if (list_index == free_cell_list.len) {
+            if (first_solution.* == null) {
+                first_solution.* = board_state.numbers_max;
+            }
+
+            solution_count += 1;
+
+            if (solution_count >= solution_count_max) {
+                return solution_count;
+            }
+
+            // Force backtrack
+            board_state.numbers()[free_cell_list[list_index - 1].index] = null;
+            list_index -= 1;
+
+            continue :outer_loop;
+        }
+
         const free_cell = free_cell_list[list_index];
         const valid_mask = valid_candidates_mask(board_state, free_cell);
 
@@ -85,7 +139,7 @@ fn solve_backtracking_iterative(board_state: *board.Board, free_cell_list: []Cel
 
             // Backtracking at index zero means we didn't find a solution
             if (list_index == 0) {
-                return false;
+                return solution_count;
             } else {
                 // Clear previous guess because it's wrong!
                 board_state.numbers()[free_cell_list[list_index - 1].index] = null;
@@ -93,8 +147,6 @@ fn solve_backtracking_iterative(board_state: *board.Board, free_cell_list: []Cel
             }
         }
     }
-
-    return true;
 }
 
 fn valid_candidates_mask(board_state: *const board.Board, cell_info: CellInfo) board.MaskType {
@@ -187,12 +239,15 @@ fn cell_info_candidate_count_compare_less(candidate_counts: []u8, lhs: CellInfo,
     return candidate_counts[lhs.index] < candidate_counts[rhs.index];
 }
 
+const Regular2x2 = rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 2, 2 } } } };
+const Regular2x2Solutions = 288;
+
 test "Iterative" {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{ .recursive = false }));
+        try std.testing.expect(solve(&board_state, .{ .recursive = false }) > 0);
 
         var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
@@ -201,16 +256,40 @@ test "Iterative" {
     }
 }
 
+test "Iterative Count All" {
+    var board_state: board.Board = try .init(Regular2x2);
+
+    try std.testing.expectEqual(Regular2x2Solutions, solve(&board_state, .{ .recursive = false, .solution_count_max = 1000 }));
+}
+
+test "Iterative Count Some" {
+    var board_state: board.Board = try .init(Regular2x2);
+
+    try std.testing.expectEqual(100, solve(&board_state, .{ .recursive = false, .solution_count_max = 100 }));
+}
+
 test "Recursive" {
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{ .recursive = true }));
+        try std.testing.expect(solve(&board_state, .{ .recursive = true }) > 0);
 
         var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
 
         try std.testing.expectEqualSlices(?board.NumberType, solution_board.numbers(), board_state.numbers());
     }
+}
+
+test "Recursive Count All" {
+    var board_state: board.Board = try .init(Regular2x2);
+
+    try std.testing.expectEqual(Regular2x2Solutions, solve(&board_state, .{ .recursive = true, .solution_count_max = 1000 }));
+}
+
+test "Recursive Count Some" {
+    var board_state: board.Board = try .init(Regular2x2);
+
+    try std.testing.expectEqual(100, solve(&board_state, .{ .recursive = true, .solution_count_max = 100 }));
 }

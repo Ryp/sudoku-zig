@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const board = @import("board.zig");
 const validator = @import("validator.zig");
