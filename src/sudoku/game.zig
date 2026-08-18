@@ -181,8 +181,28 @@ pub const State = struct {
     }
 
     fn push_state_to_history(self: *Self) void {
+        const board_unchanged = std.mem.eql(?u4, self.get_board_history_slice(self.history_index), self.board.numbers());
+        const candidate_masks_unchanged = std.mem.eql(MaskType, self.get_candidate_masks_history_slice(self.history_index), self.candidate_masks);
+
+        // Don't record noop actions
+        if (board_unchanged and candidate_masks_unchanged) {
+            return;
+        }
+
         if (self.history_index + 1 < MaxHistorySize) {
+            // History has space
             self.history_index += 1;
+            self.max_history_index = self.history_index;
+
+            self.save_state_to_history(self.history_index);
+        } else {
+            // History is full, drop the oldest entry
+            const cell_count = self.board.extent * self.board.extent;
+            const kept_cell_count = (MaxHistorySize - 1) * cell_count;
+
+            std.mem.copyForwards(?u4, self.board_history[0..kept_cell_count], self.board_history[cell_count..]);
+            std.mem.copyForwards(MaskType, self.candidate_masks_history[0..kept_cell_count], self.candidate_masks_history[cell_count..]);
+
             self.max_history_index = self.history_index;
 
             self.save_state_to_history(self.history_index);
