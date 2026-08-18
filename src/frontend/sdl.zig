@@ -448,7 +448,9 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
                                     c.SDLK_RETURN => {
                                         game.apply_player_event(PlayerAction{ .get_hint = undefined });
                                     },
-                                    else => {},
+                                    else => {
+                                        game.apply_player_event(PlayerAction{ .discard_hint = undefined });
+                                    },
                                 }
                             },
                         },

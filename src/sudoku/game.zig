@@ -209,7 +209,12 @@ pub const State = struct {
                     .get_hint => {
                         self.player_apply_hint();
                     },
-                    else => {},
+                    .discard_hint => {
+                        self.player_discard_hint();
+                    },
+                    else => {
+                        @panic("Invalid action while waiting for hint validation");
+                    },
                 }
             },
         }
@@ -254,6 +259,9 @@ pub const State = struct {
             },
             .solve_board => {
                 self.player_solve_board();
+            },
+            else => {
+                @panic("Unexpected player event in normal flow!");
             },
         }
     }
@@ -394,6 +402,15 @@ pub const State = struct {
         }
     }
 
+    fn player_discard_hint(self: *Self) void {
+        if (self.solver_event != null) {
+            self.solver_event = null;
+            self.flow = .Normal;
+        } else {
+            @panic("Solver event not found!");
+        }
+    }
+
     fn player_solve_board(self: *Self) void {
         if (solver.solve(&self.board, .{ .dancing_links = .{} })) {
             self.player_clear_candidates();
@@ -418,6 +435,7 @@ pub const PlayerAction = union(enum) {
     fill_all_candidates,
     clear_all_candidates,
     get_hint,
+    discard_hint,
     solve_board,
 };
 
