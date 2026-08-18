@@ -6,6 +6,7 @@ const known_boards = @import("known_boards.zig");
 const validator = @import("validator.zig");
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
+const DancingLinkContext = dancing_links_solver.DancingLinkContext;
 const DoublyLink = dancing_links_solver.DoublyLink;
 const ChoiceConstraintsIndices = dancing_links_solver.ChoiceConstraintsIndices;
 
@@ -55,9 +56,6 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Boa
     var choices_constraint_link_indices_max: [choices_count_max]ChoiceConstraintsIndices = undefined;
     const choices_constraint_link_indices = choices_constraint_link_indices_max[0..choices_count];
 
-    var solution_max: [board.MaxExtentSqr]SolutionClue = undefined;
-    const solution = solution_max[0 .. extent * extent];
-
     // This changes between runs only if the size of the sudoku or the box layout changes
     dancing_links_solver.fill_choices_constraint_link_indices(&board_state, choices_constraint_link_indices, header_link_offset);
 
@@ -65,29 +63,22 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Boa
 
     var rng = std.Random.Xoshiro256.init(seed);
 
-    const clue_count = extent;
-    const unknown_count = extent_sqr - clue_count;
     cover_columns_for_random_clues(&board_state, &rng.random(), choices_constraint_link_indices, links_h, links_v);
 
-    const found_solution = solve_dancing_links_recursive(DancingLinkContext{
+    const solution_count = dancing_links_solver.solve_recursive(DancingLinkContext{
         .board_state = &board_state,
         .links_h = links_h,
         .links_v = links_v,
         .choice_link_offset = choice_link_offset,
         .choices_constraint_link_indices = choices_constraint_link_indices,
-        .solution = solution,
-    }, 0);
+    }, 1, true);
 
-    if (!found_solution) {
+    if (solution_count == 0) {
         const board_string_max = board_state.string_from_board_max();
         const board_string = board_string_max[0..extent_sqr];
 
         std.debug.print("Current solution: {s}\n", .{board_string});
         @panic("Failed to find solution for generated sudoku!");
-    }
-
-    for (solution[0..unknown_count]) |clue| {
-        board_state.numbers()[clue.cell_index] = clue.number;
     }
 
     var is_unique = true;
@@ -126,55 +117,6 @@ const SolutionClue = struct {
     cell_index: u32,
     number: u4,
 };
-
-const DancingLinkContext = struct {
-    board_state: *board.Board,
-    links_h: []DoublyLink,
-    links_v: []DoublyLink,
-    choice_link_offset: u32,
-    choices_constraint_link_indices: []ChoiceConstraintsIndices,
-
-    solution: []SolutionClue,
-};
-
-fn solve_dancing_links_recursive(ctx: DancingLinkContext, depth: u32) bool {
-    if (ctx.links_h[0].next == 0) {
-        return true;
-    } else {
-        const chosen_column_index = dancing_links_solver.choose_best_column_index(ctx.links_h, ctx.links_v);
-
-        // Iterate over choices (rows)
-        var vertical_index = ctx.links_v[chosen_column_index].next;
-        while (vertical_index != chosen_column_index) : (vertical_index = ctx.links_v[vertical_index].next) {
-            const row_index = (vertical_index - ctx.choice_link_offset) / 4;
-            const header = ctx.choices_constraint_link_indices[row_index];
-
-            // Iterate over constraints (columns)
-            inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
-                dancing_links_solver.cover_column(ctx.links_h, ctx.links_v, constraint_index);
-            }
-
-            if (solve_dancing_links_recursive(ctx, depth + 1)) {
-                const cell_index = row_index / ctx.board_state.extent;
-                const number = row_index % ctx.board_state.extent;
-
-                ctx.solution[depth] = SolutionClue{
-                    .cell_index = cell_index,
-                    .number = @intCast(number),
-                };
-
-                return true;
-            }
-
-            // Iterate over constraints (columns) in the exact reverse order of covering
-            inline for (.{ header.box_index, header.col_index, header.row_index, header.exs_index }) |constraint_index| {
-                dancing_links_solver.uncover_column(ctx.links_h, ctx.links_v, constraint_index);
-            }
-        }
-
-        return false;
-    }
-}
 
 fn cover_columns_for_random_clues(board_state: *board.Board, random: *const std.Random, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
     const extent = board_state.extent;

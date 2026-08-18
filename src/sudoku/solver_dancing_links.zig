@@ -24,6 +24,7 @@ pub const DoublyLink = struct {
 // choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
+// FIXME use SoAoS?
 //
 // Returns the number of solutions found (capped by solution_count_max)
 pub fn solve(board_state: *board.Board, options: Options) !u32 {
@@ -91,12 +92,11 @@ pub fn solve(board_state: *board.Board, options: Options) !u32 {
         .choices_constraint_link_indices = choices_constraint_link_indices,
     };
 
-    return solve_dancing_links_recursive(context, options.solution_count_max, options.fill_solution);
+    return solve_recursive(context, options.solution_count_max, options.fill_solution);
 }
 
-const DancingLinkContext = struct {
+pub const DancingLinkContext = struct {
     board_state: *board.Board,
-    // FIXME use SoAoS?
     links_h: []DoublyLink,
     links_v: []DoublyLink,
     choice_link_offset: u32,
@@ -129,7 +129,7 @@ pub fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const Do
     return best_col;
 }
 
-fn solve_dancing_links_recursive(ctx: DancingLinkContext, solution_count_max: u32, fill_solution: bool) u32 {
+pub fn solve_recursive(ctx: DancingLinkContext, solution_count_max: u32, fill_solution: bool) u32 {
     if (ctx.links_h[0].next == 0) {
         return 1;
     } else {
@@ -147,7 +147,7 @@ fn solve_dancing_links_recursive(ctx: DancingLinkContext, solution_count_max: u3
                 cover_column(ctx.links_h, ctx.links_v, constraint_index);
             }
 
-            solution_count += solve_dancing_links_recursive(ctx, solution_count_max - solution_count, fill_solution);
+            solution_count += solve_recursive(ctx, solution_count_max - solution_count, fill_solution);
 
             // Uncover in the exact reverse order of covering
             inline for (.{ header.box_index, header.col_index, header.row_index, header.exs_index }) |constraint_index| {
