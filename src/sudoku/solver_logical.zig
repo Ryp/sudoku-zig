@@ -7,6 +7,7 @@ const RegionIndex = board.RegionIndex;
 const RegionSet = board.RegionSet;
 
 const known_boards = @import("known_boards.zig");
+const validator = @import("validator.zig");
 
 const common = @import("common.zig");
 const u32_2 = common.u32_2;
@@ -666,6 +667,10 @@ pub fn apply_technique(board_state: *board.Board, candidate_masks: []u16, solver
 }
 
 pub fn solve(board_state: *board.Board) bool {
+    if (validator.check_board_for_errors(board_state, null) != null) {
+        return false;
+    }
+
     var candidate_masks_max = trivial_candidate_masks_max(board_state);
     const candidate_masks = candidate_masks_max[0 .. board_state.extent * board_state.extent];
 

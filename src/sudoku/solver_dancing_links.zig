@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const board = @import("board.zig");
 const known_boards = @import("known_boards.zig");
+const validator = @import("validator.zig");
 
 pub const Options = struct {
     solution_count_max: u32 = 1,
@@ -29,6 +30,10 @@ pub fn solve(board_state: *board.Board, options: Options) !u32 {
     if (board_state.rules.chess_anti_king or board_state.rules.chess_anti_knight) {
         std.debug.print("error: solving puzzles with chess constraints isn't supported yet\n", .{});
         return error.UnsupportedDLXSolverChessRules;
+    }
+
+    if (validator.check_board_for_errors(board_state, null) != null) {
+        return 0;
     }
 
     const extent = board_state.rules.type.extent();
@@ -326,6 +331,16 @@ fn list_size_inclusive(links: []const DoublyLink, start_index: u32) u32 {
     }
 
     return count;
+}
+
+test "Conflicting clues" {
+    // Duplicate clues in a region used to double-cover constraint columns,
+    // corrupt the link matrix and can hang the search forever
+    var board_state: board.Board = try .init(known_boards.easy.rules);
+    try board_state.fill_board_from_string("..................11.3.....1.....................................................");
+
+    try std.testing.expect(try solve(&board_state, .{}) == 0);
+    try std.testing.expect(try solve(&board_state, .{}) == 0);
 }
 
 test {

@@ -3,12 +3,17 @@ const std = @import("std");
 const board = @import("board.zig");
 const solver_logical = @import("solver_logical.zig");
 const known_boards = @import("known_boards.zig");
+const validator = @import("validator.zig");
 
 pub const Options = struct {
     recursive: bool = false,
 };
 
 pub fn solve(board_state: *board.Board, options: Options) bool {
+    if (validator.check_board_for_errors(board_state, null) != null) {
+        return false;
+    }
+
     var free_cell_list_max: [board.MaxExtentSqr]CellInfo = undefined;
     const free_cell_list = populate_free_list(board_state, &free_cell_list_max);
 
