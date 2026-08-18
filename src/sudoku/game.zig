@@ -432,7 +432,7 @@ pub const State = struct {
     }
 
     fn player_solve_board(self: *Self) void {
-        if (solver.solve(&self.board, .{ .dancing_links = .{} })) {
+        if (solver.solve(&self.board, solver_options_for_rules(self.board.rules))) {
             self.player_clear_candidates();
             // NOTE: Already done in the body of clear_candidates.
             // push_state_to_history(game);
@@ -442,6 +442,15 @@ pub const State = struct {
         }
     }
 };
+
+// The dancing links solver doesn't support chess constraints, but backtracking does
+fn solver_options_for_rules(board_rules: rules.Rules) solver.Options {
+    if (board_rules.chess_anti_king or board_rules.chess_anti_knight) {
+        return .{ .sorted_backtracking = .{} };
+    }
+
+    return .{ .dancing_links = .{} };
+}
 
 pub const PlayerAction = union(enum) {
     toggle_select: PlayerToggleSelect,
