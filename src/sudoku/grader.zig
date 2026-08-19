@@ -5,11 +5,26 @@ const solver_logical = @import("solver_logical.zig");
 const board = @import("board.zig");
 const validator = @import("validator.zig");
 
-pub fn grade_and_print_summary(const_board: board.Board) !void {
+pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: board.Board) !void {
     // Create a dummy board we can modify
     var board_state: board.Board = try .init(const_board.rules);
 
     @memcpy(board_state.numbers(), const_board.numbers_const());
+
+    // Grading a board that doesn't have exactly one solution is meaningless, so check
+    // that first. This has to run before the technique loop below starts placing numbers,
+    // otherwise we'd be counting the solutions of a different board.
+    const solution_count = try solver.solve(allocator, &board_state, .{
+        .solution_count_max = 2,
+        .fill_solution = false,
+    });
+
+    if (solution_count == 0) {
+        std.debug.print("ERROR: The board has no solution!\n", .{});
+        return;
+    } else if (solution_count > 1) {
+        std.debug.print("ERROR: The board has more than one solution!\n", .{});
+    }
 
     var candidate_masks_max = solver_logical.trivial_candidate_masks_max(&board_state);
     const candidate_masks = candidate_masks_max[0 .. const_board.extent * const_board.extent];

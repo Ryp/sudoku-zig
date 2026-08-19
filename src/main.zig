@@ -100,7 +100,7 @@ pub fn main(init: std.process.Init) !void {
             }
         };
     }
-    defer game_state.deinit(allocator);
+    defer game_state.deinit();
 
     sdl.execute_main_loop(&game_state, allocator) catch |err| {
         switch (err) {

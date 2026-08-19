@@ -6,81 +6,38 @@ const known_boards = @import("known_boards.zig");
 const validator = @import("validator.zig");
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
-const DancingLinkContext = dancing_links_solver.DancingLinkContext;
-const DoublyLink = dancing_links_solver.DoublyLink;
-const ChoiceConstraintsIndices = dancing_links_solver.ChoiceConstraintsIndices;
+const Matrix = dancing_links_solver.Matrix;
 
-pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Board {
+pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Board {
     if (board_rules.chess_anti_king or board_rules.chess_anti_knight) {
         std.debug.print("error: generating puzzles with chess constraints isn't supported yet, please provide a sudoku string instead\n", .{});
         return error.UnsupportedDLXGeneratorChessRules;
     }
 
-    const extent = board_rules.type.extent();
-    const extent_sqr = extent * extent;
+    const extent_sqr = board_rules.type.extent() * board_rules.type.extent();
 
     var board_state: board.Board = try .init(board_rules);
 
-    // All links are allocated sequentially, so we're doing some math to compute relative addresses.
-    const constraint_type_count = 4;
-
-    // Actual size version
-    const constraints_per_type_count = extent_sqr;
-    const constraint_count = constraints_per_type_count * constraint_type_count;
-    const node_per_constraint_count = extent;
-    const choice_link_count = constraint_count * node_per_constraint_count;
-    const link_count = 1 + constraint_count + choice_link_count;
-
-    // Max size version
-    const constraints_per_type_count_max = board.MaxExtentSqr;
-    const constraint_count_max = constraints_per_type_count_max * constraint_type_count;
-    const node_per_constraint_count_max = board.MaxExtent;
-    const choice_link_count_max = constraint_count_max * node_per_constraint_count_max;
-    const link_count_max = 1 + constraint_count_max + choice_link_count_max;
-
-    var links_h_max: [link_count_max]DoublyLink = undefined;
-    const links_h = links_h_max[0..link_count];
-
-    var links_v_max: [link_count_max]DoublyLink = undefined;
-    const links_v = links_v_max[0..link_count];
-
-    const root_link_offset = 0;
-    const header_link_offset = root_link_offset + 1;
-    const header_link_count = constraint_count;
-    const choice_link_offset = header_link_offset + header_link_count;
-
-    // Array indexed by row giving containing the header link indices for the 4 satisfied contraints
-    const choices_count = extent * extent_sqr;
-    const choices_count_max = board.MaxExtent * board.MaxExtentSqr;
-
-    var choices_constraint_link_indices_max: [choices_count_max]ChoiceConstraintsIndices = undefined;
-    const choices_constraint_link_indices = choices_constraint_link_indices_max[0..choices_count];
-
-    // This changes between runs only if the size of the sudoku or the box layout changes
-    dancing_links_solver.fill_choices_constraint_link_indices(&board_state, choices_constraint_link_indices, header_link_offset);
-
-    dancing_links_solver.link_matrix(choices_constraint_link_indices, links_h, links_v, choice_link_offset);
-
     var rng = std.Random.Xoshiro256.init(seed);
 
-    cover_columns_for_random_clues(&board_state, &rng.random(), choices_constraint_link_indices, links_h, links_v);
+    // Fill the board with a random full solution. Scoped so we're not holding onto the
+    // matrix while the uniqueness loop below builds its own.
+    {
+        var matrix: Matrix = try .init(allocator, &board_state);
+        defer matrix.deinit(allocator);
 
-    const solution_count = dancing_links_solver.solve_recursive(DancingLinkContext{
-        .board_state = &board_state,
-        .links_h = links_h,
-        .links_v = links_v,
-        .choice_link_offset = choice_link_offset,
-        .choices_constraint_link_indices = choices_constraint_link_indices,
-    }, 1, true);
+        cover_choices_for_random_clues(&matrix, &rng.random());
 
-    if (solution_count == 0) {
-        const board_string_max = board_state.string_from_board_max();
-        const board_string = board_string_max[0..extent_sqr];
+        if (matrix.solve_recursive(1, true) == 0) {
+            const board_string_max = board_state.string_from_board_max();
+            const board_string = board_string_max[0..extent_sqr];
 
-        std.debug.print("Current solution: {s}\n", .{board_string});
-        @panic("Failed to find solution for generated sudoku!");
+            std.debug.print("Current solution: {s}\n", .{board_string});
+            @panic("Failed to find solution for generated sudoku!");
+        }
     }
 
+    // Remove random clues as long as the board has a unique solution
     var is_unique = true;
     var try_harder_count = difficulty;
 
@@ -94,7 +51,8 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Boa
 
         board_state.numbers()[random_index] = null;
 
-        is_unique = try dancing_links_solver.solve(&board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
+        // FIXME reuse matrix
+        is_unique = try dancing_links_solver.solve(allocator, &board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
 
         if (!is_unique) {
             // Whoops, we've gone one step too far - restore the number
@@ -113,12 +71,10 @@ pub fn generate(board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Boa
     return board_state;
 }
 
-const SolutionClue = struct {
-    cell_index: u32,
-    number: u4,
-};
-
-fn cover_columns_for_random_clues(board_state: *board.Board, random: *const std.Random, choices_constraint_link_indices: []const ChoiceConstraintsIndices, links_h: []DoublyLink, links_v: []DoublyLink) void {
+// Seed the matrix with a random permutation on the first row. Any full solution reachable
+// from there is as good as any other, and it's much cheaper than shuffling the search.
+fn cover_choices_for_random_clues(matrix: *Matrix, random: *const std.Random) void {
+    const board_state = matrix.board_state;
     const extent = board_state.extent;
 
     var taken_numbers_max = std.mem.zeroes([board.MaxExtent]bool);
@@ -131,7 +87,7 @@ fn cover_columns_for_random_clues(board_state: *board.Board, random: *const std.
         var is_taken = true;
 
         while (is_taken) {
-            number = @intCast(random.uintLessThan(usize, board_state.extent));
+            number = @intCast(random.uintLessThan(usize, extent));
             is_taken = taken_numbers[number];
         }
 
@@ -139,12 +95,7 @@ fn cover_columns_for_random_clues(board_state: *board.Board, random: *const std.
 
         board_state.numbers()[cell_index] = number;
 
-        const choice_index = dancing_links_solver.get_choice_index(@intCast(cell_index), number, board_state.extent);
-        const header = choices_constraint_link_indices[choice_index];
-
-        inline for (.{ header.exs_index, header.row_index, header.col_index, header.box_index }) |constraint_index| {
-            dancing_links_solver.cover_column(links_h, links_v, constraint_index);
-        }
+        matrix.cover_choice(dancing_links_solver.get_choice_index(cell_index, number, extent));
     }
 }
 
@@ -158,9 +109,9 @@ test {
         rules.Rules{ .type = .{ .regular = .{ .box_extent = .{ 4, 4 } } } },
         known_boards.jigsaw9.rules,
     }) |board_rules| {
-        var generated_board = try generate(board_rules, Seed, Difficulty);
+        var generated_board = try generate(std.testing.allocator, board_rules, Seed, Difficulty);
 
         try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
-        try std.testing.expect(try dancing_links_solver.solve(&generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
+        try std.testing.expect(try dancing_links_solver.solve(std.testing.allocator, &generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
     }
 }

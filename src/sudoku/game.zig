@@ -29,6 +29,7 @@ pub const State = struct {
         found_nothing,
     };
 
+    allocator: std.mem.Allocator,
     board: board.Board,
     candidate_masks: []MaskType, // Should be set to zero when setting number
     selected_cells_full: []u32, // Full allocated array, we usually don't use it directly
@@ -43,7 +44,7 @@ pub const State = struct {
 
     pub fn init(io: std.Io, allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {
         var game = try Self.init_empty_board(allocator, board_rules.type.extent());
-        errdefer game.deinit(allocator);
+        errdefer game.deinit();
 
         var board_state: board.Board = try .init(board_rules);
 
@@ -55,7 +56,7 @@ pub const State = struct {
 
             const seed = std.mem.readInt(u64, &seed_buffer, .little);
 
-            board_state = try generator.generate(board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
+            board_state = try generator.generate(allocator, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
         }
 
         game.board = board_state;
@@ -86,6 +87,7 @@ pub const State = struct {
         errdefer allocator.free(candidate_masks_history);
 
         return .{
+            .allocator = allocator,
             .board = undefined, // Not set yet!
             .candidate_masks = candidate_masks,
             .selected_cells_full = selected_cells_full,
@@ -129,7 +131,7 @@ pub const State = struct {
         const extent = try reader.takeInt(u32, .little);
 
         var self: Self = try .init_empty_board(allocator, extent);
-        errdefer self.deinit(allocator);
+        errdefer self.deinit();
 
         try self.board.load(reader);
 
@@ -157,11 +159,11 @@ pub const State = struct {
         return self;
     }
 
-    pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
-        allocator.free(self.board_history);
-        allocator.free(self.candidate_masks_history);
-        allocator.free(self.selected_cells_full);
-        allocator.free(self.candidate_masks);
+    pub fn deinit(self: Self) void {
+        self.allocator.free(self.board_history);
+        self.allocator.free(self.candidate_masks_history);
+        self.allocator.free(self.selected_cells_full);
+        self.allocator.free(self.candidate_masks);
     }
 
     fn get_board_history_slice(self: Self, history_index: u32) []?u4 {
@@ -432,15 +434,22 @@ pub const State = struct {
     }
 
     fn player_solve_board(self: *Self) void {
-        const solution_count = solver.solve(&self.board, .{}) catch 0;
+        const solution_count = solver.solve(self.allocator, &self.board, .{}) catch |err| {
+            switch (err) {
+                error.UnsupportedDLXSolverChessRules, // FIXME The compiler can't prove that this doesn't happen apparently
+                error.OutOfMemory,
+                => {
+                    return; // FIXME solve failed with an error, tell the player somehow
+                },
+            }
+        };
 
         if (solution_count > 0) {
             self.player_clear_candidates();
             // NOTE: Already done in the body of clear_candidates.
             // push_state_to_history(game);
         } else {
-            // We didn't manage to solve the puzzle
-            // FIXME tell the player somehow
+            // FIXME solve was not possible, tell the player somehow
         }
     }
 };

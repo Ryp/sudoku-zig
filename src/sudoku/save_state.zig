@@ -40,7 +40,7 @@ test "State serialization" {
 
     inline for (known_boards.TestBacktrackingSolver) |known_board| {
         const game_1: game.State = try .init(io, allocator, known_board.rules, known_board.start_string);
-        defer game_1.deinit(allocator);
+        defer game_1.deinit();
 
         var allocating_writer = std.Io.Writer.Allocating.init(allocator);
         defer allocating_writer.deinit();
@@ -50,7 +50,7 @@ test "State serialization" {
         var reader: std.Io.Reader = .fixed(allocating_writer.writer.buffer[0..allocating_writer.writer.end]);
 
         const game_2 = try load(&reader, allocator);
-        defer game_2.deinit(allocator);
+        defer game_2.deinit();
 
         try std.testing.expectEqual(allocating_writer.writer.end, reader.end);
 
