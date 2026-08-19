@@ -29,11 +29,8 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
         cover_choices_for_random_clues(&matrix, &rng.random());
 
         if (matrix.solve_recursive(1, true) == 0) {
-            const board_string_max = board_state.string_from_board_max();
-            const board_string = board_string_max[0..extent_sqr];
-
-            std.debug.print("Current solution: {s}\n", .{board_string});
-            @panic("Failed to find solution for generated sudoku!");
+            std.debug.print("error: failed to find solution for the generated sudoku, most likely that comes from an invalid set of rules\n", .{});
+            return error.InvalidSudokuGeneratorRulesOrInternalError;
         }
     }
 
@@ -73,6 +70,8 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
 
 // Seed the matrix with a random permutation on the first row. Any full solution reachable
 // from there is as good as any other, and it's much cheaper than shuffling the search.
+// NOTE: this works for our current set of rules, but this can rot once we add more rules
+// ex: when using thermometers, choosing a random number at a random place might be invalid
 fn cover_choices_for_random_clues(matrix: *Matrix, random: *const std.Random) void {
     const board_state = matrix.board_state;
     const extent = board_state.extent;
