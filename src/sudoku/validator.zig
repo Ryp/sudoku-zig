@@ -134,11 +134,11 @@ test "Duplicate numbers in a region" {
 
     // Row duplicate
     try board_state.fill_board_from_string("11..............");
-    try std.testing.expect(check_board_for_errors(&board_state, null) != null);
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
 
     // Column duplicate
     try board_state.fill_board_from_string("1...1...........");
-    try std.testing.expect(check_board_for_errors(&board_state, null) != null);
+    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
 
     // Box duplicate that shares neither row nor column
     try board_state.fill_board_from_string("1....1..........");
@@ -174,7 +174,7 @@ test "Chess rules" {
     king_rules.chess_anti_king = true;
     var king_board: board.Board = try .init(king_rules);
     try king_board.fill_board_from_string(".....1....1.....");
-    try std.testing.expect(check_board_for_errors(&king_board, null) != null);
+    try std.testing.expectEqual(null, check_board_for_errors(&king_board, null));
 
     // A knight's move apart, only invalid with the anti-knight rule
     try board_state.fill_board_from_string("1.....1.........");
@@ -184,5 +184,5 @@ test "Chess rules" {
     knight_rules.chess_anti_knight = true;
     var knight_board: board.Board = try .init(knight_rules);
     try knight_board.fill_board_from_string("1.....1.........");
-    try std.testing.expect(check_board_for_errors(&knight_board, null) != null);
+    try std.testing.expectEqual(null, check_board_for_errors(&knight_board, null));
 }

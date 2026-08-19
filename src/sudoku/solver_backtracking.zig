@@ -247,7 +247,7 @@ test "Iterative" {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{ .recursive = false }) > 0);
+        try std.testing.expectEqual(1, solve(&board_state, .{ .recursive = false }));
 
         var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
@@ -273,7 +273,7 @@ test "Recursive" {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(solve(&board_state, .{ .recursive = true }) > 0);
+        try std.testing.expectEqual(1, solve(&board_state, .{ .recursive = true }));
 
         var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);

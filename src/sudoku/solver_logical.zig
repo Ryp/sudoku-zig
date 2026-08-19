@@ -192,7 +192,7 @@ test "Naked pair" {
     var candidate_masks = std.mem.zeroes([board.MaxExtentSqr]board.MaskType);
 
     // Make sure that there's no hit for the initial board
-    try std.testing.expect(find_naked_pair(board_state, &candidate_masks) == null);
+    try std.testing.expectEqual(null, find_naked_pair(board_state, &candidate_masks));
 
     const number_a: u4 = 0;
     const number_b: u4 = 8;
@@ -203,7 +203,7 @@ test "Naked pair" {
     candidate_masks[1] = pair_mask;
 
     // There shouldn't be any hit if there's no candidates to remove
-    try std.testing.expect(find_naked_pair(board_state, &candidate_masks) == null);
+    try std.testing.expectEqual(null, find_naked_pair(board_state, &candidate_masks));
 
     candidate_masks[2] = board_state.mask_for_number(number_a);
     candidate_masks[3] = board_state.mask_for_number(number_b);
@@ -219,7 +219,7 @@ test "Naked pair" {
         apply_naked_pair(board_state, &candidate_masks, naked_pair);
 
         // Make sure we don't hit again after applying the solver event
-        try std.testing.expect(find_naked_pair(board_state, &candidate_masks) == null);
+        try std.testing.expectEqual(null, find_naked_pair(board_state, &candidate_masks));
     } else {
         try std.testing.expect(false);
     }
@@ -575,7 +575,7 @@ test "Box-line removal" {
     const candidate_masks = candidate_masks_max[0..extent_sqr];
 
     // Make sure that there's no hit for the initial board
-    try std.testing.expect(find_box_line_reduction(board_state, candidate_masks) == null);
+    try std.testing.expectEqual(null, find_box_line_reduction(board_state, candidate_masks));
 
     const number: u4 = 0;
 
@@ -594,7 +594,7 @@ test "Box-line removal" {
         apply_technique(&board_state, candidate_masks, .{ .box_line_reduction = box_line_reduction });
 
         // Make sure we don't hit again after applying the solver event
-        try std.testing.expect(find_box_line_reduction(board_state, candidate_masks) == null);
+        try std.testing.expectEqual(null, find_box_line_reduction(board_state, candidate_masks));
     } else {
         try std.testing.expect(false);
     }

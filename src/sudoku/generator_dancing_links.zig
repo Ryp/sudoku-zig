@@ -112,6 +112,6 @@ test {
         var generated_board = try generate(std.testing.allocator, board_rules, Seed, Difficulty);
 
         try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
-        try std.testing.expect(try dancing_links_solver.solve(std.testing.allocator, &generated_board, .{ .solution_count_max = 2, .fill_solution = false }) == 1);
+        try std.testing.expectEqual(1, try dancing_links_solver.solve(std.testing.allocator, &generated_board, .{ .solution_count_max = 2, .fill_solution = false }));
     }
 }

@@ -47,8 +47,6 @@ pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: O
 
     matrix.cover_choices_for_given_clues();
 
-    // FIXME sort header links by size
-
     return matrix.solve_recursive(options.solution_count_max, options.fill_solution);
 }
 
@@ -147,6 +145,7 @@ pub const Matrix = struct {
                 self.uncover_choice(choice_index);
 
                 if (solution_count >= solution_count_max) {
+                    // FIXME if we request a large max count but the board has only 1, fill solution will never run.
                     if (fill_solution) {
                         const cell_index = choice_index / self.board_state.extent;
                         const number = choice_index % self.board_state.extent;
@@ -353,8 +352,22 @@ test "Conflicting clues" {
     var board_state: board.Board = try .init(known_boards.easy.rules);
     try board_state.fill_board_from_string("..................11.3.....1.....................................................");
 
-    try std.testing.expect(try solve(std.testing.allocator, &board_state, .{}) == 0);
-    try std.testing.expect(try solve(std.testing.allocator, &board_state, .{}) == 0);
+    try std.testing.expectEqual(0, try solve(std.testing.allocator, &board_state, .{}));
+    try std.testing.expectEqual(0, try solve(std.testing.allocator, &board_state, .{}));
+}
+
+test "Board Fill" {
+    // Duplicate clues in a region used to double-cover constraint columns,
+    // corrupt the link matrix and can hang the search forever
+    var board_state: board.Board = try .init(known_boards.easy.rules);
+    try board_state.fill_board_from_string("..................11.3.....1.....................................................");
+
+    try std.testing.expectEqual(0, try solve(std.testing.allocator, &board_state, .{ .solution_count_max = 2, .fill_solution = true }));
+
+    var solution_board: board.Board = try .init(board_state.rules);
+    try solution_board.fill_board_from_string(known_boards.easy.solution_string);
+
+    try std.testing.expect(std.mem.eql(?board.NumberType, solution_board.numbers(), board_state.numbers()));
 }
 
 test {
@@ -362,7 +375,7 @@ test {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
 
-        try std.testing.expect(try solve(std.testing.allocator, &board_state, .{}) > 0);
+        try std.testing.expectEqual(1, try solve(std.testing.allocator, &board_state, .{}));
 
         var solution_board: board.Board = try .init(known_board.rules);
         try solution_board.fill_board_from_string(known_board.solution_string);
