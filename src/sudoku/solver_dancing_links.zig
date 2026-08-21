@@ -7,7 +7,7 @@ const validator = @import("validator.zig");
 
 pub const Options = struct {
     solution_count_max: u32 = 1,
-    fill_solution: bool = true,
+    fill_solution: bool = true, // Fills the first solution found
 };
 
 pub const DoublyLink = struct {
@@ -30,6 +30,11 @@ const ConstraintTypeCount = 4;
 //
 // Returns the number of solutions found (capped by solution_count_max)
 pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: Options) !u32 {
+    if (options.solution_count_max == 0) {
+        std.debug.print("error: can't solve, solution_count_max = {} is invalid\n", .{options.solution_count_max});
+        return error.UnsupportedMaxSolutionCount;
+    }
+
     if (board_state.rules.chess_anti_king or board_state.rules.chess_anti_knight) {
         std.debug.print("error: solving puzzles with chess constraints isn't supported yet\n", .{});
         return error.UnsupportedDLXSolverChessRules;
@@ -45,7 +50,24 @@ pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: O
 
     matrix.cover_choices_for_given_clues();
 
-    return matrix.solve_recursive(options.solution_count_max, options.fill_solution);
+    // This functions supports filling the first solution as well as counting,
+    // but internally we either only count solutions or only fill the first solution.
+    // Work around this issue by first looking for a single solution and filling it,
+    // then count the solutions if needed.
+    if (options.fill_solution) {
+        if (matrix.solve_recursive()) {
+            if (options.solution_count_max > 1) {
+                return matrix.count_solutions_recursive(options.solution_count_max);
+            }
+            else {
+                return 1;
+            }
+        } else {
+            return 0;
+        }
+    } else {
+        return matrix.count_solutions_recursive(options.solution_count_max);
+    }
 }
 
 // The exact cover matrix. Links are allocated as one flat array laid out as
@@ -123,7 +145,44 @@ pub const Matrix = struct {
         return (link_index - self.choice_link_offset) / ConstraintTypeCount;
     }
 
-    pub fn solve_recursive(self: *Matrix, solution_count_max: u32, fill_solution: bool) u32 {
+    // Finds the first solution and write it
+    // Returns with the same matrix as set in input
+    pub fn solve_recursive(self: *Matrix) bool {
+        if (self.links_h[0].next == 0) {
+            return true;
+        } else {
+            const chosen_column_index = choose_best_column_index(self.links_h, self.links_v);
+
+            // Iterate over choices (rows)
+            var vertical_index = self.links_v[chosen_column_index].next;
+
+            while (vertical_index != chosen_column_index) : (vertical_index = self.links_v[vertical_index].next) {
+                const choice_index = self.choice_index_from_link_index(vertical_index);
+
+                self.cover_choice(choice_index);
+
+                const found_solution = self.solve_recursive();
+
+                self.uncover_choice(choice_index);
+
+                if (found_solution) {
+                    const cell_index = choice_index / self.board_state.extent;
+                    const number = choice_index % self.board_state.extent;
+
+                    self.board_state.numbers()[cell_index] = @intCast(number);
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    // Returns with the same matrix as set in input
+    pub fn count_solutions_recursive(self: *Matrix, solution_count_max: u32) u32 {
+        std.debug.assert(solution_count_max > 0);
+
         if (self.links_h[0].next == 0) {
             return 1;
         } else {
@@ -138,19 +197,11 @@ pub const Matrix = struct {
 
                 self.cover_choice(choice_index);
 
-                solution_count += self.solve_recursive(solution_count_max - solution_count, fill_solution);
+                solution_count += self.count_solutions_recursive(solution_count_max - solution_count);
 
                 self.uncover_choice(choice_index);
 
                 if (solution_count >= solution_count_max) {
-                    // FIXME if we request a large max count but the board has only 1, fill solution will never run.
-                    if (fill_solution) {
-                        const cell_index = choice_index / self.board_state.extent;
-                        const number = choice_index % self.board_state.extent;
-
-                        self.board_state.numbers()[cell_index] = @intCast(number);
-                    }
-
                     return solution_count;
                 }
             }
@@ -358,9 +409,9 @@ test "Board Fill" {
     // Duplicate clues in a region used to double-cover constraint columns,
     // corrupt the link matrix and can hang the search forever
     var board_state: board.Board = try .init(known_boards.easy.rules);
-    try board_state.fill_board_from_string("..................11.3.....1.....................................................");
+    try board_state.fill_board_from_string(known_boards.easy.start_string);
 
-    try std.testing.expectEqual(0, try solve(std.testing.allocator, &board_state, .{ .solution_count_max = 2, .fill_solution = true }));
+    try std.testing.expectEqual(1, try solve(std.testing.allocator, &board_state, .{ .solution_count_max = 2, .fill_solution = true }));
 
     var solution_board: board.Board = try .init(board_state.rules);
     try solution_board.fill_board_from_string(known_boards.easy.solution_string);

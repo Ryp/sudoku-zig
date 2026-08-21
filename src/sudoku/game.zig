@@ -436,6 +436,7 @@ pub const State = struct {
     fn player_solve_board(self: *Self) void {
         const solution_count = solver.solve(self.allocator, &self.board, .{}) catch |err| {
             switch (err) {
+                error.UnsupportedMaxSolutionCount, // This shouldn't happen as we're passing default flags
                 error.UnsupportedDLXSolverChessRules, // FIXME The compiler can't prove that this doesn't happen apparently
                 error.OutOfMemory,
                 => {

@@ -28,7 +28,7 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
 
         cover_choices_for_random_clues(&matrix, &rng.random());
 
-        if (matrix.solve_recursive(1, true) == 0) {
+        if (!matrix.solve_recursive()) {
             std.debug.print("error: failed to find solution for the generated sudoku, most likely that comes from an invalid set of rules\n", .{});
             return error.InvalidSudokuGeneratorRulesOrInternalError;
         }

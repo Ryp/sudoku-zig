@@ -21,8 +21,9 @@ pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: O
             .fill_solution = options.fill_solution,
         }) catch |err| {
             switch (err) {
-                error.UnsupportedDLXSolverChessRules => unreachable, // We just made sure this was not possible
-                error.OutOfMemory => return err,
+                error.UnsupportedMaxSolutionCount, // Shouldn't happen in game, so propagate
+                error.UnsupportedDLXSolverChessRules, // We just made sure this was not possible
+                error.OutOfMemory, => return err,
             }
         };
     } else {
