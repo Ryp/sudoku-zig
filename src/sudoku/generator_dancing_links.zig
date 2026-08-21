@@ -98,7 +98,7 @@ fn cover_choices_for_random_clues(matrix: *Matrix, random: *const std.Random) vo
     }
 }
 
-test {
+test "solve all" {
     const Seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
     const Difficulty: u32 = 50;
 

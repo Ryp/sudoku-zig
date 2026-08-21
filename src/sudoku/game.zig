@@ -39,7 +39,7 @@ pub const State = struct {
     candidate_masks_history: []MaskType,
     history_index: u32 = 0,
     max_history_index: u32 = 0,
-    validation_error: ?validator.Error,
+    validation_error: ?validator.ValidationError,
     solver_event: ?SolverEvent,
 
     pub fn init(io: std.Io, allocator: std.mem.Allocator, board_rules: rules.Rules, sudoku_string_opt: ?[]const u8) !Self {

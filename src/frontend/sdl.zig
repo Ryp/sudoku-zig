@@ -837,7 +837,7 @@ fn draw_solver_technique_overlay(board_state: board.Board, sdl_context: SdlConte
     }
 }
 
-fn draw_validation_error(board_state: board.Board, sdl_context: SdlContext, validation_error: validator.Error) void {
+fn draw_validation_error(board_state: board.Board, sdl_context: SdlContext, validation_error: validator.ValidationError) void {
     // Highlight region that was considered if any
     if (validation_error.region_index_opt) |region_index| {
         const region = board_state.regions.get(region_index);

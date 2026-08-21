@@ -687,7 +687,7 @@ pub fn solve(board_state: *board.Board) bool {
     return true;
 }
 
-test {
+test "solve all" {
     inline for (known_boards.TestLogicalSolver) |known_board| {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);

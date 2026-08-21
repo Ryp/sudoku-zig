@@ -7,7 +7,7 @@ const common = @import("common.zig");
 const i32_2 = common.i32_2;
 const all = common.all;
 
-pub const Error = struct {
+pub const ValidationError = struct {
     number: u4,
     is_candidate: bool,
     invalid_cell_index: u32,
@@ -15,7 +15,7 @@ pub const Error = struct {
     region_index_opt: ?board.RegionIndex,
 };
 
-pub fn check_board_for_errors(board_state: *const board.Board, candidate_masks_opt: ?[]const board.MaskType) ?Error {
+pub fn check_board_for_errors(board_state: *const board.Board, candidate_masks_opt: ?[]const board.MaskType) ?ValidationError {
     // Iterate over all filled cells of the board
     for (board_state.numbers_const(), 0..) |number_opt, reference_cell_index| {
         if (number_opt) |number| {
@@ -80,7 +80,7 @@ pub fn check_board_for_errors(board_state: *const board.Board, candidate_masks_o
     return null;
 }
 
-fn check_anti_rule(board_state: *const board.Board, candidate_masks_opt: ?[]const board.MaskType, rule_offsets: []const i32_2, reference_cell_index: u32, cell_coord_signed: i32_2, number: u4) ?Error {
+fn check_anti_rule(board_state: *const board.Board, candidate_masks_opt: ?[]const board.MaskType, rule_offsets: []const i32_2, reference_cell_index: u32, cell_coord_signed: i32_2, number: u4) ?ValidationError {
     const number_mask = board_state.mask_for_number(number);
 
     for (rule_offsets) |offset| {
@@ -130,22 +130,55 @@ test "Valid boards" {
 }
 
 test "Duplicate numbers in a region" {
+    const any_number = 0;
+
     var board_state: board.Board = try .init(Regular2x2);
 
-    // Row duplicate
-    try board_state.fill_board_from_string("11..............");
-    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+    const cell_index_ref = board_state.cell_index_from_coord(i32_2{ 1, 1 }); // A
+    const cell_index_b = board_state.cell_index_from_coord(i32_2{ 2, 1 }); // On the same row as A
+    const cell_index_c = board_state.cell_index_from_coord(i32_2{ 1, 2 }); // On the same column as A
+    const cell_index_d = board_state.cell_index_from_coord(i32_2{ 0, 0 }); // On the same box as A
+
+    // Setup row conflict
+    board_state.numbers()[cell_index_ref] = any_number;
+    board_state.numbers()[cell_index_b] = any_number;
+
+    try std.testing.expectEqual(ValidationError{
+        .number = any_number,
+        .is_candidate = false,
+        // It shouldn't matter in which order the conflicting cells are reported, so this test might prove flaky since it expects a particular order.
+        .invalid_cell_index = cell_index_b,
+        .reference_cell_index = cell_index_ref,
+        .region_index_opt = board_state.regions.get_region_index(.Row, 1),
+    }, check_board_for_errors(&board_state, null));
+
+    // Setup column conflict
+    board_state.numbers()[cell_index_b] = null;
+    board_state.numbers()[cell_index_c] = any_number;
 
     // Column duplicate
-    try board_state.fill_board_from_string("1...1...........");
-    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+    try std.testing.expectEqual(ValidationError{
+        .number = any_number,
+        .is_candidate = false,
+        // It shouldn't matter in which order the conflicting cells are reported, so this test might prove flaky since it expects a particular order.
+        .invalid_cell_index = cell_index_c,
+        .reference_cell_index = cell_index_ref,
+        .region_index_opt = board_state.regions.get_region_index(.Col, 1),
+    }, check_board_for_errors(&board_state, null));
 
-    // Box duplicate that shares neither row nor column
-    try board_state.fill_board_from_string("1....1..........");
+    // Setup box conflict
+    board_state.numbers()[cell_index_c] = null;
+    board_state.numbers()[cell_index_d] = any_number;
 
-    const box_error = check_board_for_errors(&board_state, null) orelse return error.TestExpectedError;
-    try std.testing.expectEqual(0, box_error.number);
-    try std.testing.expect(!box_error.is_candidate);
+    // Column duplicate
+    try std.testing.expectEqual(ValidationError{
+        .number = any_number,
+        .is_candidate = false,
+        // It shouldn't matter in which order the conflicting cells are reported, so this test might prove flaky since it expects a particular order.
+        .invalid_cell_index = cell_index_ref,
+        .reference_cell_index = cell_index_d,
+        .region_index_opt = board_state.regions.get_region_index(.Box, 0),
+    }, check_board_for_errors(&board_state, null));
 }
 
 test "Candidate conflicting with a placed number" {
@@ -164,25 +197,52 @@ test "Candidate conflicting with a placed number" {
     try std.testing.expectEqual(2, candidate_error.invalid_cell_index);
 }
 
-test "Chess rules" {
-    // Diagonal neighbors across a box boundary, only invalid with the anti-king rule
-    var board_state: board.Board = try .init(Regular2x2);
-    try board_state.fill_board_from_string(".....1....1.....");
-    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
-
+test "king" {
     var king_rules = Regular2x2;
     king_rules.chess_anti_king = true;
     var king_board: board.Board = try .init(king_rules);
-    try king_board.fill_board_from_string(".....1....1.....");
-    try std.testing.expectEqual(null, check_board_for_errors(&king_board, null));
 
-    // A knight's move apart, only invalid with the anti-knight rule
-    try board_state.fill_board_from_string("1.....1.........");
-    try std.testing.expectEqual(null, check_board_for_errors(&board_state, null));
+    const any_number = 2;
 
+    const cell_index_a = king_board.cell_index_from_coord(i32_2{ 1, 1 });
+    const cell_index_b = king_board.cell_index_from_coord(i32_2{ 2, 2 }); // At a king's move from A (should fire)
+    const cell_index_c = king_board.cell_index_from_coord(i32_2{ 3, 0 }); // At a knight's move from A (shouldn't fire)
+
+    king_board.numbers()[cell_index_a] = any_number;
+    king_board.numbers()[cell_index_b] = any_number;
+    king_board.numbers()[cell_index_c] = any_number;
+
+    try std.testing.expectEqual(ValidationError{
+        .number = any_number,
+        .is_candidate = false,
+        // It shouldn't matter in which order the conflicting cells are reported, so this test might prove flaky since it expects a particular order.
+        .invalid_cell_index = cell_index_b,
+        .reference_cell_index = cell_index_a,
+        .region_index_opt = null,
+    }, check_board_for_errors(&king_board, null));
+}
+
+test "knight" {
     var knight_rules = Regular2x2;
     knight_rules.chess_anti_knight = true;
     var knight_board: board.Board = try .init(knight_rules);
-    try knight_board.fill_board_from_string("1.....1.........");
-    try std.testing.expectEqual(null, check_board_for_errors(&knight_board, null));
+
+    const any_number = 3;
+
+    const cell_index_a = knight_board.cell_index_from_coord(i32_2{ 1, 1 });
+    const cell_index_b = knight_board.cell_index_from_coord(i32_2{ 3, 0 }); // At a knight's move from A (should fire)
+    const cell_index_c = knight_board.cell_index_from_coord(i32_2{ 2, 2 }); // At a king's move from A (shouldn't fire)
+
+    knight_board.numbers()[cell_index_a] = any_number;
+    knight_board.numbers()[cell_index_b] = any_number;
+    knight_board.numbers()[cell_index_c] = any_number;
+
+    try std.testing.expectEqual(ValidationError{
+        .number = any_number,
+        .is_candidate = false,
+        // It shouldn't matter in which order the conflicting cells are reported, so this test might prove flaky since it expects a particular order.
+        .invalid_cell_index = cell_index_a,
+        .reference_cell_index = cell_index_b,
+        .region_index_opt = null,
+    }, check_board_for_errors(&knight_board, null));
 }

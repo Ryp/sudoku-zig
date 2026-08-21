@@ -24,8 +24,6 @@ const ConstraintTypeCount = 4;
 // https://kychin.netlify.app/sudoku-blog/dlx/
 // https://garethrees.org/2007/06/10/zendoku-generation/ (use wayback archive)
 //
-// FIXME rewrite
-// choices (H links) never get edited AND are always 4 wide - for all types of sudoku => store next to each other
 // IDEA: Keep headers sorted?
 // IDEA: SoA for links?
 // FIXME use SoAoS?
@@ -370,7 +368,7 @@ test "Board Fill" {
     try std.testing.expect(std.mem.eql(?board.NumberType, solution_board.numbers(), board_state.numbers()));
 }
 
-test {
+test "solve all" {
     inline for (known_boards.TestDancingLinksSolver) |known_board| {
         var board_state: board.Board = try .init(known_board.rules);
         try board_state.fill_board_from_string(known_board.start_string);
