@@ -6,7 +6,6 @@ const known_boards = @import("known_boards.zig");
 const validator = @import("validator.zig");
 
 const dancing_links_solver = @import("solver_dancing_links.zig");
-const Matrix = dancing_links_solver.Matrix;
 
 pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u64, difficulty: u32) !board.Board {
     if (board_rules.chess_anti_king or board_rules.chess_anti_knight) {
@@ -14,53 +13,51 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
         return error.UnsupportedDLXGeneratorChessRules;
     }
 
-    const extent_sqr = board_rules.type.extent() * board_rules.type.extent();
+    const extent = board_rules.type.extent();
 
     var board_state: board.Board = try .init(board_rules);
 
     var rng = std.Random.Xoshiro256.init(seed);
 
-    // Fill the board with a random full solution. Scoped so we're not holding onto the
-    // matrix while the uniqueness loop below builds its own.
-    {
-        var matrix: Matrix = try .init(allocator, &board_state);
-        defer matrix.deinit(allocator);
+    var matrix: dancing_links_solver.Matrix = try .init(allocator, &board_state);
+    defer matrix.deinit(allocator);
 
-        cover_choices_for_random_clues(&matrix, &rng.random());
+    cover_choices_for_random_clues(&matrix, &rng.random());
 
-        if (!matrix.solve_recursive()) {
-            std.debug.print("error: failed to find solution for the generated sudoku, most likely that comes from an invalid set of rules\n", .{});
-            return error.InvalidSudokuGeneratorRulesOrInternalError;
-        }
+    if (!matrix.solve_recursive()) {
+        std.debug.print("error: failed to find solution for the generated sudoku, most likely that comes from an invalid set of rules\n", .{});
+        return error.InvalidSudokuGeneratorRulesOrInternalError;
     }
 
-    // Remove random clues as long as the board has a unique solution
-    var is_unique = true;
+    // Go back to a fully uncovered matrix
+    uncover_choices_for_random_clues(&matrix);
+
     var try_harder_count = difficulty;
 
-    while (is_unique) {
-        const random_index = rng.random().uintLessThan(u32, extent_sqr);
-        const number_at_random_index = board_state.numbers()[random_index];
+    // Remove random clues as long as the board has a unique solution
+    while (true) {
+        const random_index = rng.random().uintLessThan(u32, extent * extent);
+        const number_opt = board_state.numbers()[random_index];
 
-        if (number_at_random_index == null) {
-            continue;
-        }
+        if (number_opt) |number| {
+            board_state.numbers()[random_index] = null;
 
-        board_state.numbers()[random_index] = null;
+            matrix.cover_choices_for_given_clues();
 
-        // FIXME reuse matrix
-        is_unique = try dancing_links_solver.solve(allocator, &board_state, .{ .solution_count_max = 2, .fill_solution = false }) == 1;
+            const solution_count = matrix.count_solutions_recursive(2);
 
-        if (!is_unique) {
-            // Whoops, we've gone one step too far - restore the number
-            board_state.numbers()[random_index] = number_at_random_index;
+            // Go back to a fully uncovered matrix
+            matrix.uncover_choices_for_given_clues();
 
-            if (try_harder_count > 0) {
-                try_harder_count -= 1;
-                is_unique = true;
-                continue;
-            } else {
-                break;
+            if (solution_count != 1) {
+                // Whoops, we've gone one step too far - restore the number
+                board_state.numbers()[random_index] = number;
+
+                if (try_harder_count > 0) {
+                    try_harder_count -= 1;
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -72,7 +69,7 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
 // from there is as good as any other, and it's much cheaper than shuffling the search.
 // NOTE: this works for our current set of rules, but this can rot once we add more rules
 // ex: when using thermometers, choosing a random number at a random place might be invalid
-fn cover_choices_for_random_clues(matrix: *Matrix, random: *const std.Random) void {
+fn cover_choices_for_random_clues(matrix: *dancing_links_solver.Matrix, random: *const std.Random) void {
     const board_state = matrix.board_state;
     const extent = board_state.extent;
 
@@ -94,7 +91,24 @@ fn cover_choices_for_random_clues(matrix: *Matrix, random: *const std.Random) vo
 
         board_state.numbers()[cell_index] = number;
 
-        matrix.cover_choice(dancing_links_solver.get_choice_index(cell_index, number, extent));
+        matrix.cover_choice(matrix.get_choice_index(cell_index, number));
+    }
+}
+
+// Exact reverse of cover_choices_for_random_clues. Relies on the first-row numbers
+// being untouched since covering - solve_recursive() only fills the other cells.
+fn uncover_choices_for_random_clues(matrix: *dancing_links_solver.Matrix) void {
+    const board_state = matrix.board_state;
+    const line_region = board_state.regions.row(0);
+
+    var i = line_region.len;
+    while (i > 0) {
+        i -= 1;
+
+        const cell_index = line_region[i];
+        const number = board_state.numbers_const()[cell_index].?;
+
+        matrix.uncover_choice(matrix.get_choice_index(cell_index, number));
     }
 }
 
@@ -109,6 +123,15 @@ test "solve all" {
         known_boards.jigsaw9.rules,
     }) |board_rules| {
         var generated_board = try generate(std.testing.allocator, board_rules, Seed, Difficulty);
+
+        // A full grid is trivially valid and unique, so make sure clues were actually removed
+        var empty_cell_count: u32 = 0;
+        for (generated_board.numbers_const()) |number_opt| {
+            if (number_opt == null) {
+                empty_cell_count += 1;
+            }
+        }
+        try std.testing.expect(empty_cell_count > 0);
 
         try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
         try std.testing.expectEqual(1, try dancing_links_solver.solve(std.testing.allocator, &generated_board, .{ .solution_count_max = 2, .fill_solution = false }));

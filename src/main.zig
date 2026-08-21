@@ -90,8 +90,6 @@ pub fn main(init: std.process.Init) !void {
                 error.InvalidSudokuStringCharacter,
                 error.InvalidSudokuClue,
                 error.InvalidSudokuGeneratorRulesOrInternalError,
-                error.UnsupportedMaxSolutionCount,
-                error.UnsupportedDLXSolverChessRules,
                 error.UnsupportedDLXGeneratorChessRules,
                 => {
                     return; // We already printed a helpful message, just return

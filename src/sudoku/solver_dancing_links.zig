@@ -58,8 +58,7 @@ pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: O
         if (matrix.solve_recursive()) {
             if (options.solution_count_max > 1) {
                 return matrix.count_solutions_recursive(options.solution_count_max);
-            }
-            else {
+            } else {
                 return 1;
             }
         } else {
@@ -210,12 +209,25 @@ pub const Matrix = struct {
         }
     }
 
-    // We now have the initial fully connected matrix
     // Let's remove the choices we already have a clue for
     pub fn cover_choices_for_given_clues(self: *Matrix) void {
-        for (self.board_state.numbers(), 0..) |number_opt, cell_index| {
+        for (self.board_state.numbers_const(), 0..) |number_opt, cell_index| {
             if (number_opt) |number| {
-                self.cover_choice(get_choice_index(cell_index, number, self.board_state.extent));
+                self.cover_choice(self.get_choice_index(cell_index, number));
+            }
+        }
+    }
+
+    // Exact reverse order of cover_choices_for_given_clues
+    pub fn uncover_choices_for_given_clues(self: *Matrix) void {
+        const numbers = self.board_state.numbers_const();
+        var cell_index = numbers.len;
+
+        while (cell_index > 0) {
+            cell_index -= 1;
+
+            if (numbers[cell_index]) |number| {
+                self.uncover_choice(self.get_choice_index(cell_index, number));
             }
         }
     }
@@ -235,7 +247,7 @@ pub const Matrix = struct {
 
             for (0..extent) |number_usize| {
                 const number: u32 = @intCast(number_usize);
-                const choice_index = get_choice_index(cell_index, number, extent);
+                const choice_index = self.get_choice_index(cell_index, number);
 
                 // Get indices for each four constraints we satisfy
                 self.choices[choice_index] = ChoiceConstraintsIndices{
@@ -273,6 +285,10 @@ pub const Matrix = struct {
             free_choice_link_index += ConstraintTypeCount;
         }
     }
+
+    pub fn get_choice_index(self: *const Matrix, cell_index: usize, number: usize) usize {
+        return cell_index * self.board_state.extent + number;
+    }
 };
 
 fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const DoublyLink) u32 {
@@ -299,10 +315,6 @@ fn choose_best_column_index(links_h: []const DoublyLink, links_v: []const Doubly
     }
 
     return best_col;
-}
-
-pub fn get_choice_index(cell_index: usize, number: usize, extent: u32) usize {
-    return cell_index * extent + number;
 }
 
 // Gives us an index to the header link of the constraints of that choice
