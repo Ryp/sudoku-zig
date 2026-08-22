@@ -22,15 +22,12 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
     var matrix: dancing_links_solver.Matrix = try .init(allocator, &board_state);
     defer matrix.deinit(allocator);
 
-    cover_choices_for_random_clues(&matrix, &rng.random());
-
-    if (!matrix.solve_recursive()) {
-        std.debug.print("error: failed to find solution for the generated sudoku, most likely that comes from an invalid set of rules\n", .{});
-        return error.InvalidSudokuGeneratorRulesOrInternalError;
+    // Fill the board with a full solution using a randomized solving walk
+    // We started with an empty matrix (fully uncovered) and after the solve this state is restored
+    if (!matrix.solve_recursive(&rng.random())) {
+        std.debug.print("error: failed to find solution for the generated sudoku, most likely from an invalid set of rules\n", .{});
+        return error.InvalidSudokuGeneratorRules;
     }
-
-    // Go back to a fully uncovered matrix
-    uncover_choices_for_random_clues(&matrix);
 
     var try_harder_count = difficulty;
 
@@ -65,54 +62,7 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
     return board_state;
 }
 
-// Seed the matrix with a random permutation on the first row. Any full solution reachable
-// from there is as good as any other, and it's much cheaper than shuffling the search.
-// NOTE: this works for our current set of rules, but this can rot once we add more rules
-// ex: when using thermometers, choosing a random number at a random place might be invalid
-fn cover_choices_for_random_clues(matrix: *dancing_links_solver.Matrix, random: *const std.Random) void {
-    const board_state = matrix.board_state;
-    const extent = board_state.extent;
-
-    var taken_numbers_max = std.mem.zeroes([board.MaxExtent]bool);
-    const taken_numbers = taken_numbers_max[0..extent];
-
-    const line_region = board_state.regions.row(0);
-
-    for (line_region) |cell_index| {
-        var number: u4 = undefined;
-        var is_taken = true;
-
-        while (is_taken) {
-            number = @intCast(random.uintLessThan(usize, extent));
-            is_taken = taken_numbers[number];
-        }
-
-        taken_numbers[number] = true;
-
-        board_state.numbers()[cell_index] = number;
-
-        matrix.cover_choice(matrix.get_choice_index(cell_index, number));
-    }
-}
-
-// Exact reverse of cover_choices_for_random_clues. Relies on the first-row numbers
-// being untouched since covering - solve_recursive() only fills the other cells.
-fn uncover_choices_for_random_clues(matrix: *dancing_links_solver.Matrix) void {
-    const board_state = matrix.board_state;
-    const line_region = board_state.regions.row(0);
-
-    var i = line_region.len;
-    while (i > 0) {
-        i -= 1;
-
-        const cell_index = line_region[i];
-        const number = board_state.numbers_const()[cell_index].?;
-
-        matrix.uncover_choice(matrix.get_choice_index(cell_index, number));
-    }
-}
-
-test "solve all" {
+test "generate all" {
     const Seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
     const Difficulty: u32 = 50;
 

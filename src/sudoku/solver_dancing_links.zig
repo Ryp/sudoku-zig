@@ -55,7 +55,7 @@ pub fn solve(allocator: std.mem.Allocator, board_state: *board.Board, options: O
     // Work around this issue by first looking for a single solution and filling it,
     // then count the solutions if needed.
     if (options.fill_solution) {
-        if (matrix.solve_recursive()) {
+        if (matrix.solve_recursive(null)) {
             if (options.solution_count_max > 1) {
                 return matrix.count_solutions_recursive(options.solution_count_max);
             } else {
@@ -146,21 +146,35 @@ pub const Matrix = struct {
 
     // Finds the first solution and write it
     // Returns with the same matrix as set in input
-    pub fn solve_recursive(self: *Matrix) bool {
+    pub fn solve_recursive(self: *Matrix, random_opt: ?*const std.Random) bool {
         if (self.links_h[0].next == 0) {
             return true;
         } else {
             const chosen_column_index = choose_best_column_index(self.links_h, self.links_v);
 
-            // Iterate over choices (rows)
+            // Collect the choices upfront so we can optionally shuffle them.
+            var candidates_max: [board.MaxExtent]u32 = undefined;
+            var candidate_count: usize = 0;
+
             var vertical_index = self.links_v[chosen_column_index].next;
 
             while (vertical_index != chosen_column_index) : (vertical_index = self.links_v[vertical_index].next) {
-                const choice_index = self.choice_index_from_link_index(vertical_index);
+                candidates_max[candidate_count] = vertical_index;
+                candidate_count += 1;
+            }
+
+            const candidates = candidates_max[0..candidate_count];
+
+            if (random_opt) |random| {
+                random.shuffle(u32, candidates);
+            }
+
+            for (candidates) |candidate_link_index| {
+                const choice_index = self.choice_index_from_link_index(candidate_link_index);
 
                 self.cover_choice(choice_index);
 
-                const found_solution = self.solve_recursive();
+                const found_solution = self.solve_recursive(random_opt);
 
                 self.uncover_choice(choice_index);
 

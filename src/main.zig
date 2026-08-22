@@ -89,7 +89,7 @@ pub fn main(init: std.process.Init) !void {
                 error.InvalidSudokuStringLength,
                 error.InvalidSudokuStringCharacter,
                 error.InvalidSudokuClue,
-                error.InvalidSudokuGeneratorRulesOrInternalError,
+                error.InvalidSudokuGeneratorRules,
                 error.UnsupportedDLXGeneratorChessRules,
                 => {
                     return; // We already printed a helpful message, just return
