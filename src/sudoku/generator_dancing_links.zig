@@ -29,32 +29,40 @@ pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u6
         return error.InvalidSudokuGeneratorRules;
     }
 
+    // Visit each cell exactly once, in random order
+    var random_cell_indices_max: [board.MaxExtentSqr]u32 = undefined;
+    const random_cell_indices = random_cell_indices_max[0 .. extent * extent];
+
+    for (random_cell_indices, 0..) |*cell_index, index| {
+        cell_index.* = @intCast(index);
+    }
+
+    rng.random().shuffle(u32, random_cell_indices);
+
     var try_harder_count = difficulty;
 
     // Remove random clues as long as the board has a unique solution
-    while (true) {
-        const random_index = rng.random().uintLessThan(u32, extent * extent);
-        const number_opt = board_state.numbers()[random_index];
+    for (random_cell_indices) |cell_index| {
+        // The board starts full and each cell is visited once, so there's always a number
+        const number = board_state.numbers_const()[cell_index].?;
 
-        if (number_opt) |number| {
-            board_state.numbers()[random_index] = null;
+        board_state.numbers()[cell_index] = null;
 
-            matrix.cover_choices_for_given_clues();
+        matrix.cover_choices_for_given_clues();
 
-            const solution_count = matrix.count_solutions_recursive(2);
+        const solution_count = matrix.count_solutions_recursive(2);
 
-            // Go back to a fully uncovered matrix
-            matrix.uncover_choices_for_given_clues();
+        // Go back to a fully uncovered matrix
+        matrix.uncover_choices_for_given_clues();
 
-            if (solution_count != 1) {
-                // Whoops, we've gone one step too far - restore the number
-                board_state.numbers()[random_index] = number;
+        if (solution_count != 1) {
+            // Whoops, we've gone one step too far - restore the number
+            board_state.numbers()[cell_index] = number;
 
-                if (try_harder_count > 0) {
-                    try_harder_count -= 1;
-                } else {
-                    break;
-                }
+            if (try_harder_count > 0) {
+                try_harder_count -= 1;
+            } else {
+                break;
             }
         }
     }
