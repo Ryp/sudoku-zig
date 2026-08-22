@@ -237,7 +237,9 @@ pub fn apply_hidden_single(board_state: *board.Board, candidate_masks: []u16, hi
 }
 
 pub fn find_hidden_single(board_state: board.Board, candidate_masks: []const u16) ?HiddenSingle {
-    inline for (.{ RegionSet.Col, RegionSet.Row, RegionSet.Box }) |set| {
+    // Scan boxes first because they are supposedly easier to spot
+    // Sudoku Explainer relies on this and rates them lower
+    inline for (.{ RegionSet.Box, RegionSet.Col, RegionSet.Row }) |set| {
         for (0..board_state.extent) |sub_index| {
             if (find_hidden_single_region(board_state, candidate_masks, .{ .set = set, .sub_index = sub_index })) |solver_event| {
                 return solver_event;
