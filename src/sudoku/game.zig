@@ -56,7 +56,7 @@ pub const State = struct {
 
             const seed = std.mem.readInt(u64, &seed_buffer, .little);
 
-            board_state = try generator.generate(allocator, board_rules, seed, .{ .dancing_links = .{ .difficulty = 200 } });
+            board_state = try generator.generate(allocator, board_rules, seed, .{ .dancing_links = .{} });
         }
 
         game.board = board_state;

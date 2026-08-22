@@ -26,9 +26,14 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: *const
         std.debug.print("error: The board has more than one solution!\n", .{});
     }
 
-    const hodoku_grade = try hodoku.grade(const_board);
-
-    std.debug.print("HoDoKu score: {} ({s})\n", .{ hodoku_grade.score, @tagName(hodoku_grade.level) });
+    if (hodoku.grade(const_board)) |grade| {
+        std.debug.print("HoDoKu score: {} ({s})\n", .{ grade.score, @tagName(grade.level) });
+    } else |err| switch (err) {
+        error.GraderNoSolutionFound => {
+            std.debug.print("warning: the grader couldn't finish solving the board with known techniques.\n", .{});
+            // Don't return and print the techniques we've found
+        },
+    }
 
     // Show more data about the techniques used
     var candidate_masks_max = solver_logical.trivial_candidate_masks_max(&board_state);

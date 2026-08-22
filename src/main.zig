@@ -84,21 +84,20 @@ pub fn main(init: std.process.Init) !void {
         board_rules.chess_anti_king = res.args.king != 0;
         board_rules.chess_anti_knight = res.args.knight != 0;
 
-        game_state = game.State.init(io, allocator, board_rules, res.positionals[0]) catch |err| {
-            switch (err) {
-                error.InvalidSudokuBoardExtent,
-                error.InvalidSudokuStringLength,
-                error.InvalidSudokuStringCharacter,
-                error.InvalidSudokuClue,
-                error.InvalidSudokuGeneratorRules,
-                error.UnsupportedDLXGeneratorChessRules,
-                => {
-                    return; // We already printed a helpful message, just return
-                },
-                error.OutOfMemory => {
-                    return err;
-                },
-            }
+        game_state = game.State.init(io, allocator, board_rules, res.positionals[0]) catch |err| switch (err) {
+            error.InvalidSudokuBoardExtent,
+            error.InvalidSudokuStringLength,
+            error.InvalidSudokuStringCharacter,
+            error.InvalidSudokuClue,
+            error.InvalidSudokuGeneratorRules,
+            error.UnsupportedDLXGeneratorChessRules,
+            error.UnreachableSudokuGeneratorTarget,
+            => {
+                return; // We already printed a helpful message, just return
+            },
+            error.OutOfMemory => {
+                return err;
+            },
         };
     }
     defer game_state.deinit();
@@ -109,15 +108,11 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("Board: {s}\n", .{board_string});
 
     grader.grade_and_print_summary(allocator, &game_state.board) catch |err| switch (err) {
-        else => {
-            return err; // FIXME Catch-all
-        },
+        else => return err, // FIXME Catch-all
     };
 
     sdl.execute_main_loop(&game_state, allocator) catch |err| switch (err) {
-        else => {
-            return err; // FIXME Catch-all, as there's way more errors that can happen here
-        },
+        else => return err, // FIXME Catch-all, as there's way more errors that can happen here
     };
 
     const exit_board_string_max = game_state.board.string_from_board_max();

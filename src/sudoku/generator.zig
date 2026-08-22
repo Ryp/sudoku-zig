@@ -5,15 +5,13 @@ const board = @import("board.zig");
 const dancing_links = @import("generator_dancing_links.zig");
 
 pub const Algorithm = union(enum) {
-    dancing_links: struct {
-        difficulty: u32,
-    },
+    dancing_links: dancing_links.Options,
 };
 
 pub fn generate(allocator: std.mem.Allocator, board_rules: rules.Rules, seed: u64, algorithm: Algorithm) !board.Board {
     switch (algorithm) {
         .dancing_links => |options| {
-            return dancing_links.generate(allocator, board_rules, seed, options.difficulty);
+            return dancing_links.generate(allocator, board_rules, seed, options);
         },
     }
 }

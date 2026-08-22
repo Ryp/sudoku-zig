@@ -54,7 +54,18 @@ pub fn score_window(level: Level) ScoreWindow {
     };
 }
 
-// FIXME This only really works well with 3x3 sudokus
+pub fn any_score_window() ScoreWindow {
+    return .{
+        .min = 0,
+        .max = std.math.inf(f64),
+    };
+}
+
+// The original code is only really valid for 3x3 boards, so try to normalize the score for different extents
+pub fn normalized_score(score: u64, cell_count: u32) f64 {
+    return @as(f64, @floatFromInt(score * ReferenceCellCount)) / @as(f64, @floatFromInt(cell_count));
+}
+
 pub fn grade(const_board: *const board.Board) !Grade {
     var board_state = const_board.*; // Board is POD
 
@@ -107,4 +118,6 @@ test "score windows" {
     try std.testing.expectEqual(ScoreWindow{ .min = 0, .max = 800 }, score_window(.easy));
     try std.testing.expectEqual(ScoreWindow{ .min = 801, .max = 1000 }, score_window(.medium));
     try std.testing.expectEqual(ScoreWindow{ .min = 1801, .max = std.math.inf(f64) }, score_window(.extreme));
+    try std.testing.expectEqual(@as(f64, 1000), normalized_score(1000, 81));
+    try std.testing.expectEqual(@as(f64, 1000), normalized_score(2000, 162));
 }
