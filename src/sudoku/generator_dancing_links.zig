@@ -83,13 +83,7 @@ test "generate all" {
         var generated_board = try generate(std.testing.allocator, board_rules, Seed, Difficulty);
 
         // A full grid is trivially valid and unique, so make sure clues were actually removed
-        var empty_cell_count: u32 = 0;
-        for (generated_board.numbers_const()) |number_opt| {
-            if (number_opt == null) {
-                empty_cell_count += 1;
-            }
-        }
-        try std.testing.expect(empty_cell_count > 0);
+        try std.testing.expect(!generated_board.is_full());
 
         try std.testing.expectEqual(null, validator.check_board_for_errors(&generated_board, null));
         try std.testing.expectEqual(1, try dancing_links_solver.solve(std.testing.allocator, &generated_board, .{ .solution_count_max = 2, .fill_solution = false }));

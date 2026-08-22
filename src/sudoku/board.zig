@@ -136,6 +136,16 @@ pub const Board = struct {
 
         return string_max;
     }
+
+    pub fn is_full(self: *const Self) bool {
+        for (self.numbers_const()) |number_opt| {
+            if (number_opt == null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 };
 
 // This struct is used as a helper to iterate over regions of the board without doing index math everywhere.

@@ -678,13 +678,7 @@ pub fn solve(board_state: *board.Board) bool {
         apply_technique(board_state, candidate_masks, technique);
     }
 
-    for (board_state.numbers()) |number_opt| {
-        if (number_opt == null) {
-            return false;
-        }
-    }
-
-    return true;
+    return board_state.is_full();
 }
 
 test "solve all" {
