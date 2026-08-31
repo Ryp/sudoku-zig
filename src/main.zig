@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const game = @import("sudoku/game.zig");
 const board = @import("sudoku/board.zig");
+const grader = @import("sudoku/grader.zig");
 const rules = @import("sudoku/rules.zig");
 const save_state = @import("sudoku/save_state.zig");
 
@@ -102,16 +103,27 @@ pub fn main(init: std.process.Init) !void {
     }
     defer game_state.deinit();
 
-    sdl.execute_main_loop(&game_state, allocator) catch |err| {
-        switch (err) {
-            error.InvalidSudokuBoardExtent => {
-                return; // We already printed a helpful message, just return
-            },
-            else => {
-                return err; // Catch-all, as there's way more errors that can happen here
-            },
-        }
+    const board_string_max = game_state.board.string_from_board_max();
+    const board_string = board_string_max[0 .. game_state.board.extent * game_state.board.extent];
+
+    std.debug.print("Board: {s}\n", .{board_string});
+
+    grader.grade_and_print_summary(allocator, &game_state.board) catch |err| switch (err) {
+        else => {
+            return err; // FIXME Catch-all
+        },
     };
+
+    sdl.execute_main_loop(&game_state, allocator) catch |err| switch (err) {
+        else => {
+            return err; // FIXME Catch-all, as there's way more errors that can happen here
+        },
+    };
+
+    const exit_board_string_max = game_state.board.string_from_board_max();
+    const exit_board_string = exit_board_string_max[0 .. game_state.board.extent * game_state.board.extent];
+
+    std.debug.print("Board at exit: {s}\n", .{exit_board_string});
 
     if (true) {
         const output_path = "latest.sdku";

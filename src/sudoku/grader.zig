@@ -3,9 +3,9 @@ const std = @import("std");
 const solver = @import("solver.zig");
 const solver_logical = @import("solver_logical.zig");
 const board = @import("board.zig");
-const validator = @import("validator.zig");
+const hodoku = @import("grader_hodoku.zig");
 
-pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: board.Board) !void {
+pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: *const board.Board) !void {
     // Create a dummy board we can modify
     var board_state: board.Board = try .init(const_board.rules);
 
@@ -20,12 +20,17 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: board.
     });
 
     if (solution_count == 0) {
-        std.debug.print("ERROR: The board has no solution!\n", .{});
+        std.debug.print("error: The board has no solution!\n", .{});
         return;
     } else if (solution_count > 1) {
-        std.debug.print("ERROR: The board has more than one solution!\n", .{});
+        std.debug.print("error: The board has more than one solution!\n", .{});
     }
 
+    const hodoku_grade = try hodoku.grade(const_board);
+
+    std.debug.print("HoDoKu score: {} ({s})\n", .{ hodoku_grade.score, @tagName(hodoku_grade.level) });
+
+    // Show more data about the techniques used
     var candidate_masks_max = solver_logical.trivial_candidate_masks_max(&board_state);
     const candidate_masks = candidate_masks_max[0 .. const_board.extent * const_board.extent];
 
@@ -37,27 +42,13 @@ pub fn grade_and_print_summary(allocator: std.mem.Allocator, const_board: board.
         technique_histogram[technique_index] += 1;
 
         solver_logical.apply_technique(&board_state, candidate_masks, technique);
-
-        if (validator.check_board_for_errors(&board_state, null)) |validation_error| {
-            std.debug.print("The board has a validation error: {}\n", .{validation_error});
-            return;
-        }
     }
-
-    std.debug.print("Grading summary:\n", .{});
 
     for (technique_histogram, 0..) |count, bucket_index| {
         if (count > 0) {
             const Tag = TechniqueUnionTypeInfo.tag_type.?;
             const technique = @as(Tag, @enumFromInt(bucket_index));
             std.debug.print("   '{s}' was applied {} times\n", .{ @tagName(technique), count });
-        }
-    }
-
-    for (board_state.numbers()) |number_opt| {
-        if (number_opt == null) {
-            std.debug.print("WARNING: Couldn't fully solve this board with logic!\n", .{});
-            break;
         }
     }
 }

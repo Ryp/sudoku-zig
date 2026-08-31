@@ -238,7 +238,6 @@ pub fn apply_hidden_single(board_state: *board.Board, candidate_masks: []u16, hi
 
 pub fn find_hidden_single(board_state: board.Board, candidate_masks: []const u16) ?HiddenSingle {
     // Scan boxes first because they are supposedly easier to spot
-    // Sudoku Explainer relies on this and rates them lower
     inline for (.{ RegionSet.Box, RegionSet.Col, RegionSet.Row }) |set| {
         for (0..board_state.extent) |sub_index| {
             if (find_hidden_single_region(board_state, candidate_masks, .{ .set = set, .sub_index = sub_index })) |solver_event| {
@@ -627,19 +626,20 @@ pub const Technique = union(enum(u4)) {
     box_line_reduction: BoxLineReduction,
 };
 
+// HoDoKu's scoring relies on this order
 pub fn find_easiest_known_technique(board_state: board.Board, candidate_masks: []const u16) ?Technique {
     if (find_naked_single(board_state, candidate_masks)) |naked_single| {
         return .{ .naked_single = naked_single };
     } else if (find_hidden_single(board_state, candidate_masks)) |hidden_single| {
         return .{ .hidden_single = hidden_single };
-    } else if (find_naked_pair(board_state, candidate_masks)) |naked_pair| {
-        return .{ .naked_pair = naked_pair };
-    } else if (find_hidden_pair(board_state, candidate_masks)) |hidden_pair| {
-        return .{ .hidden_pair = hidden_pair };
     } else if (find_pointing_line(board_state, candidate_masks)) |pointing_line| {
         return .{ .pointing_line = pointing_line };
     } else if (find_box_line_reduction(board_state, candidate_masks)) |box_line_reduction| {
         return .{ .box_line_reduction = box_line_reduction };
+    } else if (find_naked_pair(board_state, candidate_masks)) |naked_pair| {
+        return .{ .naked_pair = naked_pair };
+    } else if (find_hidden_pair(board_state, candidate_masks)) |hidden_pair| {
+        return .{ .hidden_pair = hidden_pair };
     } else {
         return null;
     }

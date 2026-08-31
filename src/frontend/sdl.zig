@@ -13,7 +13,6 @@ const solver_logical = @import("../sudoku/solver_logical.zig");
 const game_state = @import("../sudoku/game.zig");
 const PlayerAction = game_state.PlayerAction;
 
-const grader = @import("../sudoku/grader.zig");
 const validator = @import("../sudoku/validator.zig");
 
 const common = @import("../sudoku/common.zig");
@@ -338,13 +337,6 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
     const title_string = try allocator.alloc(u8, 1024);
     defer allocator.free(title_string);
 
-    const board_string_max = game.board.string_from_board_max();
-    const board_string = board_string_max[0 .. game.board.extent * game.board.extent];
-
-    std.debug.print("Board: {s}\n", .{board_string});
-
-    try grader.grade_and_print_summary(allocator, game.board);
-
     main_loop: while (true) {
         // Poll events
         var sdl_event: c.SDL_Event = undefined;
@@ -595,11 +587,6 @@ pub fn execute_main_loop(game: *game_state.State, allocator: std.mem.Allocator) 
 
         _ = c.SDL_RenderPresent(sdl_context.renderer);
     }
-
-    const exit_board_string_max = game.board.string_from_board_max();
-    const exit_board_string = exit_board_string_max[0 .. game.board.extent * game.board.extent];
-
-    std.debug.print("Board at exit: {s}\n", .{exit_board_string});
 }
 
 fn fill_box_regions_colors(board_type: rules.Type, box_region_colors: []ColorRGBA8) void {

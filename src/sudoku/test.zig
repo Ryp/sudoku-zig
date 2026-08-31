@@ -5,6 +5,7 @@ comptime {
     _ = @import("generator.zig");
     _ = @import("generator_dancing_links.zig");
     _ = @import("grader.zig");
+    _ = @import("grader_hodoku.zig");
     _ = @import("known_boards.zig");
     _ = @import("rules.zig");
     _ = @import("save_state.zig");
